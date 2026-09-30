@@ -4,7 +4,7 @@
 - IPPL is a C++ Particle and fields Framework. Preserve physical correctness over stylistic cleanup.
 - In this directory we model Cherenkov Diffraction Radiation. The solver is based on ../fel
 - add meaninfull unit_tests for classes maybe even for functions.
-- use Doxygen extensivly also to document the math/physics. 
+- use Doxygen extensivly also to document the math/physics.
 
 ## Build
 - Configure with CMake using the project’s normal toolchain and dependency prefixes.
@@ -22,7 +22,7 @@
 - For algorithmic changes, state expected impact on conservation, stability, and reproducibility.
 - Flag any change that may alter floating-point behavior or MPI/GPU execution order.
 - Add or update at least one regression/sanity test for physics-facing changes.
-- Keep am eye on parallel efficincy at least on the openmp level
+- Keep an eye on parallel efficiency at least on the openmp level
 
 # Naming Conventions
 - Variables should use camel casing
