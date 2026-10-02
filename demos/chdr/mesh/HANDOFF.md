@@ -1,5 +1,8 @@
 # mesh-1 implementation state
 
+Relocation note (2 October 2026): this example now lives in `demos/chdr/mesh/`.
+Paths below describe the original runs and retain their historical locations.
+
 Goal (18 September 2026): construct a YAML-configured distributed FEL-layout
 mesh and staircase prism, inspired by OPALX's generated Python beamline viewer.
 Scope excludes field evolution and particle initialization.

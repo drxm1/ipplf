@@ -37,11 +37,12 @@ Run these commands from the **repository root**:
 ```sh
 cmake --build build_openmp --target mesh-1 test-chdr-geometry --parallel 4
 ctest --test-dir build_openmp -R '^chdr\.mesh\.' --output-on-failure
-OMP_NUM_THREADS=2 build_openmp/demos/chdr/src/mesh-1 \
-  demos/chdr/src/config-brick.yaml --output /tmp/chdr-student-brick
+OMP_NUM_THREADS=2 build_openmp/demos/chdr/mesh/mesh-1 \
+  demos/chdr/mesh/config-brick.yaml --output /tmp/chdr-student-brick
 python3 /tmp/chdr-student-brick/mesh-1_Materials.py --pdf-only
 ```
 
+With `IPPL_USE_STANDARD_FOLDERS=ON`, use `build_openmp/bin/mesh-1` instead.
 For a new build, enable `IPPL_ENABLE_CHDR=ON` and `BUILD_TESTING=ON` together
 with the normal IPPL toolchain options for your machine. Enabling the FEL
 executable or Catalyst in-situ visualization is not required. The local
@@ -310,7 +311,7 @@ radiation from a rotated radiator.
 | MPI comparison fails | Compare global cell indices, origin, halo offsets, checksum and sample ownership |
 | Edited viewer changes disappear | Change its C++ emitter rather than the generated snapshot |
 
-From `demos/chdr/src`, run:
+From `demos/chdr/mesh`, run:
 
 ```sh
 doxygen Doxyfile

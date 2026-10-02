@@ -1,5 +1,8 @@
 # FEL student documentation state
 
+Relocation note (2 October 2026): the CHDR example referenced below now lives
+in `demos/chdr/mesh/`; the dated account retains its original paths.
+
 Goal (19 September 2026): review demos/fel source comments and generate focused,
 local Doxygen documentation comparable to demos/chdr/src. This is a documentation
 task: preserve executable C++ tokens, algorithms, defaults and numerical tolerances.

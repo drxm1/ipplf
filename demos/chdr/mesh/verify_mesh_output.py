@@ -13,7 +13,7 @@ cell-centre count on every grid. The self-contained material viewer must
 embed the same metadata and slice CSV as the separately exported files.
 
 From the repository root, after equivalent serial and two-rank mesh runs:
-    python demos/chdr/src/verify_mesh_output.py PATH_TO_SERIAL PATH_TO_MPI2
+    python demos/chdr/mesh/verify_mesh_output.py PATH_TO_SERIAL PATH_TO_MPI2
 
 This integration checker reads existing output; it does not launch MPI or
 exercise the geometry classes directly. It compares sampled slice values,

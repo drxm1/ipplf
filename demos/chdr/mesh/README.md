@@ -52,16 +52,17 @@ ctest --test-dir build -R '^chdr\.mesh\.' --output-on-failure
 The ChDR target needs Catalyst's Conduit parser, like FEL. CMake finds or
 fetches it automatically. Enabling ChDR does not require enabling the full
 FEL demo or Catalyst in-situ visualization. The standalone executable defaults
-to the quick YAML copied beside it by CMake.
+to the quick YAML copied into the build tree by CMake.
 
 ```sh
-OMP_NUM_THREADS=2 build/demos/chdr/src/mesh-1
-OMP_NUM_THREADS=2 mpiexec -n 2 build/demos/chdr/src/mesh-1 \
-  demos/chdr/src/config.yaml --output /tmp/chdr-mesh-mpi2
+OMP_NUM_THREADS=2 build/demos/chdr/mesh/mesh-1
+OMP_NUM_THREADS=2 mpiexec -n 2 build/demos/chdr/mesh/mesh-1 \
+  demos/chdr/mesh/config.yaml --output /tmp/chdr-mesh-mpi2
 ~/.venv-h6/bin/python /tmp/chdr-mesh-mpi2/mesh-1_Materials.py --show
 ~/.venv-h6/bin/python /tmp/chdr-mesh-mpi2/mesh-1_Materials.py --save /tmp/chdr-materials.png
 ```
 
+With `IPPL_USE_STANDARD_FOLDERS=ON`, use `build/bin/mesh-1` instead.
 Replace `build` by your build directory (the local validation uses
 `build_openmp`). `--help` lists the application options. `--output` overrides
 the YAML path; relative output paths are relative to the working directory.
@@ -78,7 +79,7 @@ the YAML path; relative output paths are relative to the working directory.
 Check the scale case before allocating it:
 
 ```sh
-build/demos/chdr/src/mesh-1 demos/chdr/src/config-scale.yaml --dry-run
+build/demos/chdr/mesh/mesh-1 demos/chdr/mesh/config-scale.yaml --dry-run
 ```
 
 The prism cases use the previously discussed 100 x 100 x 160 mm box and the assumed
@@ -124,8 +125,8 @@ Type-specific keys are checked; a brick cannot silently accept prism vertices.
 Run the prepared brick case separately:
 
 ```sh
-OMP_NUM_THREADS=2 build/demos/chdr/src/mesh-1 \
-  demos/chdr/src/config-brick.yaml --output demos/chdr/src/data/brick
+OMP_NUM_THREADS=2 build/demos/chdr/mesh/mesh-1 \
+  demos/chdr/mesh/config-brick.yaml --output demos/chdr/mesh/data/brick
 ```
 
 `units.length` converts all input lengths to SI metres internally. The code
@@ -159,11 +160,11 @@ The C++ program writes:
   the radiator centroid, snapped to cell centres.
 
 For the same workflow as OPALX's generated `ElementPositions.py`, run the
-generated material script directly from your output directory. A local example
-has been generated in `demos/chdr/src/data`:
+generated material script directly from your output directory. For example,
+after writing output to `demos/chdr/mesh/data`:
 
 ```sh
-cd ~/git/ippl-chdr/demos/chdr/src/data
+cd ~/git/ippl-chdr/demos/chdr/mesh/data
 ~/.venv-h6/bin/python mesh-1_Materials.py --show
 ```
 
