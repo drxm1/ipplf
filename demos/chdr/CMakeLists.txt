@@ -1,4 +1,5 @@
-# ChDR geometry and mesh prototypes; no field evolution is built here yet.
+# ChDR geometry and vacuum-wave demos.
 message(STATUS "Configuring demos/chdr/")
 
 add_subdirectory(mesh)
+add_subdirectory(vacuum)
