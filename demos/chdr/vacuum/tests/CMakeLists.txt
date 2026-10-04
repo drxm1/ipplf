@@ -1,6 +1,17 @@
 # One standard GoogleTest executable; run the same suites on one and two ranks.
 include(AddIpplTest)
 
+# Only CSV/CLI integration checks need Python; no field reader is needed in this unit.
+find_package(Python3 QUIET COMPONENTS Interpreter)
+set(CHDR_VACUUM_TEST_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/runs"
+    CACHE PATH "Directory for bounded CHDR vacuum test logs and CSV")
+
+function(chdr_vacuum_skip_test test_name reason)
+  add_test(NAME "${test_name}" COMMAND "${CMAKE_COMMAND}" -E echo "SKIP: ${reason}")
+  set_tests_properties("${test_name}" PROPERTIES LABELS "chdr;vacuum;unavailable;${ARGN}" TIMEOUT
+                                                 10 SKIP_REGULAR_EXPRESSION "^SKIP:")
+endfunction()
+
 add_ippl_test(
   test-chdr-vacuum
   COMPILE_ONLY
@@ -8,6 +19,8 @@ add_ippl_test(
   TestMain.cpp
   test_first_step.cpp
   test_setup.cpp
+  test_diagnostics.cpp
+  test_policy.cpp
   ../VacuumSetup.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
@@ -32,7 +45,7 @@ set_tests_properties(
              "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 
 # Smoke checks exercise the real driver; the GoogleTests establish numerical accuracy.
-add_test(NAME chdr.vacuum.driver.serial COMMAND $<TARGET_FILE:chdr-vacuum-wave>)
+add_test(NAME chdr.vacuum.driver.serial COMMAND $<TARGET_FILE:chdr-vacuum-wave> --steps 1)
 set_tests_properties(
   chdr.vacuum.driver.serial
   PROPERTIES LABELS
@@ -65,7 +78,7 @@ if(MPIEXEC_EXECUTABLE)
                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
   add_test(NAME chdr.vacuum.driver.mpi2
            COMMAND "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
-                   $<TARGET_FILE:chdr-vacuum-wave> ${MPIEXEC_POSTFLAGS})
+                   $<TARGET_FILE:chdr-vacuum-wave> ${MPIEXEC_POSTFLAGS} --steps 1)
   set_tests_properties(
     chdr.vacuum.driver.mpi2
     PROPERTIES LABELS
@@ -77,3 +90,5 @@ if(MPIEXEC_EXECUTABLE)
                ENVIRONMENT
                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 endif()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/WaveTests.cmake")

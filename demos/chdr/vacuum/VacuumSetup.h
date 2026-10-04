@@ -15,7 +15,7 @@ namespace chdr::vacuum {
     using VacuumSolver =
         ippl::StandardFDTDSolver<VField_t<double, Dim>, SourceField_t<double, Dim>, ippl::periodic>;
 
-    Fields makePeriodicFieldContainer();
+    Fields makePeriodicFieldContainer(int cellsZ = 64);
     void checkLocalDomain(const ippl::FieldLayout<Dim>& layout);
     void initializeFieldStorage(Fields& fields);
     /** @brief Synchronize allocated one-cell potential halos and periodic faces.

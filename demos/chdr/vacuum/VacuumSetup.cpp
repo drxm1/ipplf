@@ -10,16 +10,20 @@ namespace chdr::vacuum {
     /** @brief Construct the normalized periodic grid with MPI decomposition along z.
      * @return Owning mesh/layout container; field arrays are not yet allocated.
      * @pre IPPL is initialized; all ranks call this function.
-     * @details Fixed 8x8x64 cells in [0,1/8] x [0,1/8] x [0,1].
+     * @param cellsZ Accepted z resolution: 64 (coarse) or 128 (fine).
+     * @details Cells are (cellsZ/8, cellsZ/8, cellsZ) in the same normalized box.
+     * The box is [0,1/8] x [0,1/8] x [0,1]; other resolutions are rejected.
      * initializeFieldStorage later allocates arrays with default one-cell halos.
      */
-    Fields makePeriodicFieldContainer() {
-        constexpr std::array<int, Dim> Cells{8, 8, 64};
+    Fields makePeriodicFieldContainer(int cellsZ) {
+        if (cellsZ != 64 && cellsZ != 128)
+            throw std::invalid_argument("Supported z cell counts are 64 and 128");
+        const std::array<int, Dim> cells{cellsZ / 8, cellsZ / 8, cellsZ};
         ippl::Vector<double, Dim> lower(0.0), upper(0.125, 0.125, 1.0), spacing;
         ippl::NDIndex<Dim> domain;
         for (unsigned d = 0; d < Dim; ++d) {
-            domain[d]  = ippl::Index(Cells[d]);
-            spacing[d] = (upper[d] - lower[d]) / Cells[d];
+            domain[d]  = ippl::Index(cells[d]);
+            spacing[d] = (upper[d] - lower[d]) / cells[d];
         }
         return Fields(spacing, lower, upper, {false, false, true}, domain, lower, true);
     }
