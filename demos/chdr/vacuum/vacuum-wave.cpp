@@ -1,14 +1,17 @@
 #include <cmath>
 #include <exception>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <locale>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
 #include "VacuumFailure.h"
+#include "VacuumOutput.h"
 #include "VacuumSetup.h"
 
 namespace {
@@ -34,6 +37,7 @@ namespace {
     struct Options {
         int cellsZ_m = 64;
         int steps_m  = -1;  ///< -1 selects one full period; 0/1 support initialization checks.
+        std::filesystem::path output_m;  ///< Empty disables VTK output; CSV goes to stdout.
     };
 
     /// @brief Read a required next CLI value or throw before field construction.
@@ -59,6 +63,8 @@ namespace {
             options.cellsZ_m = 128;
         else if (arg == "--steps")
             options.steps_m = parseSteps(argumentValue(index, argc, argv));
+        else if (arg == "--output")
+            options.output_m = argumentValue(index, argc, argv);
         else if (arg == "--info" || arg == "-i" || arg == "--overallocate" || arg == "-b"
                  || arg == "--timer-fences")
             argumentValue(index, argc, argv);
@@ -68,12 +74,31 @@ namespace {
             throw std::invalid_argument("Unknown argument: " + arg);
     }
 
-    /// @brief Parse identical per-rank coarse/fine and bounded-duration options.
+    /// @brief Parse identical per-rank options; output must be new/empty when supplied.
     Options parseOptions(int argc, char* argv[]) {
         Options options;
         for (int index = 1; index < argc; ++index)
             parseArgument(options, index, argc, argv);
         return options;
+    }
+
+    /// @brief Copy the actual field geometry into the writer's unit-neutral metadata.
+    chdr::vacuum::OutputGeometry outputGeometry(Fields& fields) {
+        chdr::vacuum::OutputGeometry geometry;
+        for (unsigned d = 0; d < Dim; ++d) {
+            geometry.cells_m[d]   = fields.getFL().getDomain()[d].length();
+            geometry.origin_m[d]  = fields.getMesh().getOrigin()[d];
+            geometry.spacing_m[d] = fields.getMesh().getMeshSpacing()[d];
+        }
+        return geometry;
+    }
+
+    /// @brief Create optional collective output after all simulation storage exists.
+    std::unique_ptr<chdr::vacuum::VacuumOutput> makeOutput(Fields& fields, const Options& options) {
+        if (options.output_m.empty())
+            return nullptr;
+        return std::make_unique<chdr::vacuum::VacuumOutput>(
+            options.output_m, outputGeometry(fields), fields.getFL().comm.getCommunicator());
     }
 
     /// @brief Bound a requested partial run by the one-period benchmark duration.
@@ -111,9 +136,18 @@ namespace {
             throw std::runtime_error("Failed to write diagnostics");
     }
 
-    /// @brief Measure/check each state before advancing; report rank-zero diagnostic CSV.
+    /// @brief Publish measured array times and update the series after a complete frame.
+    void writeCheckpoint(chdr::vacuum::VacuumOutput& output, Fields& fields,
+                         const chdr::vacuum::Diagnostics& d) {
+        const chdr::vacuum::FrameRecord frame{d.step_m, d.timeA_m, d.timeE_m, d.timeB_m, d.dt_m};
+        output.writeFrame(fields.getE(), fields.getB(), frame);
+        output.writeSeries();
+    }
+
+    /// @brief Measure/check every state; optionally publish owned fields at checkpoints.
     void evolve(VacuumSolver& solver, Fields& fields, const Options& options) {
         const int lastStep = numberOfSteps(options, solver.getDt());
+        auto output        = makeOutput(fields, options);
         chdr::vacuum::PhaseTracker phaseTracker;
         // Observe states 0 through lastStep; perform exactly lastStep advances.
         for (int step = 0; step <= lastStep; ++step) {
@@ -122,6 +156,8 @@ namespace {
             const bool checkpoint = isCheckpoint(step, lastStep, solver.getDt());
             printDiagnostics(diagnostic, phase);
             validateStep(diagnostic, phase, checkpoint, options.cellsZ_m == 128);
+            if (output && checkpoint)
+                writeCheckpoint(*output, fields, diagnostic);
             if (step < lastStep)
                 solver.solve();
         }

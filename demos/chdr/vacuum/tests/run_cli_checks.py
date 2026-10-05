@@ -2,7 +2,8 @@
 """Exercise the actual driver CLI, including a coordinated MPI rejection.
 
 This checks parsing and process exit status. Mid-run numerical gates are tested
-in GoogleTest. Field output and its reader checks belong to the later output unit.
+in GoogleTest. The output-enabled zero/one-step cases supply a separate actual
+reader test through cli-checks.json; their process success alone is not readback.
 """
 import argparse
 import json
@@ -31,12 +32,22 @@ def cases(args):
             ('timer-option', [], ['--timer-fences', 'on', '--steps', '0'], True),
             ('debug-option', [], ['--debug', '--steps', '0'], True),
             ('unknown', [], ['--unrecognized-vacuum-option'], False),
-            ('unsupported-output', [], ['--output', 'unused'], False),
+            ('missing-output', [], ['--output'], False),
+            ('output-initial', [], ['--steps', '0', '--output', 'output-initial'], True),
+            ('output-first-step', [], ['--steps', '1', '--output', 'output-first-step'], True),
             ('missing-steps', [], ['--steps'], False),
             ('negative-steps', [], ['--steps', '-1'], False),
             ('suffix-steps', [], ['--steps', '1x'], False),
             ('overflow-steps', [], ['--steps', '999999999999999999999'], False),
             ('period-limit-mpi2', mpi, args.mpi_after + ['--steps', '999'], False)]
+
+
+def output_path(directory, options):
+    """Resolve a supplied field directory against the recorded driver working directory."""
+    if '--output' not in options:
+        return None
+    index = options.index('--output') + 1
+    return str(directory / options[index]) if index < len(options) else None
 
 
 def run_case(args, directory, specification):
@@ -54,7 +65,7 @@ def run_case(args, directory, specification):
             'expected_success': success, 'passed': expected,
             'stdout': str(out_path), 'stderr': str(err_path),
             'environment': {'OMP_NUM_THREADS': '1', 'OMP_PROC_BIND': 'false'},
-            'stdin': 'x\n'}
+            'stdin': 'x\n', 'output': output_path(directory, options)}
 
 
 def main():

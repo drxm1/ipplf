@@ -1,10 +1,11 @@
 # One standard GoogleTest executable; run the same suites on one and two ranks.
 include(AddIpplTest)
 
-# Only CSV/CLI integration checks need Python; no field reader is needed in this unit.
+# Python drives integration checks; pvpython is optional at build time, required for readback.
 find_package(Python3 QUIET COMPONENTS Interpreter)
+find_program(CHDR_VACUUM_PVPYTHON NAMES pvpython DOC "ParaView Python for actual output readback")
 set(CHDR_VACUUM_TEST_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/runs"
-    CACHE PATH "Directory for bounded CHDR vacuum test logs and CSV")
+    CACHE PATH "Directory for bounded CHDR vacuum test logs, CSV and field output")
 
 function(chdr_vacuum_skip_test test_name reason)
   add_test(NAME "${test_name}" COMMAND "${CMAKE_COMMAND}" -E echo "SKIP: ${reason}")
@@ -91,4 +92,5 @@ if(MPIEXEC_EXECUTABLE)
                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 endif()
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/OutputTests.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/WaveTests.cmake")

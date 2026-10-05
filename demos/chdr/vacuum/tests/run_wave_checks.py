@@ -2,8 +2,8 @@
 """Run the fixed coarse, fine and two-rank benchmark; verify all CSV rows.
 
 Expected quantities and tolerances follow README.md and wave_checks.py's cited
-reference. This unit compares global diagnostics across ranks; field-by-field
-MPI agreement and VTK/readback acceptance remain deferred to the output unit.
+reference. Each run also writes fields; separate actual-reader checks establish
+field-by-field MPI agreement and output correctness from the recorded manifest.
 """
 import argparse
 import datetime
@@ -37,9 +37,9 @@ def fingerprint(binary):
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
 
 
-def command(args, case):
+def command(args, case, output):
     extra = ['--fine'] if case == 'fine-serial' else []
-    base = [str(args.binary)] + extra
+    base = [str(args.binary)] + extra + ['--output', str(output)]
     if case != 'coarse-mpi2':
         return base
     return ([args.mpiexec, args.numproc_flag, '2'] + args.mpi_before
@@ -66,16 +66,16 @@ def invoke(argv, cwd, environment, out, err, stdin=None):
 
 
 def run_case(args, directory, case):
-    csv = directory / (case + '.csv')
+    output, csv = directory / case, directory / (case + '.csv')
     stderr = directory / (case + '.stderr.log')
-    argv = command(args, case)
+    argv = command(args, case, output)
     environment = os.environ.copy()
     environment.update(OMP_NUM_THREADS='1', OMP_PROC_BIND='false')
     with csv.open('w') as out, stderr.open('w') as err:
         status = invoke(argv, directory, environment, out, err)
     return {'case': case, 'argv': argv, 'cwd': str(directory), 'exit_code': status,
             'environment': {'OMP_NUM_THREADS': '1', 'OMP_PROC_BIND': 'false'},
-            'csv': str(csv), 'stderr': str(stderr)}
+            'output': str(output), 'csv': str(csv), 'stderr': str(stderr)}
 
 
 def save_record(args, directory, record):
@@ -106,8 +106,8 @@ def main():
     directory = Path(tempfile.mkdtemp(prefix='wave-', dir=args.results))
     record = {'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'source_before': fingerprint(args.binary), 'runs': [],
-              'mpi_comparison': 'global diagnostics only',
-              'deferred': ['field-by-field MPI comparison', 'VTK output and real-reader checks']}
+              'mpi_comparison': 'CSV global diagnostics; direct fields need actual readback',
+              'reader_acceptance': 'separate wave-readback.json required'}
     try:
         execute(args, directory, record)
     finally:

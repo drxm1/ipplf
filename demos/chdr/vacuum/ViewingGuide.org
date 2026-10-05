@@ -1,0 +1,97 @@
+#+title: View the vacuum-wave output
+
+* Open a saved run
+
+Open =wave.pvti.series= in ParaView and press Apply. Keep it beside all named
+=.pvti= wrappers and rank =.vti= pieces. Each wrapper is a complete global
+snapshot, including the serial one-piece case; load the series to retain the
+explicit saved times. Do not open a single rank piece as the whole simulation.
+
+Choose Surface representation, Cell Data =E_raw= and component X. Use a fixed
+color range of -1 to 1 for the normalized reference wave. To inspect the
+magnetic field, choose =B_raw= component Y. Advance through the actual saved
+times; do not interpret the filename's step number as a physical time. Use an
+orthographic camera looking from positive y, with camera up along positive x:
+the picture then has +x upward and +z rightward.
+
+Open a Spreadsheet View and select Field Data to inspect =potential_time=,
+=E_time=, =B_time=, =dt=, =step= and =normalization=. The dataset/series time is
+=potential_time=. Each raw array has its own supplied timestamp; normalization
+code 1 denotes the declared dimensionless convention and assigns no SI scales.
+For this benchmark's backward-difference reconstruction the initial electric
+sample is half a timestep earlier than potential time zero. That initial
+negative E time is intentional; it does not mean an output frame was lost.
+Source: Fallahi, /MITHRA 2.0/, "Wave Equation" and "FDTD for Wave Equation,"
+equations (3.8)-(3.15), library key =fallahi2020mithra20fullwavesimulation=;
+the implemented reconstruction is in =src/MaxwellSolvers/FDTDSolverBase.hpp=.
+The running project narrative documents its actual field-time interpretation.
+
+The reader checks establish coordinates, association, components and times;
+a plausible screenshot alone establishes none of those numerical properties.
+The steps above are a proposed user walkthrough, not evidence that an
+interactive GUI walkthrough has already occurred.
+
+* Reproducible headless picture
+
+From the IPPL repository root, choose an existing run and a new output path:
+#+begin_src sh
+env -u DISPLAY OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 pvpython --force-offscreen-rendering --disable-registry \
+  demos/chdr/vacuum/render_output.py RUN/wave.pvti.series RUN/view-e-025.png \
+  --time 0.25 --array E_raw --component X --range -1 1
+#+end_src
+The script fixes resolution, camera, component, range, colors and lighting,
+and writes a companion JSON containing actual metadata, reader versions, graphics
+backend and camera settings. =camera_orientation_checked= verifies the camera
+matrix only; =image_pixels_checked=false= means the PNG must still be inspected.
+It refuses a time absent from the series and refuses to replace an existing
+PNG. A failed rendering/provenance check can leave a PNG without its companion
+JSON; use a fresh path for a retry and do not treat that partial pair as verified.
+Select =--array B_raw --component Y= for the magnetic view. On a headless
+machine the installed ParaView must support an offscreen backend. Report a
+backend failure explicitly; it does not undo successful file-reader checks.
+Inspect even a command that exits successfully. In a restricted execution
+environment, ParaView 6.0.1 / VTK 9.5.2 with Mesa 26.1.1 llvmpipe (LLVM 21.1.8) produced
+an incomplete strip despite correct saved data and camera. With GPU access,
+NVIDIA EGL (driver 610.43.02) produced the complete horizontal box. For this setup,
+unset DISPLAY for the headless invocation and allow GPU access. A warning about
+a bad X-server connection appeared before successful EGL rendering; check the
+final exit status, PNG and companion JSON rather than that warning alone.
+These are observations for this environment, not guarantees for other versions.
+A plausible image still requires independent numerical readback.
+Fixed rendering inputs are reproducible instructions, not a promise of
+identical pixels across different GPU, font or ParaView installations.
+
+* Exporter regression tests (optional for viewing)
+
+You do not need these tests to run or view the vacuum wave. A /test fixture/
+here means a small synthetic dataset with known values, built to test the exporter.
+Its source stays in =tests/= so later changes can be checked again; the generated
+VTK files are temporary test outputs and are not part of the source commit.
+
+The CTest group =chdr.vacuum.output.*= builds this Kokkos/MPI test program and
+uses actual VTK/ParaView readers. To run it from the IPPL root after building the
+configured test target:
+#+begin_src sh
+cmake --build BUILD --target test-chdr-vacuum-output --parallel 1
+ctest --test-dir BUILD -R '^chdr\.vacuum\.output\.' --no-tests=error --output-on-failure
+#+end_src
+The synthetic grid has 4 by 3 by 6 owned cells, origin (-2,3,5), spacing
+(0.5,1.25,2), a serial case and two z pieces separated at cell index 3.
+It writes three unequal times, signed distinguishable nextafter/pi values,
+explicit independent array times and sentinel-filled halos. Every component
+of every owned cell is checked bit-for-bit after actual reading, including
+cells beside the partition interface. A custom comma-decimal global locale
+tests that files still use classic-locale numbers.
+
+Four two-rank cases inject piece-open, wrapper-open, series-open and nonfinite
+component failures. Every rank must receive failure; the previous complete
+frame and series must remain readable. Test outputs use fresh subdirectories
+under =CHDR_VACUUM_TEST_OUTPUT_DIR/writer=, normally in the build tree. Each
+retains exact child commands, logs, exit statuses and source hashes. Missing
+=pvpython= is reported as an explicit skipped reader test; complete milestone
+acceptance requires the real-reader checks to run, not merely configure.
+
+Format references: [[https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html][VTK XML formats]],
+[[https://docs.vtk.org/en/latest/design_documents/IOXMLTimeInFieldData.html][VTK TimeValue field metadata]],
+[[https://docs.paraview.org/en/latest/UsersGuide/dataIngestion.html#handling-temporal-file-series][ParaView temporal file series]], and
+[[https://www.paraview.org/paraview-docs/latest/python/paraview.simple.html][ParaView Python view/screenshot API]].
