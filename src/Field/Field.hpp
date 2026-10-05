@@ -4,6 +4,10 @@
 //
 //
 
+#pragma once
+
+#include "Field/Field.h"
+
 namespace ippl {
     namespace detail {
         template <typename T, unsigned Dim, class Mesh, class Centering, class... ViewArgs>
