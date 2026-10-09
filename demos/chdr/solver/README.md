@@ -14,12 +14,12 @@ R2; R2Prime is its relabelled equivalence experiment, and R1 is the inherited
 regression/control. Material, particles and open boundaries belong to later
 units.
 
-The constructor requires an explicit reconstruction. Select `Reconstruction::R2`
+The constructor requires an explicit reconstruction. Select `EBReconstructionConvention::R2`
 for the common-time contract. Both collocated and staggered routes are retained
 as selectable implementations for later material and sourced applications; the
 choice for a particular result will follow its benchmarks. The present vacuum
 module supports Standard and NonStandard in the collocated reading, and Standard
-in the staggered reading. Record the selected `Reading` and stencil with every result.
+in the staggered reading. Record the selected `SpatialDiscretization` and stencil with every result.
 
 ## Units and labels
 
@@ -39,6 +39,37 @@ length scale \f$L_0\f$ and potential scale \f$\Phi_0\f$, the conversions are
 These are dimensional substitutions into the potential equations of
 [Fallahi, section 3.1.1, Eqs. (3.6)–(3.9)][fallahi]. No SI input adapter is
 implemented here.
+
+The entries below are half-step offsets m relative to k: the time is
+\f$(k+m/2)\Delta t\f$. `LevelContract` owns these labels. The R2 labels follow
+[Fallahi, sections 3.1.2, 3.1.4, 3.2.2][fallahi] and
+[Christlieb et al., Eqs. (25)–(29)][gauge]. R2Prime shifts the scalar-potential
+and charge slots by one step while retaining the same reconstructed fields
+when its histories are consistent (deduction from the componentwise update).
+
+Bitwise R2/R2Prime equality assumes matching floating-point contraction in both
+kernels; changing the rounded operation sequence can change the result
+[Jeannerod and Rump, Eqs. (1.1)–(1.2)][roundoff]. The tests retain bitwise assertions.
+Only a demonstrated, recorded contraction difference permits the fallback
+\f$\max\lvert E_{\mathrm{R2}}-E_{\mathrm{R2Prime}}\rvert
+\le 10^{-15}\max\lvert E_{\mathrm{R2}}\rvert\f$.
+Both maxima cover owned cells, components and ranks, rather than normalizing each
+component separately. Record the architecture and contraction flags with any fallback.
+
+| Quantity | R1 | R2 | R2Prime |
+|---|---:|---:|---:|
+| Vector potential, current | 0 | 0 | 0 |
+| Scalar potential, charge | 0 | +1 | −1 |
+| Electric field | mixed: −1 and 0 | −1 | −1 |
+| Output magnetic field | 0 | −1 | −1 |
+| Raw magnetic field | 0 | 0 | 0 |
+
+R1 electric output has no single time label for a time-dependent scalar
+potential. A probe channel for it therefore requires the explicit
+`phiIsZero` declaration. The R1 convergence control is compared at the
+vector-potential difference midpoint; this deliberately exposes its scalar-term
+time offset rather than assigning a single time to the combined field.
+
 ## Library references
 
 The citation keys used in source comments identify these works:

@@ -9,14 +9,12 @@
 #include <type_traits>
 
 #include "FELFieldContainer.hpp"
+#include "LevelContract.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
+#include "SpatialDimension.h"
 #include "VacuumSetup.h"
 
 namespace chdr::solver {
-
-    /// Dimension of a cauchy slice.
-    /// Must match the amount of components that \f$\vec{E}, \vec{B}, \vec{A}, \vec{J}\f$ have.
-    constexpr unsigned SpatialDim = 3;
 
     /// Caller-owned mesh, layout, source and output storage container.
     using ChDRFieldContainer = FELFieldContainer<double, SpatialDim>;

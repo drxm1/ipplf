@@ -4,6 +4,7 @@ add_ippl_test(
   COMPILE_ONLY
   SOURCES
   ../../vacuum/tests/TestMain.cpp
+  test_shell.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
   "${CMAKE_CURRENT_SOURCE_DIR}/../../vacuum"
@@ -42,5 +43,6 @@ function(chdr_solver_test suite filter)
                  "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
   endif()
 endfunction()
+chdr_solver_test(shell "SolverShell.*")
 target_sources(test-chdr-solver PRIVATE test_setup.cpp)
 chdr_solver_test(setup "PeriodicSetup.*")
