@@ -3,3 +3,4 @@ message(STATUS "Configuring demos/chdr/")
 
 add_subdirectory(mesh)
 add_subdirectory(vacuum)
+add_subdirectory(solver)
