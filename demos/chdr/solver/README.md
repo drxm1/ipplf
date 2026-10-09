@@ -70,6 +70,17 @@ potential. A probe channel for it therefore requires the explicit
 vector-potential difference midpoint; this deliberately exposes its scalar-term
 time offset rather than assigning a single time to the combined field.
 
+`SpatialDiscretization::Collocated` samples everything at cell centres.
+`SpatialDiscretization::Staggered` is supported only for R2 and Standard: scalar potential
+and charge at centres, vector potential/current/electric components on their
+positive faces, magnetic components on the transverse positive edges.
+`LevelContract::positionOffset` reports the extra offset from the cell centre
+in cell units. In homogeneous vacuum with \f$\epsilon=\mu=\alpha=1\f$,
+[Chew, section 2, Eqs. (11)–(13), and the paragraph after Eq. (18)][chew]
+give the Lorenz gauge and the component wave equations used here. Component
+positions and staggered differences follow [Ryu et al., Appendix A, Eqs. (19)–(24)][ryu];
+the arrays and potential update are shared.
+
 ## Operators and monitors
 
 For collocated reconstruction, the spatial first difference is
@@ -83,6 +94,20 @@ Laplacian has symbol \f$-\sum_d K_d^2\f$, where
 [Fallahi, Eqs. (3.17), (3.21)–(3.25)][fallahi].
 
 
+For the staggered reading, the forward gradient maps centre scalars to faces,
+and the forward curl maps face vectors to edges. Backward divergence returns
+face vectors to centres; magnetic divergence instead uses forward differences
+from edges to vertices. The backward curl returns edge vectors to faces for
+the corresponding field equation. These are the staggered differences of
+[Ryu et al., Appendix A][ryu].
+
+Their gradient/divergence composition is the Standard Laplacian: in each
+direction, direct substitution gives
+\f$D^-D^+f_i=(f_{i+1}-2f_i+f_{i-1})/h^2\f$. Cross-direction differences commute
+on the periodic uniform grid, giving the curl/divergence cancellations below.
+These are deductions from the staggered difference definitions and the lattice identities
+in [Ryu et al., Appendix A][ryu] and [Clemens and Weiland, section 2][fit].
+
 ## Library references
 
 The citation keys used in source comments identify these works:
@@ -92,6 +117,7 @@ The citation keys used in source comments identify these works:
 - `chew2014generalizedgauge`: Weng Cho Chew (2014), [Vector Potential Electromagnetic Theory with Generalized Gauge for Inhomogeneous Anisotropic Media][chew].
 - `ryu2016potentialfdtd`: Christopher J. Ryu, Aiyin Y. Liu, Wei E. I. Sha and Weng Cho Chew (2016), [Finite-Difference Time-Domain Simulation of the Maxwell–Schrödinger System][ryu].
 - `trefethen1996FiniteDifferenceSpectral`: Lloyd N. Trefethen (1996), [Finite Difference and Spectral Methods for Ordinary and Partial Differential Equations][trefethen].
+- `schneider2010UnderstandingFdtd`: John B. Schneider (2010), [Understanding the Finite-Difference Time-Domain Method][schneider]; equation and printed-page references use the author PDF dated 2026-03-22.
 - `clemens2001FiniteIntegration`: Markus Clemens and Thomas Weiland (2001), [Discrete Electromagnetism with the Finite Integration Technique][fit].
 - `jeannerod2013ImprovedErrorBounds`: Claude-Pierre Jeannerod and Siegfried M. Rump (2013), [Improved Error Bounds for Inner Products in Floating-Point Arithmetic][roundoff].
 - `oskooi2010meep`: Ardavan F. Oskooi et al. (2010), [Meep: A Flexible Free-Software Package for Electromagnetic Simulations by the FDTD Method][meep].
@@ -102,6 +128,7 @@ The citation keys used in source comments identify these works:
 [chew]: https://arxiv.org/abs/1406.4780
 [ryu]: https://doi.org/10.1109/JMMCT.2016.2605378
 [trefethen]: https://people.maths.ox.ac.uk/trefethen/pdetext.html
+[schneider]: https://eecs.wsu.edu/~schneidj/ufdtd/
 [fit]: https://doi.org/10.2528/PIER00080103
 [roundoff]: https://doi.org/10.1137/120894488
 [meep]: https://doi.org/10.1016/j.cpc.2009.11.008

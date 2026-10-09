@@ -67,6 +67,7 @@ namespace chdr::solver {
     }
 
     /** @brief Centred derivative; absolute mode replaces subtraction by absolute addition.
+     * @tparam Absolute Select signed differentiation or absolute evaluation at compile time.
      * @details Along the selected axis, the stencil is
      * \f[
      * (D_cf)_j=\frac{f_{j+1}-f_{j-1}}{2h}.
@@ -91,13 +92,17 @@ namespace chdr::solver {
      * diagnostic scale, not a theorem-bound for FMA-contracted expressions.
      * A nested expression must also propagate the absolute evaluation of its inner terms.
      */
-    template <class Sample>
+    template <bool Absolute = false, class Sample>
     KOKKOS_INLINE_FUNCTION double centeredDifference(Sample f, int i, int j, int k, int axis,
-                                                     double h, bool absolute = false) {
+                                                     double h) {
+        static_assert(SpatialDim == 3, "centeredDifference uses a three-index spatial accessor");
         // Axis determines along which axis the difference is made.
         const int di = axis == 0, dj = axis == 1, dk = axis == 2;
         const double plus = f(i + di, j + dj, k + dk), minus = f(i - di, j - dj, k - dk);
-        return (absolute ? Kokkos::abs(plus) + Kokkos::abs(minus) : plus - minus) * (0.5 / h);
+        if constexpr (Absolute)
+            return (Kokkos::abs(plus) + Kokkos::abs(minus)) * (0.5 / h);
+        else
+            return (plus - minus) * (0.5 / h);
     }
 
     /** @brief Apply the three-point second derivative, or its absolute evaluation.
@@ -236,6 +241,67 @@ namespace chdr::solver {
         return result;
     }
 
+    /** @brief Assemble the collocated gradient from three centred spatial derivatives.
+     * @tparam Absolute Select signed derivatives or their absolute evaluations at compile time.
+     * @details For Absolute=false, apply the Cartesian gradient definition using a central
+     * difference for each partial derivative [schneider2010UnderstandingFdtd,
+     * section 2.5, Eq. (2.17), p. 14; section 3.1, Eq. (3.6), p. 30].
+     * Schneider samples at \f$x_0\pm\delta/2\f$. Setting \f$\delta=2h_d\f$ along
+     * axis d gives \f$(f_{i+1}-f_{i-1})/(2h_d)\f$, evaluated at the input cell
+     * location (deduction); i here denotes the index along that axis.
+     * The signed result is the positive discrete gradient. Electric-field reconstruction
+     * supplies the minus sign from [fallahi2020mithra20fullwavesimulation, Eq. (3.9)]
+     * separately from this spatial operator.
+     * See centeredDifference() for the separate absolute-evaluation convention.
+     */
+    template <bool Absolute = false, class Sample>
+    KOKKOS_INLINE_FUNCTION ippl::Vector<double, SpatialDim> gradient(
+        Sample f, int i, int j, int k, ippl::Vector<double, SpatialDim> h) {
+        static_assert(SpatialDim == 3, "gradient requires three spatial dimensions");
+        return {centeredDifference<Absolute>(f, i, j, k, 0, h[0]),
+                centeredDifference<Absolute>(f, i, j, k, 1, h[1]),
+                centeredDifference<Absolute>(f, i, j, k, 2, h[2])};
+    }
+
+    /** @brief Evaluate the collocated curl in fixed cyclic component order.
+     * @tparam Absolute Use input magnitudes and additive stencil terms for absolute evaluation.
+     * @param view Vector-valued device view containing the three selected components.
+     * @param i Local x index, including the field's ghost-cell offset.
+     * @param j Local y index, including the field's ghost-cell offset.
+     * @param k Local z index, including the field's ghost-cell offset.
+     * @param h Positive mesh spacings in x, y, z order.
+     * @param firstComponent Zero for a vector field, one for the vector part of a four-potential.
+     * @details For Absolute=false, use the Cartesian curl's component order and signs
+     * [schneider2010UnderstandingFdtd, section 2.5, Eq. (2.24), p. 16], replacing
+     * each partial derivative with centeredDifference(). The same source's Eq. (2.25),
+     * p. 16, gives the discrete z component explicitly: take its sample separations
+     * \f$\Delta x=2h_x\f$ and \f$\Delta y=2h_y\f$ to obtain this stencil.
+     * Cyclic permutation gives the other two components (deduction).
+     * Each call evaluates one supplied spatial view; any averaging between potential
+     * time levels is performed by the reconstruction caller.
+     * The absolute branch adds the two absolute derivative evaluations defined by
+     * centeredDifference(), following the signed expression's arithmetic structure.
+     */
+    template <bool Absolute = false, class View>
+    KOKKOS_INLINE_FUNCTION ippl::Vector<double, SpatialDim> curl(View view, int i, int j, int k,
+                                                                 ippl::Vector<double, SpatialDim> h,
+                                                                 unsigned firstComponent = 0) {
+        static_assert(SpatialDim == 3, "curl requires three spatial dimensions");
+        ippl::Vector<double, SpatialDim> result;
+        for (unsigned d = 0; d < SpatialDim; ++d) {
+            const unsigned a = (d + 1) % SpatialDim, b = (d + 2) % SpatialDim;
+            const double first = centeredDifference<Absolute>(
+                Component<View>{view, firstComponent + b}, i, j, k, a, h[a]);
+            const double second = centeredDifference<Absolute>(
+                Component<View>{view, firstComponent + a}, i, j, k, b, h[b]);
+            if constexpr (Absolute)
+                result[d] = first + second;
+            else
+                result[d] = first - second;
+        }
+        return result;
+    }
+
     /** @brief Real factor of the centered-derivative symbol, omitting the imaginary unit.
      * @details Source: [trefethen1996FiniteDifferenceSpectral, Eq. (4.1.7),
      * p. 151; Eq. (5.1.8), p. 195].
@@ -286,7 +352,9 @@ namespace chdr::solver {
      */
     inline double maxStableTimeStep(ippl::Vector<double, SpatialDim> h, Stencil stencil) {
         return stencil == Stencil::NonStandard
+                   // Delta_t < h_z, assuming c=1
                    ? h[2]
+                   // Stability condition 3.20 for the centra-difference scheme (Delta_t < RHS)
                    : 1 / std::sqrt(1 / (h[0] * h[0]) + 1 / (h[1] * h[1]) + 1 / (h[2] * h[2]));
     }
 }  // namespace chdr::solver
