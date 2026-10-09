@@ -11,6 +11,7 @@
 #include "FELFieldContainer.hpp"
 #include "LevelContract.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
+#include "Operators.h"
 #include "SpatialDimension.h"
 #include "VacuumSetup.h"
 

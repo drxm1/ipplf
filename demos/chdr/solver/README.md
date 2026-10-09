@@ -70,6 +70,19 @@ potential. A probe channel for it therefore requires the explicit
 vector-potential difference midpoint; this deliberately exposes its scalar-term
 time offset rather than assigning a single time to the combined field.
 
+## Operators and monitors
+
+For collocated reconstruction, the spatial first difference is
+\f$D_cf_i=(f_{i+1}-f_{i-1})/(2h)\f$, with symbol
+\f$i\sin(kh)/h\f$ [Trefethen, section 5.1, Eqs. (5.1.8)–(5.1.9)][trefethen]. The Standard wave
+Laplacian has symbol \f$-\sum_d K_d^2\f$, where
+\f$K_d=2\sin(k_dh_d/2)/h_d\f$. The NonStandard symbol is
+\f$-[S_z(K_x^2+K_y^2)+K_z^2]\f$, with
+\f$S_z=1-4\mathcal A\sin^2(k_zh_z/2)\f$ and IPPL's coefficient
+\f$\mathcal A=\tfrac14[1+0.02/((h_z/h_x)^2+(h_z/h_y)^2)]\f$
+[Fallahi, Eqs. (3.17), (3.21)–(3.25)][fallahi].
+
+
 ## Library references
 
 The citation keys used in source comments identify these works:
