@@ -40,6 +40,13 @@ These are dimensional substitutions into the potential equations of
 [Fallahi, section 3.1.1, Eqs. (3.6)–(3.9)][fallahi]. No SI input adapter is
 implemented here.
 
+After k completed solves, `A_n` contains slot k and `A_nm1` slot k-1.
+Component zero is the scalar potential; components 1–3 are the vector
+potential. The source field stores charge density followed by current.
+The caller loads both histories and the source at their declared labels.
+Sources present before solve k+1 are those of slot k. Initialization resets
+history, so initialize before loading it.
+
 The entries below are half-step offsets m relative to k: the time is
 \f$(k+m/2)\Delta t\f$. `LevelContract` owns these labels. The R2 labels follow
 [Fallahi, sections 3.1.2, 3.1.4, 3.2.2][fallahi] and
