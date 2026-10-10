@@ -12,7 +12,9 @@
 #include "LevelContract.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "Operators.h"
+#include "Reconstruction.h"
 #include "SpatialDimension.h"
+#include "StaggeredReconstruction.h"
 #include "VacuumSetup.h"
 
 namespace chdr::solver {
