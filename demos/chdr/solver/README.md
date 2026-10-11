@@ -115,6 +115,42 @@ on the periodic uniform grid, giving the curl/divergence cancellations below.
 These are deductions from the staggered difference definitions and the lattice identities
 in [Ryu et al., Appendix A][ryu] and [Clemens and Weiland, section 2][fit].
 
+| Monitor or identity | Collocated reading | Staggered Standard reading |
+|---|---|---|
+| Divergence of magnetic curl | Zero to round-off | Zero to round-off |
+| Faraday, raw magnetic fields at adjacent whole steps | Zero to round-off | Zero to round-off |
+| Gauge and matching continuity | Same wave operator relates them | Same relationship with staggered differences |
+| Gauss defect for R2 | Laplacian/composed-gradient difference plus negative gauge time difference | Negative gauge time difference |
+| Laplacian equals gradient/divergence composition | Approximate for smooth resolved modes; exact mismatch given below | Exact Standard composition |
+
+The exact curl/divergence cancellations are deductions from commuting
+periodic differences [Clemens and Weiland, section 2, Eqs. (18)–(24)][fit].
+The gauge propagation and Gauss relationship are the discrete substitutions
+of [Christlieb et al., Lemma 3.3 and Theorem 3.5][gauge]. The collocated
+Laplacian differs from the composition of centred first differences, so its
+Gauss defect need not vanish. The explicit formulas and time slots are in
+the documentation of `Monitors` and `evaluateGauss`.
+
+Centred first differences annihilate checkerboard modes, so the collocated
+gradient/curl monitors do not observe every grid-scale potential mode
+[Trefethen, section 5.3, p. 203][trefethen]. Dedicated Ampère and null-mode
+projection diagnostics are deferred to later source-coupling work.
+
+To preserve zero Gauss defect in sourced staggered runs, initialize compatible
+histories with zero matching discrete gauge residual and satisfy the matching
+discrete source continuity equation (deduction from
+[Christlieb et al., Theorem 3.3 and Theorem 3.5, Eq. (43)][gauge]).
+
+For Standard, the symbol of the collocated mismatch is
+\f$L_h-D_c\cdot D_c=-\sum_d4\sin^4(k_dh_d/2)/h_d^2\f$.
+Its leading smooth-mode value is \f$-\sum_dh_d^2k_d^4/4\f$; hence on a cubic
+mesh its magnitude relative to \f$k^2\f$ is \f$(kh)^2/4\f$ along an axis,
+\f$(kh)^2/8\f$ on a face diagonal and \f$(kh)^2/12\f$ on the body diagonal.
+At the all-axis checkerboard the mismatch magnitude is \f$\sum_d4/h_d^2\f$.
+These are deductions by subtraction and Taylor expansion of the symbols above
+[Trefethen, section 5.1, Eqs. (5.1.8)–(5.1.9)][trefethen]. For NonStandard,
+subtract the same centred-gradient symbol from its stated wave symbol.
+
 Monitor normalization evaluates the same expression with absolute inputs
 and additions in place of subtractions. It reports both the maximum of the
 cellwise ratio and the ratio of global maxima. Zero divided by zero is
