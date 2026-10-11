@@ -181,6 +181,18 @@ depth (deduction from [Jeannerod and Rump, p. 7][roundoff]). The evolved fields
 are unaffected. Maxima still use MPI_MAX. The same helper serves both the
 rank-record writer and the serial-reference comparison.
 
+Load histories after selecting the time step, then call
+`evaluateInitialFields()`. Before each solve, write the source at the labels
+returned by the shell. For diagnostics, `Monitors::advance(solver)` performs
+the before/after snapshots around the solve. Seed its previous source when
+the first continuity report is needed. `solve()` itself remains usable without
+allocating monitor work fields.
+Monitoring retains five four-component fields and one three-component field,
+including halos, in addition to the solver storage. Each evaluation launches
+several stencil passes and halo exchanges; it is intended as an opt-in diagnostic.
+Continuity is available only for adjacent source snapshots from the same solver
+history. A skipped monitoring interval or history reload invalidates that pairing.
+
 ## Time step and probe
 
 Without a setter call the inherited time step is retained. The checked

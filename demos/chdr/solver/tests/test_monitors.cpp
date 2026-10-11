@@ -51,6 +51,68 @@ namespace {
         field.fillHalo();
     }
 
+    double checkIdentityReport(const MonitorReport& result, unsigned step) {
+        EXPECT_LE(result.divMagnetic_m.cell_m, 1e-12);
+        EXPECT_LE(result.divRawMagnetic_m.cell_m, 1e-12);
+        double maximum = std::max(result.divMagnetic_m.cell_m, result.divRawMagnetic_m.cell_m);
+        for (const auto& component : result.faraday_m) {
+            EXPECT_LE(component.cell_m, 1e-12);
+            maximum = std::max(maximum, component.cell_m);
+        }
+        EXPECT_EQ(result.continuityAvailable_m, step != 0);
+        EXPECT_TRUE(std::isfinite(result.gauge_m.l2_m));
+        return maximum;
+    }
+
+    /// Perturb actual output E to prove the monitor is sensitive to reconstruction errors.
+    template <class SolverType>
+    void checkElectricPerturbation(SolverType& solver, Monitors& monitors) {
+        const auto electric = solver.electricField().getView();
+        Kokkos::parallel_for(
+            "Plant output error", solver.electricField().getFieldRangePolicy(),
+            KOKKOS_LAMBDA(int i, int j, int k) {
+                electric(i, j, k)[1] += (i & 1) ? 0.0 : double(k);
+            });
+        const auto altered = monitors.evaluate(solver);
+        EXPECT_GT(std::max(altered.faraday_m[0].cell_m, altered.faraday_m[2].cell_m), 1e-6);
+    }
+
+    template <class PotentialSolverBase>
+    void checkReconstruction(std::array<int, SpatialDim> cells,
+                             EBReconstructionConvention ebReconstructionConvention) {
+        auto fields = makePeriodicFieldContainer(cells, {1.0, 1.0, 1.0}, 0);
+        initializeFieldStorage(fields);
+        ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
+                                               ebReconstructionConvention);
+        fillNoise(solver.A_n, 19);
+        fillNoise(solver.A_nm1, 41);
+        Monitors monitors(fields.getJ());
+        double maximum = 0.0;
+        for (unsigned step = 0; step < 6; ++step) {
+            fillNoise(fields.getJ(), 71 + step);
+            maximum = std::max(maximum, checkIdentityReport(monitors.advance(solver), step));
+        }
+        // The "A2/A3" tag identifies magnetic-divergence and Faraday residual checks.
+        if (ippl::Comm->rank() == 0)
+            std::cout << "A2/A3 stencil=" << int(solver.stencil())
+                      << " reconstruction=" << int(ebReconstructionConvention)
+                      << " maximum=" << maximum << " threshold=1e-12\n";
+        checkElectricPerturbation(solver, monitors);
+    }
+
+    template <class PotentialSolverBase>
+    void checkBasicIdentities(std::array<int, SpatialDim> cells) {
+        for (auto r : {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
+                       EBReconstructionConvention::R2Prime})
+            checkReconstruction<PotentialSolverBase>(cells, r);
+    }
+    TEST(ChdrMonitors, RandomNyquistStandard) {
+        checkBasicIdentities<StandardSolverPeriodic>({12, 10, 8});
+    }
+    TEST(ChdrMonitors, RandomNyquistNonStandard) {
+        checkBasicIdentities<NonStandardSolverPeriodic>({8, 8, 12});
+    }
+
     /** @brief Independent source oracle: choose charge so the declared continuity is planted.
      * @details Explicit neighboring samples, rather than production operator calls,
      * construct the source. The device kernel is kept together so its three-axis

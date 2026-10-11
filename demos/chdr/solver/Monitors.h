@@ -84,6 +84,78 @@ namespace chdr::solver {
             havePreviousSource_m = true;
             explicitlySeeded_m   = true;
         }
+
+        /** @brief Retain the state before the source is consumed by one solve.
+         * @tparam SolverType Solver exposing ChdrSolver's history, field and level interface.
+         * @param solver Shell whose next solve is to be monitored.
+         * @pre The caller has written the current source and initialized potential halos.
+         * @throws std::logic_error If another beforeSolve is still awaiting afterSolve.
+         * Continuity is evaluated here, using this and the preceding consumed
+         * source at the matched time weight supplied by LevelContract::gaugeWeight.
+         */
+        template <class SolverType>
+        void beforeSolve(SolverType& solver) {
+            if (prepared_m)
+                throw std::logic_error("Monitors::beforeSolve called twice without afterSolve");
+            captureInputs(solver);
+            preparedAt_m                   = solver.completedSolves();
+            preparedSolver_m               = &solver;
+            preparedRevision_m             = solver.historyRevision();
+            preparedDt_m                   = solver.getDt();
+            prepared_m                     = true;
+            report_m.continuityAvailable_m = previousSourceMatches(solver);
+            report_m.continuity_m          = {};
+            if (report_m.continuityAvailable_m)
+                report_m.continuity_m = continuity(
+                    consumedSource_m, previousSource_m, solver.getDt(),
+                    solver.levelContract().gaugeWeight(), solver.spatialDiscretization());
+            explicitlySeeded_m = false;
+        }
+
+        /** @brief Evaluate the completed step and retain its source for continuity.
+         * @tparam SolverType Same solver type passed to beforeSolve.
+         * @param solver Same shell, after exactly the one bracketed solve.
+         * @return Updated records whose availability flags describe retained history.
+         */
+        template <class SolverType>
+        const MonitorReport& afterSolve(SolverType& solver) {
+            if (!prepared_m || !retainedStepMatches(solver))
+                throw std::logic_error("Monitor histories do not bracket one completed solve");
+            evaluate(solver);
+            Kokkos::deep_copy(previousSource_m.getView(), consumedSource_m.getView());
+            havePreviousSource_m = true;
+            previousAt_m         = preparedAt_m;
+            previousSolver_m     = preparedSolver_m;
+            previousRevision_m   = preparedRevision_m;
+            previousDt_m         = preparedDt_m;
+            prepared_m           = false;
+            return report_m;
+        }
+
+        /// Convenience wrapper preserving the solver's original solve operation.
+        template <class SolverType>
+        const MonitorReport& advance(SolverType& solver) {
+            beforeSolve(solver);
+            solver.solve();
+            return afterSolve(solver);
+        }
+
+        /** @brief Re-evaluate the retained step, including after a live-source overwrite.
+         * @pre The solver has completed exactly the solve bracketed by beforeSolve.
+         * @details Magnetic, Faraday, gauge and Gauss reductions retain
+         * their fixed collective order. Temporary derivative values and their
+         * absolute evaluations exchange halos together before the outer stencil.
+         */
+        template <class SolverType>
+        const MonitorReport& evaluate(SolverType& solver) {
+            if (!retainedStepMatches(solver))
+                throw std::logic_error("No retained monitor history for this solve");
+            magneticDiagnostics(solver);
+            faradayDiagnostics(solver);
+            gaugeAndFieldEquations(solver);
+            return report_m;
+        }
+
         /** @brief Gauge at the reconstruction's matched vector-potential time weight.
          * @param currentField Current four-component history: scalar potential in component
          * zero, Cartesian vector potential in components 1 through SpatialDim.
@@ -153,6 +225,171 @@ namespace chdr::solver {
         AJFourFieldsType& consumedSource() { return consumedSource_m; }
 
     private:
+        template <class SolverType>
+        bool previousSourceMatches(const SolverType& solver) const {
+            return havePreviousSource_m
+                   && (explicitlySeeded_m
+                       || (previousSolver_m == &solver
+                           && previousRevision_m == solver.historyRevision()
+                           && previousAt_m == solver.completedSolves() - 1
+                           && previousDt_m == solver.getDt()));
+        }
+
+        template <class SolverType>
+        bool retainedStepMatches(const SolverType& solver) const {
+            return preparedAt_m >= 0 && preparedSolver_m == &solver
+                   && preparedRevision_m == solver.historyRevision()
+                   && preparedDt_m == solver.getDt()
+                   && solver.completedSolves() == preparedAt_m + 1;
+        }
+
+        /// Deep copies preserve histories across timeShift and later caller source writes.
+        template <class SolverType>
+        void captureInputs(SolverType& solver) {
+            if (solver.completedSolves() == 0)
+                solver.reconstructEB();
+            solver.sourceField().fillHalo();
+            Kokkos::deep_copy(oldest_m.getView(), solver.A_nm1.getView());
+            Kokkos::deep_copy(previousElectric_m.getView(), solver.electricField().getView());
+            Kokkos::deep_copy(consumedSource_m.getView(), solver.sourceField().getView());
+        }
+
+    public:
+        // NVCC extended lambdas require their enclosing member function to be public.
+        // These workspace helpers are implementation details; use advance/beforeSolve/afterSolve.
+        /** @brief Cache output B and its uncancelled scale, or compute the raw curl.
+         * @param solver Shell supplying valid potential halos and reconstructed B.
+         * @param raw Select current raw curl rather than measured output B.
+         * @details Internal workspace operation; advance controls its call order.
+         */
+        template <class SolverType>
+        void fillMagneticWorkspace(SolverType& solver, bool raw) {
+            const auto current = solver.A_n.getView(), previous = solver.A_nm1.getView();
+            const auto output  = solver.magneticField().getView();
+            const auto spacing = solver.A_n.get_mesh().getMeshSpacing();
+            const int forward =
+                solver.spatialDiscretization() == SpatialDiscretization::Staggered ? 1 : 0;
+            const double weight =
+                solver.ebReconstructionConvention() == EBReconstructionConvention::R1 ? 1.0 : 0.5;
+            workspace_m.fill(KOKKOS_LAMBDA(int i, int j, int k, unsigned d) {
+                const auto now = monitorDetail::curl(current, 1, d, i, j, k, spacing, forward);
+                if (raw)
+                    return now;
+                const auto bound = now * weight
+                                   + monitorDetail::curl(previous, 1, d, i, j, k, spacing, forward)
+                                         * (1.0 - weight);
+                return monitorDetail::Expression{output(i, j, k)[d], bound.scale_m};
+            });
+        }
+
+    private:
+        template <class SolverType>
+        void magneticDiagnostics(SolverType& solver) {
+            const int direction =
+                solver.spatialDiscretization() == SpatialDiscretization::Staggered ? 1 : 0;
+            fillMagneticWorkspace(solver, false);
+            report_m.divMagnetic_m = divergenceOfWorkspace(solver.A_n, direction);
+            fillMagneticWorkspace(solver, true);
+            report_m.divRawMagnetic_m = divergenceOfWorkspace(solver.A_n, direction);
+        }
+
+    public:
+        /** @brief Cache measured E while expanding its potential-based absolute scale.
+         * @param solver Shell supplying potential histories and reconstructed E.
+         * @details Internal workspace operation; advance controls its call order.
+         */
+        template <class SolverType>
+        void fillElectricWorkspace(SolverType& solver) {
+            const auto current = solver.A_n.getView(), previous = solver.A_nm1.getView();
+            const auto scalar =
+                solver.ebReconstructionConvention() == EBReconstructionConvention::R2 ? previous
+                                                                                      : current;
+            const auto output  = solver.electricField().getView();
+            const auto spacing = solver.A_n.get_mesh().getMeshSpacing();
+            const int forward =
+                solver.spatialDiscretization() == SpatialDiscretization::Staggered ? 1 : 0;
+            const double inverseDt = 1.0 / solver.getDt();
+            workspace_m.fill(KOKKOS_LAMBDA(int i, int j, int k, unsigned d) {
+                const auto bound = (monitorDetail::Expression(current(i, j, k)[d + 1])
+                                    - monitorDetail::Expression(previous(i, j, k)[d + 1]))
+                                       * inverseDt
+                                   + monitorDetail::derivative(monitorDetail::Component{scalar, 0u},
+                                                               i, j, k, d, spacing[d], forward);
+                return monitorDetail::Expression{output(i, j, k)[d], bound.scale_m};
+            });
+        }
+
+        /** @brief Evaluate Faraday using consecutive raw curls and the current output E.
+         * @param solver Shell supplying valid current and previous potential halos.
+         * @param d Cartesian residual component, from zero through two.
+         * @return Reduction of the selected residual against its absolute scale.
+         * @pre fillElectricWorkspace has prepared this monitor's workspace.
+         * @details The residual is
+         * \f$(B_{\mathrm{raw}}[k]-B_{\mathrm{raw}}[k-1])/dt+\operatorname{curl}_h E[k]\f$.
+         * The vector-potential time difference cancels the raw-curl difference.
+         * The remaining scalar gradient has zero discrete curl because the
+         * coordinate differences commute (deduction from
+         * [fallahi2020mithra20fullwavesimulation, Eqs. (3.8)-(3.9)]).
+         */
+        template <class SolverType>
+        ResidualMetrics faradayComponent(SolverType& solver, unsigned d) {
+            const auto current = solver.A_n.getView(), previous = solver.A_nm1.getView();
+            const auto spacing = solver.A_n.get_mesh().getMeshSpacing();
+            const int forward =
+                solver.spatialDiscretization() == SpatialDiscretization::Staggered ? 1 : 0;
+            const double inverseDt = 1.0 / solver.getDt();
+            const unsigned a = (d + 1) % SpatialDim, b = (d + 2) % SpatialDim;
+            const auto electricA = workspace_m.component(a), electricB = workspace_m.component(b);
+            return reduceResidual(
+                solver.A_n, KOKKOS_LAMBDA(int i, int j, int k) {
+                    return (monitorDetail::curl(current, 1, d, i, j, k, spacing, forward)
+                            - monitorDetail::curl(previous, 1, d, i, j, k, spacing, forward))
+                               * inverseDt
+                           + monitorDetail::derivative(electricB, i, j, k, a, spacing[a], forward)
+                           - monitorDetail::derivative(electricA, i, j, k, b, spacing[b], forward);
+                });
+        }
+
+    private:
+        template <class SolverType>
+        void faradayDiagnostics(SolverType& solver) {
+            fillElectricWorkspace(solver);
+            for (unsigned d = 0; d < SpatialDim; ++d)
+                report_m.faraday_m[d] = faradayComponent(solver, d);
+        }
+
+        /// Keep formula checks separate from physical-defect magnitudes and record availability.
+        template <class SolverType>
+        void gaugeAndFieldEquations(SolverType& solver) {
+            report_m.gauge_m =
+                gauge(solver.A_n, solver.A_nm1, solver.getDt(),
+                      solver.levelContract().gaugeWeight(), solver.spatialDiscretization());
+            const auto gauss =
+                evaluateGauss(solver, oldest_m, consumedSource_m, previousElectric_m, workspace_m);
+            report_m.gauss_m       = gauss.identity_m;
+            report_m.gaussDefect_m = gauss.defect_m;
+        }
+
+    public:
+        /** @brief Reduce the divergence of the current prepared workspace.
+         * @param prototype Field supplying owned-cell range and communicator.
+         * @param direction Zero for centered, positive/negative for forward/backward differences.
+         * @return Divergence residual and its propagated absolute scale.
+         * @pre A preceding fill operation synchronized all workspace halos.
+         */
+        ResidualMetrics divergenceOfWorkspace(const AJFourFieldsType& prototype,
+                                              int direction = 0) {
+            const auto x = workspace_m.component(0), y = workspace_m.component(1),
+                       z       = workspace_m.component(2);
+            const auto spacing = prototype.get_mesh().getMeshSpacing();
+            return reduceResidual(
+                prototype, KOKKOS_LAMBDA(int i, int j, int k) {
+                    return monitorDetail::derivative(x, i, j, k, 0, spacing[0], direction)
+                           + monitorDetail::derivative(y, i, j, k, 1, spacing[1], direction)
+                           + monitorDetail::derivative(z, i, j, k, 2, spacing[2], direction);
+                });
+        }
+
     private:
         monitorDetail::Workspace workspace_m;
         AJFourFieldsType oldest_m, consumedSource_m, previousSource_m;
