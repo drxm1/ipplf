@@ -115,6 +115,29 @@ on the periodic uniform grid, giving the curl/divergence cancellations below.
 These are deductions from the staggered difference definitions and the lattice identities
 in [Ryu et al., Appendix A][ryu] and [Clemens and Weiland, section 2][fit].
 
+Monitor normalization evaluates the same expression with absolute inputs
+and additions in place of subtractions. It reports both the maximum of the
+cellwise ratio and the ratio of global maxima. Zero divided by zero is
+defined as zero. This avoids normalizing an exact identity by its nearly
+zero result. [Jeannerod and Rump, Eq. (1.6), Theorem 4.2][roundoff] motivate the
+absolute scale for separately rounded inner products. With fused multiply-add
+(FMA) contraction or nested stencil evaluation, the round-off reasoning instead
+follows by applying the standard model, Eqs. (1.1)–(1.2), to the composed
+expression (deduction, assuming round-to-nearest without underflow or overflow);
+Theorem 4.2 does not directly cover those cases. Only owned cells
+enter reductions. MPI exchanges plain doubles. The Gauss check retains the
+source actually consumed by the solve, so replacing the next source does
+not change its interpretation. R2Prime's Gauss report is one solve late.
+
+One ghost layer and an all-periodic layout are required. After external
+history writes, prepare both histories' halos. Monitor differences of E/B
+and source arrays require their halos; composed differences exchange the
+intermediate field before the second pass. Kokkos kernels operate on the
+field execution/memory space. Evolution and stencil passes exchange halos
+through IPPL; diagnostics additionally use the documented host mirrors,
+MPI reductions and gathers. Do not capture a host solver `this` pointer inside
+a device kernel.
+
 The rank-invariance field-statistic checks use balanced pairwise local sums before their
 plain-double MPI sum. This keeps their rounding depth logarithmic in the
 cell count; the fixed sum over at most four components adds a bounded local
