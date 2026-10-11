@@ -21,6 +21,7 @@ function(chdr_solver_skip name reason)
   set_tests_properties(chdr.solver.${name} PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP:" LABELS
                                                       "chdr;solver;unit;unavailable")
 endfunction()
+target_sources(test-chdr-solver PRIVATE test_monitors.cpp)
 target_sources(test-chdr-solver PRIVATE test_compact.cpp)
 
 function(chdr_solver_test suite filter)
