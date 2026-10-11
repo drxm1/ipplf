@@ -115,6 +115,13 @@ on the periodic uniform grid, giving the curl/divergence cancellations below.
 These are deductions from the staggered difference definitions and the lattice identities
 in [Ryu et al., Appendix A][ryu] and [Clemens and Weiland, section 2][fit].
 
+The rank-invariance field-statistic checks use balanced pairwise local sums before their
+plain-double MPI sum. This keeps their rounding depth logarithmic in the
+cell count; the fixed sum over at most four components adds a bounded local
+depth (deduction from [Jeannerod and Rump, p. 7][roundoff]). The evolved fields
+are unaffected. Maxima still use MPI_MAX. The same helper serves both the
+rank-record writer and the serial-reference comparison.
+
 ## Time step and probe
 
 Without a setter call the inherited time step is retained. The checked
