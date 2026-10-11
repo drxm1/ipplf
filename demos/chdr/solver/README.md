@@ -115,6 +115,20 @@ on the periodic uniform grid, giving the curl/divergence cancellations below.
 These are deductions from the staggered difference definitions and the lattice identities
 in [Ryu et al., Appendix A][ryu] and [Clemens and Weiland, section 2][fit].
 
+## Time step and probe
+
+Without a setter call the inherited time step is retained. The checked
+safety factor S sets \f$\Delta t=S\Delta t_{\max}\f$, with
+\f$\Delta t_{\max}=(\sum h_d^{-2})^{-1/2}\f$ for Standard and
+\f$\Delta t_{\max}=h_z\f$ for admissible NonStandard aspect ratios
+[Fallahi, Eqs. (3.19), (3.20), (3.24)][fallahi]. Standard accepts
+\f$0<S<1\f$; NonStandard accepts \f$0<S\le1\f$. Setters refuse changes after
+histories have been loaded or reconstructed; initialize before changing their
+time spacing. The unchecked entry point is for tests and records only.
+No filter is added. NonStandard's axial
+Nyquist endpoint is a repeated root; its recorded growth follows the
+discrete recurrence (deduction from Eq. (3.24)).
+
 ## Library references
 
 The citation keys used in source comments identify these works:

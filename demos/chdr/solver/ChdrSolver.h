@@ -238,6 +238,18 @@ namespace chdr::solver {
         long long completedSolves() const { return completed_m; }
         /// @return History generation, independent of the resettable completed-solve count.
         unsigned long long historyRevision() const { return historyRevision_m; }
+        /** @brief Declare a custom or analytic history load and freeze its time spacing.
+         * @pre Call before writing both slots, after selecting the time step.
+         * @details Reloading at count zero invalidates monitor/probe histories through
+         * historyRevision. An evolved solver must be initialized before reloading.
+         */
+        void markHistoryLoaded() {
+            if (completed_m != 0)
+                throw IpplException("ChdrSolver::markHistoryLoaded",
+                                    "Initialize before reloading histories");
+            timeStepLocked_m = true;
+            ++historyRevision_m;
+        }
         /// @return Selected spatial component placement.
         SpatialDiscretization spatialDiscretization() const {
             return contract_m.spatialDiscretization_m;
@@ -248,6 +260,17 @@ namespace chdr::solver {
         }
         /// @return Immutable shared position/time table for the selected reading.
         const LevelContract& levelContract() const { return contract_m; }
+
+        /** @brief Interpret an integer solve/source index through the shared label table.
+         * @param quantity Output, potential or source channel whose label is requested.
+         * @param completed Completed-solve count for outputs; source index for inputs.
+         * @param phiIsZero Explicit declaration required for the unique R1 electric label.
+         * @return Absolute channel time for the current fixed step.
+         */
+        double labelTime(Quantity quantity, long long completed, bool phiIsZero = false) const {
+            return contract_m.labelTime(quantity, completed, this->getDt(), phiIsZero);
+        }
+
         /// Borrow the caller-owned output/source arrays; access does not exchange halos.
         EMFieldsType& electricField() { return *this->En_mp; }
         /// @return Borrowed caller-owned output B; its halos are not exchanged here.
@@ -270,6 +293,49 @@ namespace chdr::solver {
             return std::is_same_v<PotentialSolverBase, StandardSolverPeriodic>
                        ? Stencil::Standard
                        : Stencil::NonStandard;
+        }
+        /** @brief Return the vacuum stability bound used by both step-selection methods.
+         * @return Positive maximum stable time spacing for this update and mesh.
+         */
+        double maxStableTimeStep() const {
+            return chdr::solver::maxStableTimeStep(this->hr_m, stencil());
+        }
+        /// @return Current time step divided by the vacuum stability bound.
+        double safetyFactor() const { return this->getDt() / maxStableTimeStep(); }
+
+        /** @brief Select an effective CFL factor before the first solve.
+         * @param safety Positive fraction of maxStableTimeStep within the stated range.
+         * @details Standard accepts \f$0<S<1\f$; NonStandard accepts
+         * \f$0<S\leq1\f$. The equality exception is audited as a double-root record.
+         * Sources: Operators.h; gedney2011IntroductionFdtd, section 3.5, Eq. (3.63).
+         * The factor multiplies the effective bound, not the base constructor's default
+         * step. Loading or reconstructing histories freezes the step until initialize().
+         */
+        void setSafetyFactor(double safety) {
+            if (!std::isfinite(safety) || safety <= 0 || safety > 1
+                || (stencil() == Stencil::Standard && safety == 1))
+                throw IpplException("ChdrSolver::setSafetyFactor",
+                                    "Safety factor outside allowed range");
+            setTimeStepUnchecked(safety * maxStableTimeStep());
+        }
+        /** @brief Set a deliberate test/record step without imposing the stability interval.
+         * @param step Finite positive time spacing, before loading, reconstruction or solving.
+         * @details TimeStep.GrowsAboveBound uses an unstable step to check that the growth
+         * assertion is sensitive. Finite positive steps are required, and the timestep lock still
+         * applies. This also supports exact-period records; ordinary runs use setSafetyFactor.
+         *
+         * THIS IS MOSTLY USED FOR TESTS, AND SHOULD USUALLY NOT BE USED IN PRODUCTION OTHER THAN IN
+         * "setSafetyFactor()".
+         */
+        void setTimeStepUnchecked(double step) {
+            if (!std::isfinite(step) || step <= 0.0)
+                throw IpplException("ChdrSolver::setTimeStepUnchecked",
+                                    "Step must be finite and positive");
+            if (completed_m != 0 || timeStepLocked_m)
+                throw IpplException("ChdrSolver::setTimeStepUnchecked",
+                                    "Initialize before changing loaded histories' time step");
+            this->dt = overriddenDt_m = step;
+            hasStepOverride_m         = true;
         }
 
     private:
