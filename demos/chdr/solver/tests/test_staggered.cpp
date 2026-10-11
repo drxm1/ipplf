@@ -214,4 +214,130 @@ namespace {
                      IpplException);
     }
 
+    /** @brief Gauge potentials generated from a scalar discrete wave. This is the version used in
+     * the staggered discretization.
+     * @details Let \f$\chi[k]\f$ be the scalar wave sampled at cell centres at
+     * \f$t_k\f$. For EBReconstructionConvention::R2, the fixture uses
+     * \f[ A[k]=D_+\chi[k],\qquad
+     * \phi[k]=-(\chi[k+1]-\chi[k])/dt. \f]
+     * A is sampled on its component faces. The scalar forward time difference
+     * has the half-step time assigned to phi by LevelContract. EBReconstructionConvention
+     * reads the previous scalar slot, whose gradient cancels the negative
+     * vector-potential time difference in E; the staggered curl of A vanishes.
+     * This is a discrete deduction from [fallahi2020mithra20fullwavesimulation,
+     * Eqs. (3.8)-(3.9)] and [clemens2001FiniteIntegration, Eqs. (18)-(24)].
+     */
+    struct CompactGaugeWave {
+        ippl::Vector<double, SpatialDim> waveNumber_m, compact_m;
+        double omega_m, temporal_m;
+        KOKKOS_INLINE_FUNCTION double operator()(double x, double y, double z, double time,
+                                                 unsigned c) const {
+            const double phase =
+                waveNumber_m[0] * x + waveNumber_m[1] * y + waveNumber_m[2] * z - omega_m * time;
+            return -(c == 0 ? temporal_m : compact_m[c - 1]) * Kokkos::sin(phase);
+        }
+    };
+
+    template <class SolverType>
+    CompactGaugeWave makeGaugeWave(SolverType& solver,
+                                   ippl::Vector<double, SpatialDim> waveNumber) {
+        const auto spacing = solver.A_n.get_mesh().getMeshSpacing();
+        const double omega =
+            discreteFrequency(waveNumber, spacing, solver.getDt(), Stencil::Standard);
+        ippl::Vector<double, SpatialDim> compact;
+        for (unsigned d = 0; d < SpatialDim; ++d)
+            compact[d] = staggeredDerivativeSymbol(waveNumber[d], spacing[d]);
+        return {waveNumber, compact, omega, timeSymbol(omega, solver.getDt())};
+    }
+
+    /// Reduce sampled E/B error and the centered-gradient reference scale together.
+    struct GaugeMaximum {
+        EMFieldsType::view_type electric_m, magnetic_m;
+        CompactGaugeWave wave_m;
+        ippl::Vector<double, SpatialDim> spacing_m, centered_m;
+        ippl::Vector<int, SpatialDim> first_m;
+        double time_m                          = 0.0;
+        static constexpr double INFINITY_VALUE = std::numeric_limits<double>::infinity();
+        KOKKOS_INLINE_FUNCTION void operator()(int i, int j, int k, double& maximum,
+                                               double& scale) const {
+            const double phase = wave_m.waveNumber_m[0] * (i + first_m[0] + 0.5) * spacing_m[0]
+                                 + wave_m.waveNumber_m[1] * (j + first_m[1] + 0.5) * spacing_m[1]
+                                 + wave_m.waveNumber_m[2] * (k + first_m[2] + 0.5) * spacing_m[2]
+                                 - wave_m.omega_m * time_m;
+            for (unsigned d = 0; d < SpatialDim; ++d) {
+                const double electric = electric_m(i, j, k)[d], magnetic = magnetic_m(i, j, k)[d];
+                maximum = Kokkos::max(
+                    maximum, Kokkos::isfinite(electric) ? Kokkos::abs(electric) : INFINITY_VALUE);
+                maximum = Kokkos::max(
+                    maximum, Kokkos::isfinite(magnetic) ? Kokkos::abs(magnetic) : INFINITY_VALUE);
+                scale = Kokkos::max(
+                    scale, Kokkos::abs(centered_m[d] * wave_m.temporal_m * Kokkos::cos(phase)));
+            }
+        }
+    };
+
+    template <class SolverType>
+    GaugeMaximum gaugeMaximum(SolverType& solver, CompactGaugeWave wave) {
+        const auto spacing = solver.A_n.get_mesh().getMeshSpacing();
+        const auto local   = solver.A_n.getLayout().getLocalNDIndex();
+        ippl::Vector<double, SpatialDim> centered;
+        for (unsigned d = 0; d < SpatialDim; ++d)
+            centered[d] = centeredSymbol(wave.waveNumber_m[d], spacing[d]);
+        return {solver.electricField().getView(),
+                solver.magneticField().getView(),
+                wave,
+                spacing,
+                centered,
+                ippl::Vector<int, SpatialDim>(local[0].first() - 1, local[1].first() - 1,
+                                              local[2].first() - 1)};
+    }
+
+    template <class SolverType>
+    double runGaugeSteps(SolverType& solver, CompactGaugeWave wave, unsigned steps) {
+        auto sample  = gaugeMaximum(solver, wave);
+        double error = 0.0, reference = 0.0;
+        Monitors monitors(solver.sourceField());
+        for (unsigned step = 0; step < steps; ++step) {
+            chdr::solver::test::advanceWithFinalMonitor(solver, monitors, step + 1 == steps);
+            sample.time_m    = solver.labelTime(Quantity::Electric, solver.completedSolves());
+            double stepError = 0.0, stepReference = 0.0;
+            Kokkos::parallel_reduce("R2s gauge sampled maximum", solver.A_n.getFieldRangePolicy(),
+                                    sample, Kokkos::Max<double>(stepError),
+                                    Kokkos::Max<double>(stepReference));
+            error     = std::max(error, stepError);
+            reference = std::max(reference, stepReference);
+        }
+        MPI_Allreduce(MPI_IN_PLACE, &error, 1, MPI_DOUBLE, MPI_MAX, solver.A_n.getLayout().comm);
+        MPI_Allreduce(MPI_IN_PLACE, &reference, 1, MPI_DOUBLE, MPI_MAX,
+                      solver.A_n.getLayout().comm);
+        return error / reference;
+    }
+
+    void checkGaugeWave(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
+                        ippl::Vector<double, SpatialDim> waveNumber, unsigned fixedSteps) {
+        auto fields = makePeriodicFieldContainer(cells, lengths, 0);
+        initializeFieldStorage(fields);
+        ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
+                                                  EBReconstructionConvention::R2,
+                                                  SpatialDiscretization::Staggered);
+        const auto wave = makeGaugeWave(solver, waveNumber);
+        loadHistory(solver, wave);
+        const unsigned steps =
+            fixedSteps ? fixedSteps
+                       : unsigned(std::ceil(10.0 * TWO_PI / (wave.omega_m * solver.getDt())));
+        const double error = runGaugeSteps(solver, wave, steps);
+        EXPECT_LE(error, 1e-12);
+        if (ippl::Comm->rank() == 0)
+            std::cout << "R2s gauge max E/B = " << error << '\n';
+    }
+
+    TEST(ChdrStaggered, GaugeAxial) {
+        checkGaugeWave({8, 8, 64}, {0.125, 0.125, 1.0}, {0.0, 0.0, TWO_PI}, 128);
+    }
+    TEST(ChdrStaggered, GaugeObliqueSmall) {
+        checkGaugeWave({8, 8, 64}, {0.125, 0.125, 1.0}, {8 * TWO_PI, 8 * TWO_PI, TWO_PI}, 128);
+    }
+    TEST(ChdrStaggered, GaugeObliqueTenPeriods) {
+        checkGaugeWave({32, 32, 32}, {1.0, 1.0, 1.0}, {TWO_PI, 2 * TWO_PI, 2 * TWO_PI}, 0);
+    }
 }  // namespace
