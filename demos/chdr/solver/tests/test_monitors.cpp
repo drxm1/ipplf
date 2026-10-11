@@ -140,4 +140,83 @@ namespace {
             });
     }
 
+    TEST(ChdrMonitors, ZeroNormalizationAndOrderingGuard) {
+        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
+        initializeFieldStorage(fields);
+        ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
+                                                  EBReconstructionConvention::R2);
+        Monitors monitors(fields.getJ());
+        EXPECT_THROW(monitors.afterSolve(solver), std::logic_error);
+        monitors.seedPreviousSource(fields.getJ());
+        const auto report = monitors.advance(solver);
+        EXPECT_EQ(report.divMagnetic_m.cell_m, 0.0);
+        EXPECT_EQ(report.divRawMagnetic_m.global_m, 0.0);
+        EXPECT_EQ(report.gauge_m.cell_m, 0.0);
+        EXPECT_TRUE(report.continuityAvailable_m);
+        EXPECT_EQ(report.continuity_m.cell_m, 0.0);
+        for (const auto& value : report.faraday_m)
+            EXPECT_EQ(value.cell_m, 0.0);
+    }
+
+    /// Exercise the retained-source wiring with independently constructed conserved charge.
+    void checkLifecycleContinuity(EBReconstructionConvention ebReconstructionConvention) {
+        auto fields = makePeriodicFieldContainer({12, 10, 8}, {1, 1, 1});
+        initializeFieldStorage(fields);
+        ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
+                                                  ebReconstructionConvention);
+        AJFourFieldsType previous;
+        previous.initialize(fields.getMesh(), fields.getFL());
+        fillNoise(previous, 211);
+        Monitors monitors(fields.getJ());
+        monitors.seedPreviousSource(previous);
+        const double dt = solver.getDt(), weight = solver.levelContract().gaugeWeight();
+        for (double planted : {0.0, 0.125, -0.125}) {
+            fillNoise(fields.getJ(), 107);
+            setConservingCharge(fields.getJ(), previous, dt, weight, planted);
+            const auto report = monitors.advance(solver);
+            EXPECT_TRUE(report.continuityAvailable_m);
+            if (planted == 0.0) {
+                EXPECT_LE(report.continuity_m.cell_m, 1e-12);
+            }
+            EXPECT_NEAR(report.continuity_m.maxAbs_m, std::abs(planted),
+                        1e-12 * report.continuity_m.maxScale_m);
+            EXPECT_NEAR(report.continuity_m.l2_m, std::abs(planted) * std::sqrt(12.0 * 10.0 * 8.0),
+                        1e-12 * report.continuity_m.scaleL2_m);
+            EXPECT_LE(chdr::solver::test::expectedContinuityMismatch(monitors.consumedSource(),
+                                                                     previous, dt, weight, planted)
+                          .cell_m,
+                      1e-12);
+            Kokkos::deep_copy(previous.getView(), monitors.consumedSource().getView());
+        }
+    }
+
+    TEST(ChdrMonitors, LifecycleConservingAndPlantedContinuity) {
+        for (auto ebReconstructionConvention :
+             {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
+              EBReconstructionConvention::R2Prime})
+            checkLifecycleContinuity(ebReconstructionConvention);
+    }
+
+    TEST(ChdrMonitors, SparseAndReloadedSourcesAreUnavailable) {
+        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
+        initializeFieldStorage(fields);
+        ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
+                                                  EBReconstructionConvention::R2);
+        Monitors monitors(fields.getJ());
+        EXPECT_FALSE(monitors.advance(solver).continuityAvailable_m);
+        EXPECT_TRUE(monitors.advance(solver).continuityAvailable_m);
+        solver.solve();
+        EXPECT_FALSE(monitors.advance(solver).continuityAvailable_m);
+        EXPECT_TRUE(monitors.advance(solver).continuityAvailable_m);
+        solver.initialize();
+        EXPECT_THROW(monitors.evaluate(solver), std::logic_error);
+        EXPECT_FALSE(monitors.advance(solver).continuityAvailable_m);
+        solver.initialize();
+        solver.solve();
+        EXPECT_FALSE(monitors.advance(solver).continuityAvailable_m);
+        solver.solve();
+        monitors.seedPreviousSource(fields.getJ());
+        EXPECT_TRUE(monitors.advance(solver).continuityAvailable_m);
+    }
+
 }  // namespace
