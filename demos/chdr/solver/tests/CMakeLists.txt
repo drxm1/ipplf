@@ -95,4 +95,5 @@ endforeach()
 
 target_sources(test-chdr-solver PRIVATE test_probe.cpp)
 chdr_solver_test(probe "FourierProbe.*")
+include(ProbeTests.cmake)
 include(StaggeredTests.cmake)

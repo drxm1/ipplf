@@ -554,4 +554,71 @@ namespace chdr::solver {
         FactorView::host_mirror_type factorsHost_m;
     };
 
+    /** @brief Bind a Fourier probe to one solver's fields, labels, step and history generation.
+     * @tparam SolverType Solver exposing ChdrSolver's field, history and level interface.
+     * @pre Construct after setting the time step and loading the potential histories.
+     * @details sample() reads completedSolves() directly and reconstructs initial E/B
+     * when the gate includes count zero. A requested raw-B channel gets separate storage
+     * and is produced by computeRawMagneticField(); the common-time output is preserved.
+     * Reloading or reinitializing histories invalidates the binding. The solver and its
+     * caller-owned mesh/layout must outlive this object. Sampling remains opt-in.
+     */
+    template <class SolverType>
+    class SolverFourierProbe {
+    public:
+        /** @brief Capture one solver's immutable sampling configuration.
+         * @param solver Initialized shell with its final time step and loaded histories.
+         * @param box Inclusive global-index sampling box.
+         * @param channels Quantities and Cartesian components; scalar phi uses component zero.
+         * @param frequencies Frequencies in cycles per step.
+         * @param firstStep First completed-solve count in the half-open gate.
+         * @param samples Number of consecutive samples.
+         * @param window Rectangle or periodic-Hann weighting.
+         * @param phiIsZero Explicit zero-scalar-potential declaration for R1 electric output.
+         */
+        SolverFourierProbe(SolverType& solver, ProbeBox box, std::vector<ProbeChannel> channels,
+                           std::vector<double> frequencies, std::int64_t firstStep,
+                           std::int64_t samples, ProbeWindow window = ProbeWindow::Rectangle,
+                           bool phiIsZero = false)
+            : solver_m(solver)
+            , revision_m(solver.historyRevision())
+            , probe_m(solver.electricField(), solver.levelContract(), solver.getDt(), box, channels,
+                      std::move(frequencies), firstStep, samples, window, phiIsZero) {
+            if (firstStep < solver.completedSolves())
+                throw std::invalid_argument("Solver has already passed the probe gate start");
+            if (std::any_of(channels.begin(), channels.end(), [](const auto& channel) {
+                    return channel.quantity_m == Quantity::RawMagnetic;
+                })) {
+                raw_m.emplace();
+                raw_m->initialize(solver.electricField().get_mesh(),
+                                  solver.electricField().getLayout());
+            }
+        }
+
+        /// Sample the current completed solve; reject changed histories before reading fields.
+        void sample() {
+            if (revision_m != solver_m.historyRevision()
+                || probe_m.metadata().dt_m != solver_m.getDt())
+                throw std::logic_error(
+                    "Construct a new Fourier probe after changing solver histories");
+            const auto step    = solver_m.completedSolves();
+            const auto& record = probe_m.metadata();
+            if (step < record.firstStep_m || step >= record.firstStep_m + record.samples_m)
+                return;
+            if (step == 0)
+                solver_m.evaluateInitialFields();
+            if (raw_m)
+                solver_m.computeRawMagneticField(*raw_m);
+            probe_m.sample(step, solver_m.electricField(), solver_m.magneticField(),
+                           raw_m ? *raw_m : solver_m.magneticField(), solver_m.A_n);
+        }
+        const ProbeRecord& metadata() const { return probe_m.metadata(); }
+        ProbeRecord gather() const { return probe_m.gather(); }
+
+    private:
+        SolverType& solver_m;
+        unsigned long long revision_m;
+        FourierProbe probe_m;
+        std::optional<FourierProbe::VectorField> raw_m;
+    };
 }  // namespace chdr::solver

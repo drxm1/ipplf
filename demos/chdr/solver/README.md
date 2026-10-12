@@ -227,6 +227,15 @@ The full convention uses the spatial forward kernel
 \f$\exp(i\mathbf k\cdot\mathbf x-i\omega t)\f$.
 The probe transforms time only and applies no spatial area or volume factor.
 
+For evolving fields, construct `SolverFourierProbe` after `loadHistory` and call
+its parameterless `sample()` after each solve. The binding reads the solver's
+completed-solve count, fields, time step and `LevelContract`; a gate containing
+count zero reconstructs the initial E/B automatically. It allocates separate raw
+B storage only for a requested raw-B channel. History reload or reinitialization
+requires a new binding. The lower-level `FourierProbe::sample(step, ...)` remains
+available for independently generated data; `step` must be the completed-solve
+count, with initial fields reconstructed before sample zero.
+
 For P global cells, C channels and F frequencies, gather allocates 2PCF doubles
 on each rank and another 2PCF doubles on rank zero. Indices and PC coordinates
 are also global on each rank; device accumulators use 2P_local CF doubles.
