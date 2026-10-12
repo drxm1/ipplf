@@ -42,6 +42,11 @@ namespace {
                 {Quantity::VectorPotential, 2},
                 {Quantity::RawMagnetic, 0}};
     }
+
+    std::vector<double> frequencies() {
+        return {40.0 / 4096.0, 40.5 / 4096.0, 97.37 / 4096.0, 61.5 / 4096.0, 0.16, 1.0 / 4096.0};
+    }
+
     chdr::vacuum::Fields makeFields() {
         ippl::Vector<double, SpatialDim> origin(0.0), upper(1.0, 1.0, 2.0), spacing(0.125);
         ippl::NDIndex<SpatialDim> domain(ippl::Index(8), ippl::Index(8), ippl::Index(16));
@@ -52,11 +57,62 @@ namespace {
         return std::polar(1.0L, 2.0L * PI * std::remainder(frequency * index, 1.0L));
     }
 
+    /** @brief Independent long-double geometric sum, including the removable zero.
+     * @details For samples \f$e^{2\pi i\mu n}\f$, the geometric series is
+     * \f$e^{i\pi\mu(N-1)}\sin(\pi N\mu)/\sin(\pi\mu)\f$, with limit N at integer
+     * \f$\mu\f$. This exact finite-sample construction supplies the window response
+     * discussed in [heinzel2002SpectrumSpectralDensity, App. B, Eqs. (40)-(42),
+     * (48)-(54)]; the geometric-series evaluation is a deduction. It never sums
+     * the generated signal samples, making it an independent reference.
+     */
+    Complex dirichlet(long double frequency, std::int64_t count) {
+        const long double reduced = std::remainder(frequency, 1.0L);
+        if (reduced == 0.0L)
+            return Complex(count, 0.0L);
+        const long double ratio =
+            std::sin(PI * std::remainder(reduced * count, 2.0L)) / std::sin(PI * reduced);
+        return ratio * cycle(reduced, 0.5L * (count - 1));
+    }
+
+    Complex windowSum(long double frequency, const ProbeRecord& record) {
+        const auto count = record.samples_m;
+        if (record.window_m == ProbeWindow::Rectangle)
+            return dirichlet(frequency, count);
+        const long double bin = 1.0L / count;
+        return 0.5L * dirichlet(frequency, count)
+               - 0.25L * (dirichlet(frequency + bin, count) + dirichlet(frequency - bin, count));
+    }
+
     double amplitude(std::size_t channel, unsigned tone) {
         return tone == 0 ? 1.0 + 0.1 * channel : 0.37;
     }
     double initialPhase(std::size_t channel, unsigned tone) {
         return tone == 0 ? 0.3 + 0.7 * channel : -1.1 + 0.4 * channel;
+    }
+
+    /// One real tone contributes its positive-frequency resonance and negative-frequency image.
+    Complex toneClosedForm(const ProbeRecord& record, std::size_t channel, unsigned tone,
+                           long double nu, long double spatial, long double label) {
+        const long double phase = spatial + initialPhase(channel, tone);
+        const long double minus = nu - static_cast<long double>(TONES[tone]);
+        const long double plus  = nu + static_cast<long double>(TONES[tone]);
+        return 0.5L * record.dt_m * amplitude(channel, tone)
+               * (std::polar(1.0L, -phase) * cycle(minus, label) * windowSum(minus, record)
+                  + std::polar(1.0L, phase) * cycle(plus, label) * windowSum(plus, record));
+    }
+
+    /// Sum the two independent finite-window references at the channel's recorded coordinate.
+    Complex closedForm(const ProbeRecord& record, std::size_t cell, std::size_t channel,
+                       std::size_t frequency) {
+        const auto x              = record.coordinates_m[cell * record.channels_m.size() + channel];
+        const long double spatial = 2.0L * PI * (x[0] + 2.0L * x[1] + 1.5L * x[2]);
+        const long double label =
+            record.firstStep_m + 0.5L * record.channels_m[channel].halfStepLabel_m.count();
+        Complex result(0.0L, 0.0L);
+        for (unsigned tone = 0; tone < 2; ++tone)
+            result += toneClosedForm(record, channel, tone, record.frequencies_m[frequency],
+                                     spatial, label);
+        return result;
     }
 
     /** @brief Write actual IPPL arrays, poisoning every halo before every sample.
@@ -215,6 +271,128 @@ namespace {
         TimeView::host_mirror_type temporalHost_m;
     };
 
+    struct ProbeErrors {
+        double maximum_m           = 0.0;
+        double wrongLabelMinimum_m = std::numeric_limits<double>::infinity();
+    };
+
+    /** @brief A deliberately wrong half-step label must produce a detectable mismatch.
+     * @details Relabelling identical samples by one half step multiplies the sum by
+     * \f$e^{i\pi\nu}\f$, a deduction from the positive time-phase transform
+     * [oskooi2010meep, Eq. (6)]. The sensitivity floor is checked at the first tone, independently
+     * of whether the transform happens to be small at other requested frequencies.
+     */
+    void checkWrongLabel(Complex measured, Complex reference, double frequency, double scale,
+                         ProbeErrors& errors) {
+        const auto wrong           = cycle(frequency, 0.5L) * reference;
+        const double miss          = double(std::abs(measured - wrong)) / scale;
+        errors.wrongLabelMinimum_m = std::min(errors.wrongLabelMinimum_m, miss);
+        EXPECT_GE(miss, 1e-6);
+    }
+
+    void writeProbeValue(std::ostream* output, unsigned probe, std::size_t cell,
+                         std::size_t channel, std::size_t frequency, double scale,
+                         std::complex<double> actual) {
+        if (output)
+            *output << probe << ' ' << cell << ' ' << channel << ' ' << frequency << ' '
+                    << std::setprecision(17) << scale << ' ' << actual.real() << ' '
+                    << actual.imag() << '\n';
+    }
+
+    /** @brief Normalize by an amplitude/window bound that remains meaningful at spectral zeros.
+     * @details The triangle inequality gives
+     * \f$R=\Delta t(\sum_n w_n)\sum_s\lvert a_s\rvert\f$ for the nonnegative
+     * windows used here, from the transform [oskooi2010meep, Eq. (6)] and window
+     * sum [heinzel2002SpectrumSpectralDensity, Eq. (19)]; deduction. Comparing
+     * against R avoids dividing a round-off-sized spectral value by itself.
+     */
+    void checkProbeValue(const ProbeRecord& record, unsigned probe, std::size_t cell,
+                         std::size_t channel, std::size_t frequency, ProbeErrors& errors,
+                         std::ostream* output) {
+        const double scale =
+            record.dt_m * record.windowSum_m * (amplitude(channel, 0) + amplitude(channel, 1));
+        const auto actual = record.value(cell, channel, frequency);
+        ASSERT_TRUE(std::isfinite(actual.real()) && std::isfinite(actual.imag()));
+        const auto reference = closedForm(record, cell, channel, frequency);
+        const Complex measured(actual.real(), actual.imag());
+        const double error = double(std::abs(measured - reference)) / scale;
+        errors.maximum_m   = std::max(errors.maximum_m, error);
+        EXPECT_LE(error, 1e-12) << "probe=" << probe << " cell=" << cell << " channel=" << channel
+                                << " frequency=" << frequency;
+        if (frequency == 0)
+            checkWrongLabel(measured, reference, record.frequencies_m[0], scale, errors);
+        writeProbeValue(output, probe, cell, channel, frequency, scale, actual);
+    }
+
+    /// Validate every gathered value and emit one compact error summary per gate.
+    void checkRecord(const ProbeRecord& record, unsigned probeNumber, std::ostream* output) {
+        if (ippl::Comm->rank() != 0)
+            return;
+        ProbeErrors errors;
+        for (std::size_t cell = 0; cell < record.indices_m.size(); ++cell) {
+            EXPECT_EQ(record.ownership_m[cell], 1);
+            for (std::size_t channel = 0; channel < record.channels_m.size(); ++channel)
+                for (std::size_t frequency = 0; frequency < record.frequencies_m.size();
+                     ++frequency)
+                    checkProbeValue(record, probeNumber, cell, channel, frequency, errors, output);
+        }
+        std::cout << "T8 probe=" << probeNumber << " cells=" << record.indices_m.size()
+                  << " max_error/R=" << std::setprecision(17) << errors.maximum_m
+                  << " min_wrong_label_error/R=" << errors.wrongLabelMinimum_m << '\n';
+    }
+
+    using ProbeList = std::vector<std::unique_ptr<FourierProbe>>;
+
+    /** @brief Combine a seam-crossing plane with long and late point gates.
+     * @details Rectangle/Hann planes check both window formulas. Long point records
+     * exercise accumulated rounding; short gates late in the run retain a large
+     * absolute step index without averaging over the entire preceding signal.
+     */
+    ProbeList frozenProbes(chdr::vacuum::Fields& fields, LevelContract levels) {
+        ProbeList probes;
+        const ProbeBox plane{{3, 0, 0}, {3, 7, 15}};
+        for (auto window : {ProbeWindow::Rectangle, ProbeWindow::Hann})
+            probes.push_back(std::make_unique<FourierProbe>(
+                fields.getE(), levels, DT, plane, channels(), frequencies(), 101, 4096, window));
+        for (const auto index : {std::array<int, SpatialDim>{0, 0, 7}, {7, 7, 8}, {7, 7, 15}})
+            for (int first : {0, 99000})
+                probes.push_back(std::make_unique<FourierProbe>(
+                    fields.getE(), levels, DT, ProbeBox{index, index}, channels(), frequencies(),
+                    first, 100000 - first));
+        return probes;
+    }
+
+    void sampleFrozenGates(chdr::vacuum::Fields& fields, FourierProbe::VectorField& raw,
+                           SignalWriter& signal, ProbeList& probes) {
+        for (int step = 0; step < 100000; ++step) {
+            signal.write(step, step >= 101 && step < 4197);
+            for (auto& probe : probes)
+                probe->sample(step, fields.getE(), fields.getB(), raw, fields.getJ());
+        }
+    }
+
+    /// Only rank zero writes; every rank still participates in each probe's gather.
+    void checkFrozenGates(ProbeList& probes) {
+        std::ofstream output;
+        if (const char* path = std::getenv("CHDR_PROBE_OUTPUT"); path && ippl::Comm->rank() == 0) {
+            output.open(path);
+            if (!output)
+                throw std::runtime_error("Cannot open the T8 rank record");
+            output << "# communicator_size " << ippl::Comm->size() << '\n';
+        }
+        EXPECT_EQ(probes[0]->metadata().window_m, ProbeWindow::Rectangle);
+        EXPECT_DOUBLE_EQ(probes[0]->metadata().windowSum_m, 4096);
+        EXPECT_DOUBLE_EQ(probes[0]->metadata().windowSquareSum_m, 4096);
+        EXPECT_DOUBLE_EQ(probes[0]->metadata().angularFrequencies_m.front(),
+                         2.0 * double(PI) * frequencies().front() / DT);
+        EXPECT_EQ(probes[1]->metadata().window_m, ProbeWindow::Hann);
+        EXPECT_EQ(probes[1]->metadata().samples_m, 4096);
+        EXPECT_DOUBLE_EQ(probes[1]->metadata().windowSum_m, 2048);
+        EXPECT_DOUBLE_EQ(probes[1]->metadata().windowSquareSum_m, 1536);
+        for (unsigned p = 0; p < probes.size(); ++p)
+            checkRecord(probes[p]->gather(), p, output.is_open() ? &output : nullptr);
+    }
+
     /// Transverse vector potential with zero scalar potential; exact discrete temporal frequency.
     struct LivePotential {
         double omega_m;
@@ -339,6 +517,18 @@ namespace {
                                                    SpatialDiscretization::Collocated);
     }
 
+    TEST(FourierProbeT8, FrozenGatesAndNaNGhosts) {
+        auto fields = makeFields();
+        chdr::vacuum::initializeFieldStorage(fields);
+        FourierProbe::VectorField raw;
+        raw.initialize(fields.getMesh(), fields.getFL());
+        const LevelContract levels{EBReconstructionConvention::R2};
+        auto probes = frozenProbes(fields, levels);
+        SignalWriter signal(fields, raw, levels);
+        sampleFrozenGates(fields, raw, signal, probes);
+        checkFrozenGates(probes);
+    }
+
     /// A separately labelled raw B channel carries the label-shift factor for identical data.
     TEST(FourierProbeT8, IdenticalSamplesGiveTheLabelShiftFactor) {
         auto fields = makeFields();
@@ -424,4 +614,20 @@ namespace {
     }
 
     /// Exercise the same accumulation kernel with the Standard staggered channel positions.
+    TEST(FourierProbeT8, StaggeredPlaneClosedForm) {
+        auto fields = makeFields();
+        chdr::vacuum::initializeFieldStorage(fields);
+        FourierProbe::VectorField raw;
+        raw.initialize(fields.getMesh(), fields.getFL());
+        const LevelContract levels{EBReconstructionConvention::R2,
+                                   SpatialDiscretization::Staggered};
+        FourierProbe probe(fields.getE(), levels, DT, {{3, 0, 0}, {3, 7, 15}}, channels(),
+                           frequencies(), 101, 4096);
+        SignalWriter signal(fields, raw, levels);
+        for (int step = 101; step < 4197; ++step) {
+            signal.write(step, true);
+            probe.sample(step, fields.getE(), fields.getB(), raw, fields.getJ());
+        }
+        checkRecord(probe.gather(), 8, nullptr);
+    }
 }  // namespace
