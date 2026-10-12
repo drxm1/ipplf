@@ -31,3 +31,12 @@ endfunction()
 
 chdr_solver_rank_producer(manufactured)
 chdr_solver_rank_producer(rank_cases)
+if(MPIEXEC_EXECUTABLE AND Python3_Interpreter_FOUND)
+  add_test(NAME chdr.solver.ranks
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compare_ranks.py"
+                   "${CHDR_SOLVER_RECORD_ROOT}/serial" "${CHDR_SOLVER_RECORD_ROOT}/mpi2")
+  set_tests_properties(chdr.solver.ranks PROPERTIES FIXTURES_REQUIRED chdr_solver_ranks TIMEOUT 60
+                                                    LABELS "chdr;solver;unit;ranks;mpi")
+else()
+  chdr_solver_skip(ranks "Rank comparison requires Python3 and an MPI launcher")
+endif()
