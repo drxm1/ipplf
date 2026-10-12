@@ -58,4 +58,40 @@ namespace chdr::solver::test {
             EXPECT_LE(std::abs(waveErrors(solver, wave).gauge_m / predicted - 1), 1e-12);
         }
     }
+    TEST(Convergence, StandardMixedR1) {
+        waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R1, false);
+    }
+    TEST(Convergence, StandardMixedR2) {
+        waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2, false);
+    }
+    TEST(Convergence, StandardMixedR2Prime) {
+        waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2Prime, false);
+    }
+    TEST(Convergence, StandardSourcedR1) {
+        waveLadder<StandardSolverPeriodic>(true, EBReconstructionConvention::R1, false);
+    }
+    TEST(Convergence, StandardSourcedR2) {
+        waveLadder<StandardSolverPeriodic>(true, EBReconstructionConvention::R2, false);
+    }
+    TEST(Convergence, StandardSourcedR2Prime) {
+        waveLadder<StandardSolverPeriodic>(true, EBReconstructionConvention::R2Prime, false);
+    }
+    TEST(Convergence, NonStandardMixedR1) {
+        waveLadder<NonStandardSolverPeriodic>(false, EBReconstructionConvention::R1, false);
+    }
+    TEST(Convergence, NonStandardMixedR2) {
+        waveLadder<NonStandardSolverPeriodic>(false, EBReconstructionConvention::R2, false);
+    }
+    TEST(Convergence, NonStandardMixedR2Prime) {
+        waveLadder<NonStandardSolverPeriodic>(false, EBReconstructionConvention::R2Prime, false);
+    }
+    TEST(Convergence, NonStandardSourcedR1) {
+        waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R1, false);
+    }
+    TEST(Convergence, NonStandardSourcedR2) {
+        waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R2, false);
+    }
+    TEST(Convergence, NonStandardSourcedR2Prime) {
+        waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R2Prime, false);
+    }
 }  // namespace chdr::solver::test
