@@ -282,4 +282,142 @@ namespace chdr::solver::test {
         std::vector<Complex> phi_m;
         std::map<std::tuple<double, double, double, double>, std::vector<double>> samples_m;
     };
+
+    struct ComovingSymbols {
+        std::vector<Complex> analytic_m, exactError_m, leadingError_m;
+    };
+    struct ComovingFactors {
+        Complex time_m, scalar_m, exSeries_m;
+        double c1_m, c2_m;
+    };
+
+    /// R2's time term is centred at the output label; its spatial coefficient depends on reading.
+    inline ComovingFactors centredFactors(std::array<double, SpatialDim> mode,
+                                          std::array<double, SpatialDim> spacing, double dt,
+                                          double beta,
+                                          SpatialDiscretization spatialDiscretization) {
+        const double gamma2 = ComovingPotentials::GAMMA * ComovingPotentials::GAMMA;
+        const double spatialSeries =
+            spatialDiscretization == SpatialDiscretization::Staggered ? 1.0 / 24.0 : 1.0 / 6.0;
+        const double frequency = beta * mode[2];
+        return {
+            {2.0 * std::sin(frequency * dt / 2.0) / dt, 0.0},
+            {1.0, 0.0},
+            {-spatialSeries * std::pow(mode[0] * spacing[0], 2), 0.0},
+            0.0,
+            gamma2
+                * (std::pow(beta, 4) * dt * dt / 24.0 - spatialSeries * spacing[2] * spacing[2])};
+    }
+
+    /** @brief Relabel the two R1 contributions independently.
+     * @details At the whole step the backward A difference carries a half-step
+     * phase; at the half step the scalar gradient carries the opposite phase.
+     * With the negative time phase used by ComovingPotentials, these factors are
+     * \f$e^{+i\omega\Delta t/2}\f$ for the time difference at the whole step and
+     * \f$e^{-i\omega\Delta t/2}\f$ for the scalar contribution at the half step.
+     * Expanding these factors together with the difference symbols produces the
+     * leading-error coefficients below. For transverse R1 at the half step,
+     * exSeries_m keeps the first-order phase term and the second-order spatial
+     * term, but omits the second-order temporal phase term; it is a mixed-order
+     * leading approximation, not a full second-order Taylor polynomial.
+     * This is a deduction from the reconstructed
+     * fields [fallahi2020mithra20fullwavesimulation, Eqs. (3.50)-(3.55)].
+     */
+    inline void applyR1Label(ComovingFactors& factors, double kz, double hz, double dt, double beta,
+                             bool halfLabel) {
+        const Complex imaginary(0.0, 1.0);
+        const double gamma2    = ComovingPotentials::GAMMA * ComovingPotentials::GAMMA,
+                     frequency = beta * kz;
+        if (halfLabel) {
+            factors.scalar_m = std::polar(1.0, -frequency * dt / 2.0);
+            factors.c1_m     = -gamma2 * beta * dt / 2.0;
+            factors.c2_m -= gamma2 * beta * beta * dt * dt / 8.0;
+            factors.exSeries_m -= imaginary * frequency * dt / 2.0;
+        } else {
+            factors.time_m *= std::polar(1.0, frequency * dt / 2.0);
+            factors.c1_m = -gamma2 * std::pow(beta, 3) * dt / 2.0;
+            factors.c2_m = gamma2 * (std::pow(beta, 4) * dt * dt - hz * hz) / 6.0;
+        }
+    }
+
+    struct ComovingModeSymbols {
+        Complex analytic_m, exactError_m, leadingError_m;
+    };
+
+    /** @brief Evaluate exact-symbol and leading-order errors for one Fourier coefficient.
+     * @pre Component is zero for the transverse electric field or two for the longitudinal field.
+     * @details These predictions use analytic coefficients and difference symbols;
+     * no measured field value enters the calculation. comovingSymbols documents
+     * the symbols and the interpretation of both error arrays.
+     */
+    inline ComovingModeSymbols modeSymbols(const ComovingPotentials& wave, std::size_t index,
+                                           std::array<double, SpatialDim> mode, double dt,
+                                           EBReconstructionConvention ebReconstructionConvention,
+                                           SpatialDiscretization spatialDiscretization,
+                                           unsigned component, bool r1HalfLabel) {
+        const Complex imaginary(0.0, 1.0);
+        const auto spacing  = wave.spacing();
+        const double beta   = wave.beta(),
+                     gamma2 = ComovingPotentials::GAMMA * ComovingPotentials::GAMMA;
+        auto factors        = centredFactors(mode, spacing, dt, beta, spatialDiscretization);
+        if (ebReconstructionConvention == EBReconstructionConvention::R1)
+            applyR1Label(factors, mode[2], spacing[2], dt, beta, r1HalfLabel);
+        const double spaceSymbol =
+            spatialDiscretization == SpatialDiscretization::Staggered
+                ? 2.0 * std::sin(mode[component] * spacing[component] / 2.0) / spacing[component]
+                : std::sin(mode[component] * spacing[component]) / spacing[component];
+        const auto phi = wave.coefficients()[index];
+        const Complex analytic =
+            -imaginary * mode[component] * phi / (component == 2 ? gamma2 : 1.0);
+        const Complex reconstructed =
+            component == 2
+                ? imaginary * (beta * factors.time_m - spaceSymbol * factors.scalar_m) * phi
+                : -imaginary * spaceSymbol * factors.scalar_m * phi;
+        return {analytic, reconstructed - analytic,
+                analytic
+                    * (component == 2
+                           ? imaginary * factors.c1_m * mode[2] + factors.c2_m * mode[2] * mode[2]
+                           : factors.exSeries_m)};
+    }
+
+    /** @brief Produce analytic fields and two independently predicted error series.
+     * @details The collocated derivative factor is \f$q_d=\sin(k_dh_d)/h_d\f$;
+     * the compact factor at the component's face is
+     * \f$q_d=2\sin(k_dh_d/2)/h_d\f$. The one-step time factor at the half step is
+     * \f$W=2\sin(\omega\Delta t/2)/\Delta t\f$
+     * [fallahi2020mithra20fullwavesimulation, Eqs. (3.50)-(3.55);
+     * ryu2016potentialfdtd, App. A, Eqs. (19)-(24)].
+     * For R2, the reconstructed coefficients are \f$-iq_x\widehat\phi\f$ and
+     * \f$i(\beta W-q_z)\widehat\phi\f$; applyR1Label supplies the phase factors
+     * when the two contributions use different times. Subtracting the analytic
+     * coefficients gives exactError_m, called P1 in the test records.
+     * leadingError_m, called P2, keeps the leading Taylor terms of these symbols.
+     * In particular, \f$q_d/k_d-1\f$ has leading term \f$-(k_dh_d)^2/6\f$ at
+     * centres and \f$-(k_dh_d)^2/24\f$ at faces, while \f$W/\omega-1\f$ has
+     * leading term \f$-(\omega\Delta t)^2/24\f$. The ratios use their continuous
+     * limits at zero wave number or frequency. These are expansions of the
+     * individual difference symbols; applyR1Label also expands the R1 phase factors
+     * before the field-error coefficients are formed. They are deductions from the
+     * displayed symbols; no reconstructed field or numerical difference is reused.
+     */
+    inline ComovingSymbols comovingSymbols(const ComovingPotentials& wave, double dt,
+                                           EBReconstructionConvention ebReconstructionConvention,
+                                           SpatialDiscretization spatialDiscretization,
+                                           unsigned component, bool r1HalfLabel) {
+        ComovingSymbols result;
+        const auto size = wave.coefficients().size();
+        result.analytic_m.resize(size);
+        result.exactError_m.resize(size);
+        result.leadingError_m.resize(size);
+        wave.forEachMode([&](int i, int j, int k) {
+            const auto index = wave.index(i, j, k);
+            const auto mode =
+                modeSymbols(wave, index, wave.waveVector(i, j, k), dt, ebReconstructionConvention,
+                            spatialDiscretization, component, r1HalfLabel);
+            result.analytic_m[index]     = mode.analytic_m;
+            result.exactError_m[index]   = mode.exactError_m;
+            result.leadingError_m[index] = mode.leadingError_m;
+        });
+        return result;
+    }
 }  // namespace chdr::solver::test
