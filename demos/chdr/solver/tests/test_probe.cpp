@@ -37,7 +37,54 @@ namespace {
             return FourierProbe(fields_m.getE(), levels, DT, box, {channel}, {frequency}, first,
                                 count, ProbeWindow::Rectangle, phiIsZero);
         }
+        void sample(FourierProbe& probe, int step) {
+            probe.sample(step, fields_m.getE(), fields_m.getB(), fields_m.getB(), fields_m.getJ());
+        }
     };
+
+    void checkInvalidGeometryAndChannels(ProbeFixture& fixture) {
+        EXPECT_THROW(fixture.make(R2, {{-1, 0, 0}, {0, 0, 0}}, ELECTRIC, 0.1, 0, 10),
+                     std::invalid_argument);
+        EXPECT_THROW(fixture.make(R2, {{0, 0, 0}, {8, 0, 0}}, ELECTRIC, 0.1, 0, 10),
+                     std::invalid_argument);
+        EXPECT_THROW(fixture.make(R2, POINT, {Quantity::Charge, 0}, 0.1, 0, 10),
+                     std::invalid_argument);
+        EXPECT_THROW(fixture.make(R2, POINT, {Quantity::Phi, 1}, 0.1, 0, 10),
+                     std::invalid_argument);
+        EXPECT_THROW(fixture.make(R2, POINT, {Quantity::Electric, SpatialDim}, 0.1, 0, 10),
+                     std::invalid_argument);
+        EXPECT_THROW(fixture.make(R1, POINT, ELECTRIC, 0.1, 0, 10), std::exception);
+        EXPECT_NO_THROW(fixture.make(R1, POINT, ELECTRIC, 0.1, 0, 10, true));
+    }
+
+    void checkInvalidTimeGate(ProbeFixture& fixture) {
+        for (double frequency : {0.0, 0.5, std::numeric_limits<double>::quiet_NaN()})
+            EXPECT_THROW(fixture.make(R2, POINT, ELECTRIC, frequency, 0, 10),
+                         std::invalid_argument);
+        EXPECT_THROW(fixture.make(R2, POINT, ELECTRIC, 0.1, -1, 10), std::invalid_argument);
+        EXPECT_THROW(fixture.make(R2, POINT, ELECTRIC, 0.1, 0, 0), std::invalid_argument);
+    }
+
+    /// Samples outside the gate are ignored; samples inside it must be complete and ordered.
+    void checkGateSampling(ProbeFixture& fixture) {
+        auto probe = fixture.make(R2, POINT, ELECTRIC, 0.1, 3, 2);
+        EXPECT_THROW(probe.gather(), std::logic_error);
+        EXPECT_NO_THROW(fixture.sample(probe, 0));
+        EXPECT_THROW(fixture.sample(probe, 4), std::logic_error);
+        fixture.sample(probe, 3);
+        EXPECT_THROW(fixture.sample(probe, 3), std::logic_error);
+        fixture.sample(probe, 4);
+        EXPECT_NO_THROW(fixture.sample(probe, 5));
+        EXPECT_NO_THROW(probe.gather());
+    }
+
+    TEST(FourierProbe, ValidatesConfiguration) {
+        ProbeFixture fixture;
+        checkInvalidGeometryAndChannels(fixture);
+        checkInvalidTimeGate(fixture);
+        checkGateSampling(fixture);
+    }
+
     /** @brief Independent integer remainder for an exactly represented dyadic frequency.
      * @details Binary64 frequencies are integer multiples of powers of two. Repeated
      * modular doubling forms the exact product remainder without a floating product;
@@ -88,5 +135,20 @@ namespace {
             FourierProbe(fixture.fields_m.getE(), R2, std::numeric_limits<double>::denorm_min(),
                          POINT, {ELECTRIC}, {0.25}, 0, 1),
             std::invalid_argument);
+    }
+
+    /// Different per-rank boxes deliberately make one output index lack an owner.
+    TEST(FourierProbe, OwnershipFailureIsCollective) {
+        if (ippl::Comm->size() < 2)
+            GTEST_SKIP() << "Ownership disagreement requires multiple ranks";
+        ProbeFixture fixture;
+        const auto& local = fixture.fields_m.getFL().getLocalNDIndex();
+        const int outside = local[2].first() == 0 ? 15 : 0;
+        auto probe = fixture.make(R2, {{0, 0, outside}, {0, 0, outside}}, ELECTRIC, 0.1, 0, 1);
+        fixture.sample(probe, 0);
+        EXPECT_THROW(probe.gather(), std::runtime_error);
+        int reached = 1, ranks = 0;
+        MPI_Allreduce(&reached, &ranks, 1, MPI_INT, MPI_SUM, fixture.fields_m.getFL().comm);
+        EXPECT_EQ(ranks, ippl::Comm->size());
     }
 }  // namespace

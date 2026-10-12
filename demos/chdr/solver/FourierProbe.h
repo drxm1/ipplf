@@ -188,6 +188,48 @@ namespace chdr::solver {
         }
         const ProbeRecord& metadata() const { return record_m; }
 
+        /** @brief Sample E/B, separately supplied raw B and the current potential slot.
+         * @details Calls outside the gate are harmless. Inside it, duplicate or skipped
+         * steps are rejected so the recorded window sums still describe the data.
+         * Phases are shared across cells; the device kernel reads only owned indices.
+         * @param step Completed-solve count after solve(), or zero after evaluateInitialFields().
+         * @param electric Reconstructed electric output at this completed-solve count.
+         * @param magnetic Reconstructed magnetic output at this completed-solve count.
+         * @param rawMagnetic Separately reconstructed unaveraged magnetic field.
+         * @param currentA Current A_n potential slot at this completed-solve count:
+         * scalar potential in component zero and Cartesian vector potential in components
+         * 1 through SpatialDim. Channel times/positions come from the bound LevelContract.
+         * @pre At count zero, reconstruct initial E/B after loading histories.
+         * Prefer SolverFourierProbe for evolving solver fields: it supplies these arguments.
+         */
+        void sample(std::int64_t step, const VectorField& electric, const VectorField& magnetic,
+                    const VectorField& rawMagnetic, const PotentialField& currentA) {
+            if (step < record_m.firstStep_m || step >= record_m.firstStep_m + record_m.samples_m)
+                return;
+            if (step != record_m.firstStep_m + samplesSeen_m)
+                throw std::logic_error("Probe samples must cover its gate exactly once in order");
+            const double scale = record_m.dt_m * weight(samplesSeen_m++);
+            preparePhases(step, scale);
+            accumulate(electric, magnetic, rawMagnetic, currentA);
+        }
+
+        /** @brief Collect completed transforms and counts on communicator rank zero.
+         * @pre Collective after the complete gate, in the same order on every rank.
+         * @details Each cell's complete temporal sum is computed by its one owner.
+         * Other ranks supply zero in that output position, so MPI does not combine
+         * partial temporal sums in a different order. Ownership counts check this
+         * condition explicitly. Real and imaginary parts are transferred as plain
+         * doubles, avoiding any dependency on a complex MPI datatype mapping.
+         */
+        ProbeRecord gather() const {
+            if (samplesSeen_m != record_m.samples_m)
+                throw std::logic_error("Cannot gather an incomplete Fourier probe gate");
+            auto result        = record_m;
+            const auto buffers = packOutput();
+            reduceOutput(buffers, result);
+            return result;
+        }
+
     private:
         static constexpr double TWO_PI         = 2.0 * Kokkos::numbers::pi_v<double>;
         static constexpr std::int64_t MAX_STEP = (std::int64_t{1} << 51) - 2;
@@ -359,6 +401,148 @@ namespace chdr::solver {
                                                       : n == 2 ? 1.0
                                                                : 0.375 * n);
         }
+
+        /// Reuse the first channel with this label; phases do not depend on cell or component.
+        std::size_t phaseSource(std::size_t channel) const {
+            std::size_t prior = 0;
+            while (prior < channel
+                   && record_m.channels_m[prior].halfStepLabel_m.count()
+                          != record_m.channels_m[channel].halfStepLabel_m.count())
+                ++prior;
+            return prior;
+        }
+        void preparePhases(std::int64_t step, double scale) {
+            // Host mirrors may alias device-accessible memory on unified-memory backends.
+            Kokkos::fence("Complete probe sampling before updating shared phase storage");
+            for (std::size_t c = 0; c < record_m.channels_m.size(); ++c)
+                prepareChannelPhase(c, phaseSource(c), step, scale);
+            Kokkos::deep_copy(factors_m, factorsHost_m);
+        }
+        void prepareChannelPhase(std::size_t channel, std::size_t prior, std::int64_t step,
+                                 double scale) {
+            for (std::size_t f = 0; f < record_m.frequencies_m.size(); ++f) {
+                const double angle =
+                    prior == channel
+                        ? phase(record_m.frequencies_m[f],
+                                2 * step + record_m.channels_m[channel].halfStepLabel_m.count())
+                        : 0.0;
+                factorsHost_m(channel, f, 0) =
+                    prior == channel ? scale * std::cos(angle) : factorsHost_m(prior, f, 0);
+                factorsHost_m(channel, f, 1) =
+                    prior == channel ? scale * std::sin(angle) : factorsHost_m(prior, f, 1);
+            }
+        }
+
+        /** @brief Read one channel directly from its matching field view.
+         * @param channel Quantity and Cartesian component; scalar potential uses component zero.
+         * @param i First local spatial index, including the halo offset.
+         * @param j Second local spatial index, including the halo offset.
+         * @param k Third local spatial index, including the halo offset.
+         * @param electricView Reconstructed E components at the bound electric time.
+         * @param magneticView Reconstructed B components, including convention-specific averaging.
+         * @param rawMagneticView Unaveraged curl of the current vector potential.
+         * @param currentAView Current four-component potential slot, ordered scalar then vector.
+         * @details No interpolation is performed; LevelContract supplies each channel's
+         * physical position and time, and sample checks the completed-solve index.
+         */
+        KOKKOS_INLINE_FUNCTION static double readSample(ProbeChannel channel, int i, int j, int k,
+                                                        VectorFieldView electricView,
+                                                        VectorFieldView magneticView,
+                                                        VectorFieldView rawMagneticView,
+                                                        FourPotentialView currentAView) {
+            const unsigned component = channel.component_m;
+            switch (channel.quantity_m) {
+                case Quantity::Electric:
+                    return electricView(i, j, k)[component];
+                case Quantity::Magnetic:
+                    return magneticView(i, j, k)[component];
+                case Quantity::RawMagnetic:
+                    return rawMagneticView(i, j, k)[component];
+                case Quantity::Phi:
+                    return currentAView(i, j, k)[0];
+                case Quantity::VectorPotential:
+                    return currentAView(i, j, k)[component + 1];
+                default:
+                    return 0.0;
+            }
+        }
+
+    public:
+        /** @brief Internal launcher: one work item owns a cell/channel's temporal sums.
+         * @param electric Reconstructed E; Cartesian components start at zero.
+         * @param magnetic Reconstructed B at the bound convention's output time.
+         * @param rawMagnetic Separately reconstructed unaveraged B at the current A time.
+         * @param currentA Current A_n slot: scalar potential then Cartesian vector potential.
+         * @details Frequency and real/imaginary accumulation order stay fixed.
+         * CUDA extended host/device lambdas require a public enclosing member;
+         * this access follows the same restriction documented by IPPL's FFT wrappers.
+         * Call sample() for the public sampling protocol, including gate/phase preparation.
+         */
+        void accumulate(const VectorField& electric, const VectorField& magnetic,
+                        const VectorField& rawMagnetic, const PotentialField& currentA) {
+            const VectorFieldView e = electric.getView(), b = magnetic.getView(),
+                                  raw = rawMagnetic.getView();
+            const FourPotentialView a = currentA.getView();
+            const auto cells          = cells_m;
+            const auto channels       = channels_m;
+            const auto sums           = sums_m;
+            const auto factors        = factors_m;
+            const auto channelCount = channels.extent(0), frequencyCount = factors.extent(1);
+            Kokkos::parallel_for(
+                "Fourier probe sample", cells.extent(0) * channelCount,
+                KOKKOS_LAMBDA(const std::size_t item) {
+                    const auto cell = item / channelCount, channel = item % channelCount;
+                    const double value = readSample(channels(channel), cells(cell, 1),
+                                                    cells(cell, 2), cells(cell, 3), e, b, raw, a);
+                    for (std::size_t f = 0; f < frequencyCount; ++f)
+                        for (unsigned part = 0; part < 2; ++part)
+                            sums(cell, channel, f, part) += value * factors(channel, f, part);
+                });
+        }
+
+    private:
+        /// Scatter only owned accumulators into globally ordered zero-padded host buffers.
+        OutputBuffers packOutput() const {
+            const auto cells = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, cells_m);
+            const auto sums  = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, sums_m);
+            const auto frequencies = record_m.frequencies_m.size();
+            const auto width       = record_m.channels_m.size() * frequencies * 2;
+            OutputBuffers buffers{std::vector<double>(record_m.indices_m.size() * width, 0.0),
+                                  std::vector<int>(record_m.indices_m.size(), 0)};
+            for (std::size_t cell = 0; cell < cells.extent(0); ++cell) {
+                const auto global        = std::size_t(cells(cell, 0));
+                buffers.counts_m[global] = 1;
+                for (std::size_t c = 0; c < record_m.channels_m.size(); ++c)
+                    for (std::size_t f = 0; f < frequencies; ++f)
+                        for (unsigned part = 0; part < 2; ++part)
+                            buffers.values_m[global * width + 2 * (c * frequencies + f) + part] =
+                                sums(cell, c, f, part);
+            }
+            return buffers;
+        }
+
+        /// Counts accompany the same global cell order, detecting gaps or duplicated ownership.
+        void reduceOutput(const OutputBuffers& buffers, ProbeRecord& result) const {
+            int rank;
+            MPI_Comm_rank(comm_m, &rank);
+            if (rank == 0) {
+                result.values_m.resize(buffers.values_m.size());
+                result.ownership_m.resize(buffers.counts_m.size());
+            }
+            MPI_Reduce(buffers.values_m.data(), result.values_m.data(),
+                       int(buffers.values_m.size()), MPI_DOUBLE, MPI_SUM, 0, comm_m);
+            MPI_Reduce(buffers.counts_m.data(), result.ownership_m.data(),
+                       int(buffers.counts_m.size()), MPI_INT, MPI_SUM, 0, comm_m);
+            int invalid =
+                rank == 0
+                && std::any_of(result.ownership_m.begin(), result.ownership_m.end(), [](int count) {
+                       return count != 1;
+                   });
+            MPI_Bcast(&invalid, 1, MPI_INT, 0, comm_m);
+            if (invalid)
+                throw std::runtime_error("Fourier probe cells do not have exactly one owner");
+        }
+
         ProbeBox box_m;
         MPI_Comm comm_m;
         ProbeRecord record_m;
