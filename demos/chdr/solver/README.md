@@ -207,6 +207,13 @@ No filter is added. NonStandard's axial
 Nyquist endpoint is a repeated root; its recorded growth follows the
 discrete recurrence (deduction from Eq. (3.24)).
 
+The `DISABLED_Holdout` suite is excluded from normal runs. It uses a different
+wave vector and anisotropic cells and is run once after development checks
+and their evidence are complete. The collocated case checks field/Gauss
+convergence, discrete identities and rank agreement; the staggered case is an
+additional record. Do not tune against its result. The exact inputs and
+numerical assertions are defined in `Convergence.h` and the named test bodies.
+
 ## Library references
 
 The citation keys used in source comments identify these works:

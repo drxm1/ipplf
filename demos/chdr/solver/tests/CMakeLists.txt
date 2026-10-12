@@ -76,6 +76,7 @@ chdr_solver_test(rank_cases "RankCases.*")
 include(RankTests.cmake)
 include(ConvergenceTests.cmake)
 chdr_solver_test(wave_norms "WaveNorms.*")
+include(LongTests.cmake)
 target_sources(test-chdr-solver PRIVATE test_serial_reference.cpp)
 chdr_solver_test(serial_reference "SerialReference.*")
 target_sources(test-chdr-solver PRIVATE test_statistics.cpp)
@@ -88,3 +89,5 @@ foreach(case ObliqueStandard ObliqueNonStandard AxialNonStandardStable
              AxialNonStandardBoundaryRecord)
   chdr_solver_test(gauge.${case} "GaugeWave.${case}")
 endforeach()
+
+include(StaggeredTests.cmake)
