@@ -93,4 +93,6 @@ foreach(case ObliqueStandard ObliqueNonStandard AxialNonStandardStable
   chdr_solver_test(gauge.${case} "GaugeWave.${case}")
 endforeach()
 
+target_sources(test-chdr-solver PRIVATE test_probe.cpp)
+chdr_solver_test(probe "FourierProbe.*")
 include(StaggeredTests.cmake)

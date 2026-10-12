@@ -207,6 +207,33 @@ No filter is added. NonStandard's axial
 Nyquist endpoint is a repeated root; its recorded growth follows the
 discrete recurrence (deduction from Eq. (3.24)).
 
+The Fourier probe computes the rectangular-rule time transform with a positive
+time-exponential and no forward normalization:
+\f$\widehat f=\Delta t\sum_n w_nf_n\exp(i\omega t_n)\f$.
+Each channel reads its own time label and spatial offset from the contract.
+The gate is explicit and half-open. Frequencies are cycles per step in
+\f$(0,1/2)\f$; phases use the integer half-step index and FMA product remainder.
+Windows are rectangle and periodic Hann
+\f$w_n=[1-\cos(2\pi n/N)]/2\f$
+[Oskooi et al., section 5.1, Eq. (6)][meep];
+[Heinzel et al., Eq. (17), Appendix B][window].
+Accumulators are local per owned cell; output reduces zero-padded real and
+imaginary doubles with an ownership count of exactly one. Metadata includes
+the gate, time step, frequency, window sums, labels and sampling coordinates.
+
+The full convention uses the spatial forward kernel
+\f$\exp(-i\mathbf k\cdot\mathbf x)\f$ and one inverse factor
+\f$(2\pi)^{-1}\f$ per transformed variable; fields have phase
+\f$\exp(i\mathbf k\cdot\mathbf x-i\omega t)\f$.
+The probe transforms time only and applies no spatial area or volume factor.
+
+For P global cells, C channels and F frequencies, gather allocates 2PCF doubles
+on each rank and another 2PCF doubles on rank zero. Indices and PC coordinates
+are also global on each rank; device accumulators use 2P_local CF doubles.
+This implementation suits bounded point/plane diagnostics; account for those
+global buffers before choosing a large surface or frequency list. Host phase
+updates wait for the preceding sample kernel, including on asynchronous backends.
+
 The `DISABLED_Holdout` suite is excluded from normal runs. It uses a different
 wave vector and anisotropic cells and is run once after development checks
 and their evidence are complete. The collocated case checks field/Gauss
