@@ -97,4 +97,15 @@ target_sources(test-chdr-solver PRIVATE test_probe.cpp)
 chdr_solver_test(probe "FourierProbe.*")
 include(ProbeTests.cmake)
 target_sources(test-chdr-solver PRIVATE test_comoving.cpp)
+chdr_solver_test(comoving "ComovingT7.*")
+foreach(variant serial mpi2)
+  if(TEST chdr.solver.comoving.${variant})
+    set_tests_properties(
+      chdr.solver.comoving.${variant}
+      PROPERTIES
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;CHDR_SOLVER_RECORD_DIR=${CHDR_SOLVER_RECORD_ROOT}/comoving-${variant}"
+    )
+  endif()
+endforeach()
 include(StaggeredTests.cmake)

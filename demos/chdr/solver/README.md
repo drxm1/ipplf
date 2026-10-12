@@ -243,12 +243,78 @@ This implementation suits bounded point/plane diagnostics; account for those
 global buffers before choosing a large surface or frequency list. Host phase
 updates wait for the preceding sample kernel, including on asynchronous backends.
 
+## Tests and evidence
+
+Build `test-chdr-solver` with `BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS`.
+The project Nix configuration also enables CHDR, FEL, FFT and SOLVERS with
+SERIAL and OPENMP. Use at most two compiler jobs for local development.
+
+From the IPPL checkout, retain the usual toolchain and dependency options when
+configuring. For an existing configured build, enable the relevant modules with:
+
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON -DIPPL_ENABLE_UNIT_TESTS=ON \
+  -DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_FEL=ON \
+  -DIPPL_ENABLE_FFT=ON -DIPPL_ENABLE_SOLVERS=ON
+cmake --build build --parallel 2 --target test-chdr-solver test-chdr-vacuum \
+  test-chdr-vacuum-output chdr-vacuum-wave
+ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
+  -LE 'long|record' --output-on-failure -j1
+ctest --test-dir build --no-tests=error -R '^chdr\.vacuum\.' --output-on-failure -j1
+ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
+  -L 'long|record' --output-on-failure -j1
+```
+
+The last selection runs the longer ladders and supplementary records separately.
+Use `-V` to retain numerical records from passing tests. Python3 and an MPI
+launcher are required for complete rank comparisons; unavailable comparisons
+appear as skipped tests. The full finite-window probe also has a serial CTest.
+
+The CTests separate bounded unit checks, long ladders and records. Tests run
+on one and two MPI ranks with one OpenMP thread per rank. Numerical assertions
+use global reductions. Rank fixtures compare global-index owned-cell dumps,
+including the source/potential seam cases; probe rank comparison checks the
+actual gathered output. Configure `CHDR_SOLVER_RECORD_ROOT` to relocate generated
+records; its default is `build/demos/chdr/solver/tests/runs`. It contains serial,
+MPI2 and probe-rank subdirectories. CTest assigns each producer's
+`CHDR_SOLVER_RECORD_DIR`; a direct executable invocation can set that variable
+itself. Preserve these directories with the run log.
+
+| Test suites | Main checks |
+|---|---|
+| `Manufactured` | Source sign, all components and time labels; wrong-label control |
+| `Levels`, `GaugeWave`, `LevelEquivalence` | Discrete gauge cancellation, R1 closed form and bitwise R2/R2Prime equivalence |
+| `Convergence`, `LongConvergence`, `StaggeredConvergence`, `LongStaggeredConvergence` | Mixed source-free and analytic sourced waves, compared at each output's label |
+| `LongGaugeGrowth` | Gauge norm in the first and last of ten periods |
+| `Dispersion`, `RecordDispersion` | Single-root cumulative phase and angular dispersion |
+| `TimeStep`, `TimeStepLong`, `TimeStepRecords` | Permitted range, effective safety factor, bounded/growing histories and endpoint records |
+| `ComovingT7` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
+| `FourierProbe`, `FourierProbeT8` | Closed-form finite-window transform, labels, positions and ownership |
+| `RankGather`, `RankCases`, `SerialReference`, `StableStatistics` | Owned fields and well-conditioned reductions across rank layouts |
+| `SolverShell`, `chdr.vacuum.*` CTests | Inherited vacuum evolution and output regression |
+| `Operators`, `CompactOperators`, `PeriodicSetup` | Difference symbols, periodic halos and geometry |
+| `ChdrMonitors`, `ChdrMonitorRecords`, `ChdrStaggered` | Discrete residual identities, continuity and Gauss formulas in both readings |
+
+The NonStandard source-amplitude record contains two host-side symbol predictions.
+The manufactured test checks that the update adds its source without averaging;
+the smooth sourced-wave record does not test evanescent near-field response.
+That application remains a separate experiment.
+
 The `DISABLED_Holdout` suite is excluded from normal runs. It uses a different
 wave vector and anisotropic cells and is run once after development checks
 and their evidence are complete. The collocated case checks field/Gauss
 convergence, discrete identities and rank agreement; the staggered case is an
 additional record. Do not tune against its result. The exact inputs and
 numerical assertions are defined in `Convergence.h` and the named test bodies.
+
+The four upstream Maxwell examples remain compile-only. The Standard example's
+update, dispersion and rank claims are covered here by `Manufactured`,
+`Dispersion` and `RankCases`. The NonStandard convergence example and the two
+image demos retain their compile-only registration; this module does not
+modify `test/maxwell`.
+Whether to convert the shared NonStandard convergence example into an asserted
+runtime test remains unresolved (an open decision). The mapping
+above records current coverage and does not settle that upstream change.
 
 ## Library references
 
