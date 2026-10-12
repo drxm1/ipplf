@@ -30,3 +30,4 @@ function(chdr_solver_rank_producer suite)
 endfunction()
 
 chdr_solver_rank_producer(manufactured)
+chdr_solver_rank_producer(rank_cases)
