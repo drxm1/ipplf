@@ -29,6 +29,8 @@
 
 #include "FELFieldContainer.hpp"
 #include "LevelContract.h"
+#include "MaterialFormulation.h"
+#include "MaterialStepContext.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "Operators.h"
 #include "Reconstruction.h"
@@ -46,11 +48,6 @@ namespace chdr::solver {
 
     /// Three-component electric or magnetic field storage type on an IPPL mesh.
     using EMFieldsType = VField_t<double, SpatialDim>;
-
-    /// Four-component scalar/vector potential or charge/current storage type.
-    /// Component zero stores \f$\phi\f$ or \f$\rho\f$; components 1 through SpatialDim
-    /// store the Cartesian components of \f$\mathbf A\f$ or \f$\mathbf J\f$.
-    using AJFourFieldsType = SourceField_t<double, SpatialDim>;
 
     /// Periodic Standard FDTD Solver, like in the vacuum example.
     /// Later on we will enable different boundary conditions,
