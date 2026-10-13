@@ -5,6 +5,7 @@ add_ippl_test(
   COMPILE_ONLY
   SOURCES
   ../../vacuum/tests/TestMain.cpp
+  test_owner.cpp
   test_halo.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
@@ -12,7 +13,7 @@ add_ippl_test(
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
 target_link_libraries(test-chdr-material PRIVATE chdr-material)
 target_compile_options(test-chdr-material PRIVATE -UNDEBUG)
-foreach(suite Halo)
+foreach(suite Owner Halo)
   add_test(NAME chdr.material.${suite}.serial COMMAND test-chdr-material
                                                       --gtest_filter=Material${suite}.*)
   set_tests_properties(

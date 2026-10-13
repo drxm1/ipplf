@@ -17,7 +17,50 @@ namespace chdr::material {
     using Position             = ippl::Vector<double, 3>;
     using Policy               = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
 
+    /** @brief Global statistics of the owned relative-permittivity samples in epsilon_m, excluding
+     * ghosts.
+     * @details Nonfinite cells are excluded from extrema and clear allFinite.
+     * Unsigned checksum sums are commutative, including unsigned integer overflow.
+     *
+     * MapStatistics holds a summary of the material map.
+     *
+     * It considers the `relative permittivity` values stored in `epsilon_m`,
+     * sampled by a map functor at cell centres.
+     */
+    struct MapStatistics {
+        /// Extrema of finite values, e.g. {1, 2.13} if it contains both vacuum and the 2.13=epsilon
+        /// material
+        double minimum_m = 0, maximum_m = 0;
+
+        /// Whether every value is finite - no NaN or infinity
+        bool allFinite_m = true;
+
+        /// count of cells marked by the map functor
+        std::uint64_t marked_m = 0;
+
+        /// fingerprint of marked cell locations
+        std::uint64_t markedChecksum_m = 0;
+
+        /// fingerprint incorporating locations and material values
+        std::uint64_t mapChecksum_m = 0;
+
+        /// A homogeneous map has finite, bitwise equal extrema.
+        bool homogeneous() const {
+            return allFinite_m
+                   && Kokkos::bit_cast<std::uint64_t>(minimum_m)
+                          == Kokkos::bit_cast<std::uint64_t>(maximum_m);
+        }
+    };
+
     namespace detail {
+        /// SplitMix64 finalizer, preserving the mesh/ occupied-ID checksum.
+        KOKKOS_INLINE_FUNCTION std::uint64_t hash(std::uint64_t id) {
+            id += UINT64_C(0x9e3779b97f4a7c15);
+            id = (id ^ (id >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+            id = (id ^ (id >> 27)) * UINT64_C(0x94d049bb133111eb);
+            return id ^ (id >> 31);
+        }
+
         /** @brief Device-copyable index metadata shared by sampling and verification.
          * @details The centre expression retains its arithmetic order, so a geometry
          * predicate sees exactly the mesh demo's original boundary samples.
@@ -34,6 +77,11 @@ namespace chdr::material {
                 for (unsigned d = 0; d < 3; ++d)
                     result[d] = origin_m[d] + (global[d] + 0.5) * spacing_m[d];
                 return result;
+            }
+            KOKKOS_INLINE_FUNCTION std::uint64_t id(CellIndex global) const {
+                return (std::uint64_t(global[0] - lower_m[0]) * count_m[1] + global[1] - lower_m[1])
+                           * count_m[2]
+                       + global[2] - lower_m[2];
             }
         };
 
@@ -140,18 +188,63 @@ namespace chdr::material {
             field.fillHalo();
             extendPhysical(field);
         }
-        /// Sample owned cells on the device; the functor receives global coordinates.
+        /** @brief Store cell-centred relative permittivity and summarize owned samples.
+         * @details Each rank visits only its owned cells; halos would duplicate samples
+         * in the global statistics. The map receives the global cell index and centre.
+         * Its value is stored unchanged, including NaN or infinity. Its separate bool
+         * output marks cells for the occupied count and occupied-location fingerprint;
+         * unmarked cells still contribute to the extrema and full-map fingerprint.
+         *
+         * The full-map fingerprint combines each global ID with the stored value's
+         * exact bits. It can reveal value changes that the occupied mask cannot, but
+         * a hash match is not a cell-by-cell equality proof. Unsigned sums use the same
+         * wraparound arithmetic on each decomposition, without floating-point sums.
+         * Nonfinite values set a separate flag and never enter the extrema reduction.
+         * Only the reduced scalars reach the host; MPI makes the result rank identical.
+         *
+         * rasterize() fills `epsilon_m` and computes its statistics
+         */
         template <class Map>
-        void rasterize(ScalarField& field, Map map) {
+        MapStatistics rasterize(ScalarField& field, Map map) {
             const auto coordinates = detail::coordinates(field.get_mesh(), field.getLayout());
             const auto view        = field.getView();
-            Kokkos::parallel_for(
+            std::uint64_t marked = 0, occupiedHash = 0, valueHash = 0, nonfinite = 0;
+            double minimum = 0, maximum = 0;
+            Kokkos::parallel_reduce(
                 "Rasterize material", field.getFieldRangePolicy(),
-                KOKKOS_LAMBDA(int i, int j, int k) {
-                    const auto global = coordinates.global(i, j, k);
-                    bool marked       = false;
-                    view(i, j, k)     = map(global, coordinates.centre(global), marked);
-                });
+                KOKKOS_LAMBDA(int i, int j, int k, std::uint64_t& count, std::uint64_t& mask,
+                              std::uint64_t& values, std::uint64_t& bad, double& low,
+                              double& high) {
+                    const auto global  = coordinates.global(i, j, k);
+                    bool inside        = false;
+                    const double value = map(global, coordinates.centre(global), inside);
+                    view(i, j, k)      = value;
+                    const auto hash    = detail::hash(coordinates.id(global));
+                    if (inside) {
+                        ++count;
+                        mask += hash;
+                    }
+                    values += detail::hash(hash ^ Kokkos::bit_cast<std::uint64_t>(value));
+                    if (!Kokkos::isfinite(value))
+                        ++bad;
+                    else {
+                        low  = Kokkos::min(low, value);
+                        high = Kokkos::max(high, value);
+                    }
+                },
+                marked, occupiedHash, valueHash, nonfinite, Kokkos::Min<double>(minimum),
+                Kokkos::Max<double>(maximum));
+
+            // Kokkos initializes Min/Max with their reducer identities, not the
+            // zero-valued output variables above. If a rank has no finite sample,
+            // its reducer identities remain; the nonfinite flag prevents homogeneity.
+            std::uint64_t sums[3]{marked, occupiedHash, valueHash};
+            // Negating the maximum lets one MPI_MIN reduce both extrema. A -1
+            // flag wins over 0 if any rank encountered a nonfinite sample.
+            double extrema[3]{minimum, -maximum, nonfinite ? -1.0 : 0.0};
+            MPI_Allreduce(MPI_IN_PLACE, sums, 3, MPI_UINT64_T, MPI_SUM, field.getLayout().comm);
+            MPI_Allreduce(MPI_IN_PLACE, extrema, 3, MPI_DOUBLE, MPI_MIN, field.getLayout().comm);
+            return {extrema[0], -extrema[1], extrema[2] == 0, sums[0], sums[1], sums[2]};
         }
 
     }  // namespace detail
@@ -171,12 +264,13 @@ namespace chdr::material {
          * as mesh. Every local axis must contain at least two owned cells.
          * @param map Device-copyable double(CellIndex, Position, bool&) functor. It must
          * return the same bits at the same coordinates and set its marked flag.
-         * @details Map storage stays in the field execution space.
+         * @details One owned-cell device reduction computes all statistics; only
+         * reduced scalars cross to the host.
          */
         template <class Map>
         MaterialOwner(Mesh& mesh, Layout& layout, const Map& map)
             : epsilon_m(mesh, detail::checkedLayout(layout)) {
-            detail::rasterize(epsilon_m, map);
+            statistics_m = detail::rasterize(epsilon_m, map);
             detail::synchronize(epsilon_m);
         }
         MaterialOwner(const MaterialOwner&)            = delete;
@@ -186,8 +280,20 @@ namespace chdr::material {
 
         /// Complete immutable allocation, including every face, edge and corner ghost.
         ScalarFieldConstView epsilon() const { return epsilon_m.getView(); }
+        /// Cached global summary of owned epsilon samples; this accessor performs no collective.
+        const MapStatistics& statistics() const { return statistics_m; }
         Mesh& mesh() const { return epsilon_m.get_mesh(); }
         Layout& layout() const { return epsilon_m.getLayout(); }
+
+        /** @brief Return the cached common relative permittivity, without communication.
+         * @throws std::invalid_argument If the cached extrema fail homogeneous().
+         * @details Returning the sampled minimum preserves its bits; no mean is formed.
+         */
+        double homogeneousValue() const {
+            if (!statistics_m.homogeneous())
+                throw std::invalid_argument("Material is not homogeneous");
+            return statistics_m.minimum_m;
+        }
 
         /// Local allocation spans, including halos, in bytes.
         std::uint64_t allocatedBytes() const {
@@ -197,5 +303,6 @@ namespace chdr::material {
 
     private:
         ScalarField epsilon_m;
+        MapStatistics statistics_m;
     };
 }  // namespace chdr::material
