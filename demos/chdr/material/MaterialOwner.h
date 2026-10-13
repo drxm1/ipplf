@@ -6,7 +6,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <typeindex>
+#include <unordered_map>
 
 namespace chdr::material {
     using Mesh                 = ippl::UniformCartesian<double, 3>;
@@ -282,11 +286,13 @@ namespace chdr::material {
 
     }  // namespace detail
 
-    /** @brief Own a static distributed cell map on the caller's mesh and layout.
-     * @details Construction is collective. The mesh/layout and all retained views
-     * must outlive their uses and end before Kokkos finalization
-     * [kokkos2026ViewProgrammingGuide, lines 293-319]. Storage accepts any value;
-     * the solver formulation specifies which materials its update supports.
+    /** @brief Own a static cell map and cache coefficient fields by rule name.
+     * @details Construction and the first derive call for a rule are collective.
+     * Every rank must use the same map/rule and call order. The caller's mesh and
+     * layout outlive this object and any solver using its views. Returned const
+     * views retain allocations [kokkos2026ViewProgrammingGuide, lines 293-306];
+     * all handles must be destroyed before Kokkos finalization. Map values are
+     * unrestricted: a solver formulation, not this storage class, sets validity.
      */
     class MaterialOwner {
     public:
@@ -329,15 +335,75 @@ namespace chdr::material {
             return statistics_m.minimum_m;
         }
 
-        /// Local allocation spans, including halos, in bytes.
+        /** @brief Compute a coefficient field from epsilon once, then reuse its allocation.
+         * @details Rule supplies static Name and a device-callable
+         * double operator()(ScalarFieldConstView,int,int,int). Indices are local
+         * allocation indices; the input already includes valid epsilon ghosts.
+         * The rule runs on owned cells before its output ghosts are synchronized.
+         * Rule::ForwardAxis is -1 for a cell-centred rule, or 0, 1, 2 for a rule
+         * using the cell and its next neighbour along that axis. Forward rules
+         * receive the lower-boundary correction described in fixLowerFace().
+         *
+         * Rules must be stateless: the cache key is Name, with a C++ type check,
+         * not the contents of a rule object. Repeating a request returns the same
+         * const view without reevaluation. A different type with the same name
+         * is rejected instead of silently returning the first type's field.
+         *
+         * The first request is collective; all ranks must use the same rule and
+         * call order. Later requests only consult the local cache. Filling this
+         * mutable cache changes neither epsilon nor any previously returned field.
+         * Returned views retain their allocation as described by the class contract.
+         * @throws std::invalid_argument If Name already belongs to another rule type.
+         */
+        template <class Rule>
+        ScalarFieldConstView derive(const Rule& rule) const {
+            if (cache_m.count(Rule::Name))
+                return derived<Rule>();
+            auto field        = std::make_unique<ScalarField>(mesh(), layout());
+            const auto output = field->getView();
+            const auto input  = epsilon();
+            Kokkos::parallel_for(
+                "Derive material coefficient", field->getFieldRangePolicy(),
+                KOKKOS_LAMBDA(int i, int j, int k) { output(i, j, k) = rule(input, i, j, k); });
+            detail::synchronize(*field);
+            fixLowerFace(*field, rule);
+            cache_m.emplace(Rule::Name, CacheEntry{typeid(Rule), std::move(field)});
+            return derived<Rule>();
+        }
+
+        /** @brief Retrieve an already cached coefficient without communication or allocation.
+         * @details Unlike derive(), this never builds a missing field. The type
+         * guard makes Name a unique association with the rule that created it.
+         * @throws std::out_of_range If no field with Rule::Name has been derived.
+         * @throws std::invalid_argument If that name belongs to another rule type.
+         */
+        template <class Rule>
+        ScalarFieldConstView derived() const {
+            const auto found = cache_m.find(Rule::Name);
+            if (found == cache_m.end())
+                throw std::out_of_range("Material rule has not been derived");
+            if (found->second.type_m != std::type_index(typeid(Rule)))
+                throw std::invalid_argument("Material rule name belongs to another type");
+            return found->second.field_m->getView();
+        }
+
+        /// Local allocation spans, including halos and cached fields, in bytes.
         std::uint64_t allocatedBytes() const {
             std::uint64_t spans = epsilon().span();
+            for (const auto& entry : cache_m)
+                spans += entry.second.field_m->getView().span();
             return spans * sizeof(double);
         }
 
     private:
+        /// Keep the owning field for halo operations and its rule identity for safe lookup.
+        struct CacheEntry {
+            std::type_index type_m;
+            std::unique_ptr<ScalarField> field_m;
+        };
         ScalarField epsilon_m;
         MapStatistics statistics_m;
+        mutable std::unordered_map<std::string, CacheEntry> cache_m;
 
     public:
         // NVCC requires public enclosing functions for extended device lambdas.
@@ -373,6 +439,43 @@ namespace chdr::material {
             MPI_Allreduce(MPI_IN_PLACE, &bad, 1, MPI_UINT64_T, MPI_SUM, layout().comm);
             if (bad)
                 throw std::runtime_error("Material field/halo verification failed");
+        }
+
+        /** @brief Replace the copied lower ghost coefficient with the actual boundary pair.
+         * @details A forward coefficient at local index i uses epsilon at i and i+1.
+         * At the lower physical boundary, ghost index 0 therefore represents the
+         * face between ghost 0 and owned cell 1. synchronize() copied coefficient
+         * 1 there, but coefficient 1 used cells 1 and 2, which may differ. Reevaluate
+         * the rule at index 0 using the already extended epsilon field.
+         * This index correction applies to two-centre face coefficients such as
+         * harmonic averaging [eymard2000FiniteVolume, section 7.1, Example 7.1, p. 22].
+         *
+         * The upper boundary needs no analogous repair: its last owned coefficient
+         * already used the boundary cell and its equal-valued outer epsilon ghost.
+         * The coefficient extension copies that pair's result farther outward.
+         * Transverse ghosts must be included to correct boundary edges and corners
+         * too. Only ranks touching this global lower face perform the repair;
+         * periodic and inter-rank faces already have their exchanged coefficients.
+         * @pre The field was produced by this rule and synchronize() has completed.
+         */
+        template <class Rule>
+        void fixLowerFace(ScalarField& field, Rule rule) const {
+            if constexpr (Rule::ForwardAxis >= 0) {
+                constexpr unsigned Axis = Rule::ForwardAxis;
+                if (layout().isAllPeriodic_m
+                    || layout().getLocalNDIndex()[Axis].first()
+                           != layout().getDomain()[Axis].first())
+                    return;
+                const auto output = field.getView();
+                const auto input  = epsilon();
+                Kokkos::parallel_for(
+                    "Derive lower boundary face", detail::allocationPolicy(field),
+                    KOKKOS_LAMBDA(int i, int j, int k) {
+                        if (CellIndex(i, j, k)[Axis] == 0)
+                            output(i, j, k) = rule(input, i, j, k);
+                    });
+                Kokkos::fence();
+            }
         }
     };
 }  // namespace chdr::material
