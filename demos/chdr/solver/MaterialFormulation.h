@@ -10,6 +10,7 @@
 
 #include <memory>
 
+#include "HomogeneousUpdate.h"
 #include "LevelContract.h"
 #include "MaterialOwner.h"
 #include "MaterialStepContext.h"
@@ -58,10 +59,24 @@ namespace chdr::solver {
      * The statistics summarize owned relative-permittivity samples over all ranks.
      * No field scan or MPI call occurs here, so a rejected common selection throws
      * on all ranks before a caller can enter base-constructor communication.
+     * HomogeneousUpdate implements the constant-coefficient, unit-gauge equations
+     * documented in that class. Its supported range is finite relative permittivity
+     * at least one and the Standard stencil; a heterogeneous map cannot use this
+     * formulation. homogeneous() checks finiteness and bitwise-equal extrema.
+     * Both spatial placements and all reconstruction conventions are accepted here;
+     * they do not change the formulation's potential recurrence.
      */
     inline void validateMaterialUpdate(const FormulationParameters& parameters,
                                        const material::MapStatistics& statistics,
-                                       const SolverDiscretizationSelection& selection);
+                                       const SolverDiscretizationSelection& selection) {
+        if (parameters.formulation_m != MaterialFormulation::Homogeneous)
+            throw IpplException("validateMaterialUpdate", "Unknown material formulation");
+        if (selection.stencil_m != Stencil::Standard || parameters.alpha_m != 1.0
+            || !statistics.homogeneous() || statistics.minimum_m < 1.0)
+            throw IpplException(
+                "validateMaterialUpdate",
+                "Homogeneous requires Standard, finite constant permittivity >= 1 and alpha = 1");
+    }
 
     /** @brief Validate and allocate formulation workspace on the prototype's mesh/layout.
      * @details The returned object owns its scratch storage. The prototype supplies
@@ -72,5 +87,8 @@ namespace chdr::solver {
      */
     inline std::unique_ptr<MaterialUpdate> makeMaterialUpdate(
         const FormulationParameters& parameters, const material::MaterialOwner& owner,
-        const SolverDiscretizationSelection& selection, AJFourFieldsType& prototype);
+        const SolverDiscretizationSelection& selection, AJFourFieldsType& prototype) {
+        validateMaterialUpdate(parameters, owner.statistics(), selection);
+        return std::make_unique<HomogeneousUpdate>(owner.homogeneousValue(), prototype);
+    }
 }  // namespace chdr::solver
