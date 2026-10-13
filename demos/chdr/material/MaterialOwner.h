@@ -70,9 +70,75 @@ namespace chdr::material {
             return layout;
         }
 
-        /// Exchange owned values into all periodic face, edge and corner ghosts.
+        /** @brief Continue the boundary medium outward after inter-rank exchange.
+         * @details Mur assumes a homogeneous region outside the scatterers
+         * [mur1981AbsorbingBoundaryFdtd, section II, p. 378]. Deduction: copying
+         * the nearest boundary value continues the material without a jump in
+         * the outward direction. This fills material ghosts; it does not apply
+         * an absorbing boundary condition to the electromagnetic fields.
+         *
+         * The layout currently distinguishes fully periodic from fully physical
+         * global boundaries. Internal rank boundaries still use halo exchange.
+         * A local allocation has one ghost layer: along each axis, indices 0
+         * and extent - 1 are ghosts; indices 1 through extent - 2 are owned.
+         * The global index ranges identify which ranks touch a physical face.
+         *
+         * Each axis sweep includes the full transverse allocation, including
+         * ghosts. For example, at a lower x/y edge with interior k, the x sweep
+         * fills (0, 1, k) from (1, 1, k); the y sweep then fills (0, 0, k) from
+         * (0, 1, k). The z sweep completes corners in the same way. Intermediate
+         * values at unswept physical ghosts are overwritten by later sweeps.
+         * At a physical/inter-rank edge the transverse source can instead be a
+         * value received from a neighbour, already supplied by fillHalo().
+         *
+         * Kernels run in the field execution space; no map data reaches the host.
+         * Each sweep completes before the next one reads its results.
+         * @pre The field has one ghost layer and at least two owned cells per
+         * axis, as required by checkedLayout(); fillHalo() has completed.
+         */
+        inline void extendPhysical(ScalarField& field) {
+            const auto& layout = field.getLayout();
+
+            // Periodic layouts need no extension
+            if (layout.isAllPeriodic_m)
+                return;
+
+            const auto local = layout.getLocalNDIndex(), domain = layout.getDomain();
+            const auto view = field.getView();
+            for (unsigned axis = 0; axis < 3; ++axis) {
+                // Identify ranks touching each global boundary
+                const bool low  = local[axis].first() == domain[axis].first();
+                const bool high = local[axis].last() == domain[axis].last();
+                // Last allocated index, including the upper ghost layer.
+                const int end = int(view.extent(axis)) - 1;
+                // Include transverse ghosts so edges and corners are filled too.
+                Kokkos::parallel_for(
+                    "Extend physical material", allocationPolicy(field),
+                    KOKKOS_LAMBDA(int i, int j, int k) {
+                        CellIndex source(i, j, k);
+                        if (low && source[axis] == 0)
+                            source[axis] = 1;
+                        else if (high && source[axis] == end)
+                            source[axis] = end - 1;
+                        else
+                            // Skip this cell's invocation, not the rest of the axis sweep.
+                            return;
+                        // Clamp only this axis; retain both transverse indices.
+                        view(i, j, k) = view(source[0], source[1], source[2]);
+                    });
+                // The next axis can read ghosts written by this sweep.
+                Kokkos::fence();
+            }
+        }
+
+        /** @brief Fill inter-rank/periodic ghosts, then extend physical boundaries.
+         * @details At a physical/inter-rank edge, extendPhysical() reads a
+         * transverse ghost supplied by fillHalo(). Reversing these calls would
+         * let the physical sweep copy a value before that exchange supplies it.
+         */
         inline void synchronize(ScalarField& field) {
             field.fillHalo();
+            extendPhysical(field);
         }
         /// Sample owned cells on the device; the functor receives global coordinates.
         template <class Map>
@@ -98,7 +164,7 @@ namespace chdr::material {
      */
     class MaterialOwner {
     public:
-        /** @brief Rasterize owned cells and exchange periodic ghosts.
+        /** @brief Rasterize owned cells, and exchange/extend ghosts.
          * @param mesh Uniform Cartesian geometry; the caller keeps it alive while this
          * owner or any solver using its fields exists.
          * @param layout Distributed ownership and periodicity, with the same lifetime

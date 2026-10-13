@@ -4,9 +4,21 @@
 #include "OwnerTestSupport.h"
 
 namespace chdr::material::test {
-    /// The independent wrap/clamp oracle includes all allocated ghosts on every split axis.
-    /// TODO: Improve these comments later based on the documented "oracles".
-    /// A reader does not know what "the independend wrap/clamp oracle" is.
+    /** @brief Require every owned and ghost cell to hold its source cell's value.
+     * @details IndexMap assigns a distinct value to each domain cell, so copying
+     * from a wrong neighbour changes the result. The expected value comes from
+     * extendedValue() in OwnerOracles.h, independently of MaterialOwner's halo
+     * implementation: it wraps indices at periodic boundaries and clamps them
+     * to the nearest domain cell at physical boundaries. Inter-rank ghosts use
+     * the global index of their owning cell, which remains inside the domain.
+     *
+     * Repeat with each axis selected for MPI decomposition. mismatches() visits
+     * the complete allocation, including faces, edges and corners, and sums
+     * bitwise differences across ranks; the assertion requires exactly zero.
+     * On multiple ranks this also checks physical/inter-rank intersections.
+     * @param periodic True for periodic global boundaries on all axes, false
+     * for physical global boundaries on all axes; internal rank seams remain.
+     */
     void checkHalos(bool periodic) {
         for (unsigned axis = 0; axis < 3; ++axis) {
             auto grid = makeGrid(axis, periodic);
@@ -24,5 +36,8 @@ namespace chdr::material::test {
 
     TEST(MaterialHalo, PeriodicSourceCells) {
         checkHalos(true);
+    }
+    TEST(MaterialHalo, PhysicalSourceCells) {
+        checkHalos(false);
     }
 }  // namespace chdr::material::test
