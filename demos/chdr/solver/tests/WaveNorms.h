@@ -77,7 +77,7 @@ namespace chdr::solver::test {
             ippl::Vector<double, SpatialDim> spacing_m;
             LevelContract contract_m;
             LorenzWave wave_m;
-            double dt_m, electricTime_m, magneticTime_m;
+            double dt_m, electricTime_m, magneticTime_m, epsilon_m;
 
             template <class SolverType>
             Samples(SolverType& solver, const LorenzWave& wave)
@@ -94,7 +94,8 @@ namespace chdr::solver::test {
                       solver.ebReconstructionConvention() == EBReconstructionConvention::R1
                           ? (solver.completedSolves() - 0.5) * dt_m
                           : solver.labelTime(Quantity::Electric, solver.completedSolves()))
-                , magneticTime_m(solver.labelTime(Quantity::Magnetic, solver.completedSolves())) {
+                , magneticTime_m(solver.labelTime(Quantity::Magnetic, solver.completedSolves()))
+                , epsilon_m(constraintFactor(wave.epsilon_m)) {
                 const auto origin = solver.A_n.get_mesh().getOrigin();
                 if (solver.A_n.getNghost() != 1 || origin[0] != 0 || origin[1] != 0
                     || origin[2] != 0)
@@ -145,14 +146,20 @@ namespace chdr::solver::test {
              * control. Gauge uses the contract's vector interpolation weight.
              * This is a continuum-error diagnostic, not the type-A Gauss identity.
              * Reference: christlieb2024GaugeConserving, Eqs. (25)-(29).
+             * epsilon_m is the uniform relative permittivity supplied by the independent
+             * constraintFactor oracle. It multiplies E's divergence in Gauss's law and
+             * phi's time difference in the Lorenz gauge; the charge remains physical.
+             * Source: [chew2014generalizedgauge, Eqs. (4), (11), with unit permeability].
              */
             KOKKOS_INLINE_FUNCTION double constraintTerm(int metric, int i, int j, int k) const {
                 const auto x        = centre(i, j, k);
                 const auto div      = divergences(i, j, k);
                 const double weight = contract_m.gaugeWeight();
-                const double gauss  = div[0] - wave_m.source(x[0], x[1], x[2], electricTime_m, 0);
-                const double gauge  = (current_m(i, j, k)[0] - previous_m(i, j, k)[0]) / dt_m
-                                     + weight * div[1] + (1 - weight) * div[2];
+                const double gauss =
+                    epsilon_m * div[0] - wave_m.source(x[0], x[1], x[2], electricTime_m, 0);
+                const double gauge =
+                    epsilon_m * (current_m(i, j, k)[0] - previous_m(i, j, k)[0]) / dt_m
+                    + weight * div[1] + (1 - weight) * div[2];
                 return metric == 4 ? gauss : metric == 5 ? div[1] : metric == 6 ? gauge : div[2];
             }
         };
@@ -188,7 +195,8 @@ namespace chdr::solver::test {
 
     /** @brief Relative E/B L2 errors and the frozen Gauss/gauge norm ratios.
      * @details The common cell volume cancels on each uniform grid. Gauss is
-     * normalized by the continuum field norm times the wave-number magnitude;
+     * normalized by relative permittivity times the continuum field norm and
+     * wave-number magnitude, matching the medium Gauss residual's factor;
      * gauge by the numerical vector-potential divergence norm.
      * Only owned cells enter any sum; ghost values are used solely by differences.
      */
@@ -200,6 +208,7 @@ namespace chdr::solver::test {
         for (int d = 0; d < static_cast<int>(SpatialDim); ++d)
             kn2 += wave.waveNumber_m[d] * wave.waveNumber_m[d];
         return {std::sqrt(sums[0] / sums[1]), std::sqrt(sums[2] / sums[3]),
-                std::sqrt(sums[4] / (kn2 * sums[1])), std::sqrt(sums[6] / sums[5])};
+                std::sqrt(sums[4] / (kn2 * sums[1])) / constraintFactor(wave.epsilon_m),
+                std::sqrt(sums[6] / sums[5])};
     }
 }  // namespace chdr::solver::test
