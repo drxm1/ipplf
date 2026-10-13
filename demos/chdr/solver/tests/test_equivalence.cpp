@@ -1,11 +1,14 @@
 /** @file test_equivalence.cpp
- * @brief Compare consistently shifted R2 and R2Prime histories bit by bit.
- * @details The extra scalar slot is produced by the same base update, not by an
+ * @brief Check bitwise equivalence of shifted histories and unit-permittivity evolution.
+ * @details The R2/R2Prime comparison uses consistently shifted histories.
+ * The extra scalar slot is produced by the same base update, not by an
  * analytic approximation. A one-slot scalar shift evolves independently of
  * the common vector histories (deduction from the componentwise wave update
  * of [fallahi2020mithra20fullwavesimulation, Eqs. (3.11)-(3.15)]).
  * Bitwise comparison assumes the two kernels use matching floating-point
  * contraction settings; the run record retains their actual compile commands.
+ * The material comparison requires the unit-permittivity update to reproduce
+ * the owner-free vacuum solver's potential histories and E/B fields exactly.
  *
  * TODO: REVIEW.
  */
@@ -135,5 +138,69 @@ namespace {
     }
     TEST(LevelEquivalence, NonStandard) {
         equivalent<NonStandardSolverPeriodic>({8, 8, 12});
+    }
+
+    /** @brief Count unequal component representations on this rank's owned cells.
+     * @details Matching layouts are a fixture precondition. Host copies preserve the
+     * values for inspection; differentBits distinguishes signed zero without a
+     * numerical tolerance. The caller combines counts across fields, steps and ranks.
+     */
+    template <class Field>
+    unsigned long long fieldBitDifferences(const Field& first, const Field& second) {
+        const auto a = copyToHost(first), b = copyToHost(second);
+        const auto local         = first.getLayout().getLocalNDIndex();
+        unsigned long long count = 0;
+        for (int i = 1; i <= int(local[0].length()); ++i)
+            for (int j = 1; j <= int(local[1].length()); ++j)
+                for (int k = 1; k <= int(local[2].length()); ++k)
+                    for (unsigned c = 0; c < Field::value_type::dim; ++c)
+                        count += differentBits(a(i, j, k)[c], b(i, j, k)[c]);
+        return count;
+    }
+
+    /** @brief Require exact recovery of the owner-free solver at unit permittivity.
+     * @details Identical labelled source-free histories evolve for 256 steps.
+     * Both potential histories and reconstructed E/B are compared every step;
+     * the full global difference count must be zero.
+     * The two solvers share mesh/layout and the unchanged zero source, but own
+     * separate potential histories and write separate E/B fields. Both retain their
+     * constructor-default physical step; this checks the material route without
+     * hiding a default-step difference behind an explicit safety-factor setter.
+     * This source-free test checks propagation and reconstruction equivalence;
+     * nonzero charge/current scaling requires the manufactured-source tests.
+     */
+    void vacuumMaterialEquivalent(EBReconstructionConvention reconstruction,
+                                  SpatialDiscretization reading) {
+        auto fields = makePeriodicFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
+        initializeFieldStorage(fields);
+        auto vacuum = makeTestSolver<StandardSolverPeriodic>(
+            fields.getJ(), fields.getE(), fields.getB(), reconstruction, reading);
+        EMFieldsType electric, magnetic;
+        electric.initialize(fields.getMesh(), fields.getFL());
+        magnetic.initialize(fields.getMesh(), fields.getFL());
+        auto medium     = makeTestSolver<StandardSolverPeriodic>(fields.getJ(), electric, magnetic,
+                                                                 reconstruction, reading, 1);
+        const auto wave = makeMixedWave();
+        loadHistory(*vacuum, wave);
+        loadHistory(*medium, wave);
+        unsigned long long differences = 0;
+        for (int step = 0; step < 256; ++step) {
+            vacuum->solve();
+            medium->solve();
+            differences += fieldBitDifferences(vacuum->A_n, medium->A_n);
+            differences += fieldBitDifferences(vacuum->A_nm1, medium->A_nm1);
+            differences += fieldBitDifferences(vacuum->electricField(), medium->electricField());
+            differences += fieldBitDifferences(vacuum->magneticField(), medium->magneticField());
+        }
+        MPI_Allreduce(MPI_IN_PLACE, &differences, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM,
+                      MPI_COMM_WORLD);
+        EXPECT_EQ(differences, 0ULL);
+    }
+    /// Exercise all collocated time reconstructions and the staggered R2 placement.
+    TEST(MediumEquivalence, EveryReconstruction) {
+        for (auto reconstruction : {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
+                                    EBReconstructionConvention::R2Prime})
+            vacuumMaterialEquivalent(reconstruction, SpatialDiscretization::Collocated);
+        vacuumMaterialEquivalent(EBReconstructionConvention::R2, SpatialDiscretization::Staggered);
     }
 }  // namespace

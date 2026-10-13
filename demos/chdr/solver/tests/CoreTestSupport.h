@@ -6,6 +6,8 @@
 #pragma once
 #include <limits>
 
+#include "ChdrSolver.h"
+#include "MaterialOwner.h"
 #include "PeriodicSetup.h"
 #include "SpatialDimension.h"
 
@@ -14,6 +16,33 @@ static_assert(
     "CoreTestSupport.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::coreTest {
+    /** @brief Construct the requested test path while retaining the caller's field owners.
+     * @details epsilon equal to zero is a fixture sentinel for the owner-free vacuum
+     * constructor, not a physical material value. Every other value constructs a
+     * constant map and passes through the normal material validation; epsilon equal
+     * to one therefore exercises a different construction path from the sentinel.
+     * HomogeneousUpdate retains only the owner's scalar permittivity and allocates
+     * its own source copy, so this temporary owner may die on return. The caller's
+     * source, E/B fields, mesh and layout must outlive the returned solver.
+     */
+    template <class PotentialSolverBase>
+    auto makeTestSolver(AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic,
+                        EBReconstructionConvention reconstruction,
+                        SpatialDiscretization reading = SpatialDiscretization::Collocated,
+                        double epsilon                = 0) {
+        using Solver = ChdrSolver<PotentialSolverBase>;
+        if (epsilon == 0)
+            return std::make_unique<Solver>(source, electric, magnetic, reconstruction, reading);
+        const chdr::material::MaterialOwner material(
+            source.get_mesh(), source.getLayout(),
+            KOKKOS_LAMBDA(ippl::Vector<int, SpatialDim>, ippl::Vector<double, SpatialDim>,
+                          bool& marked) {
+                marked = false;
+                return epsilon;
+            });
+        return std::make_unique<Solver>(source, electric, magnetic, reconstruction, reading,
+                                        material);
+    }
     /** @brief Reduce an already nonnegative cell observation over owned cells only.
      * @details The caller supplies a device-copyable scalar functor. This helper
      * performs no MPI operation, so each test retains its original collective
