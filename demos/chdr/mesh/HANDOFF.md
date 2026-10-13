@@ -1,6 +1,12 @@
 # mesh-1 implementation state
 
 Relocation note (2 October 2026): this example now lives in `demos/chdr/mesh/`.
+
+Material ownership update (12 October 2026): `material/MaterialOwner.h` now owns
+the scalar field, rasterization, statistics and verification. Physical ghosts
+copy their nearest domain cell; all ghosts are checked by bit pattern. The
+geometry predicates, configuration files, occupied counts/checksums and output
+slice bytes remain unchanged for the prism and brick on one and two ranks.
 Paths below describe the original runs and retain their historical locations.
 
 Goal (18 September 2026): construct a YAML-configured distributed FEL-layout

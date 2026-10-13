@@ -19,6 +19,8 @@
  * @brief FEL-compatible fields, cell-centre sampling, halo checks and MPI diagnostics.
  *
  * Read mesh-1.cpp in execution order, starting at main() and construct().
+ * chdr::material::MaterialOwner samples the map, fills every ghost and caches
+ * global statistics. chdr::material::TwoMaterialMap adapts the shape predicate.
  * This stage constructs a static material field and does not advance Maxwell's
  * equations or particles.
  */

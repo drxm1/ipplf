@@ -8,7 +8,8 @@ OUTPUT_DIRECTORY       = docs
 INPUT                  = StudentGuide.md Documentation.dox \
                          ChdrMeshConfig.h PrismGeometry.h BrickGeometry.h \
                          mesh-1.cpp MaterialViewer.h MeshVisualization.h \
-                         test_geometry.cpp verify_mesh_output.py
+                         test_geometry.cpp verify_mesh_output.py \
+                         ../material/MaterialOwner.h
 INPUT_ENCODING         = UTF-8
 RECURSIVE              = NO
 USE_MDFILE_AS_MAINPAGE  = StudentGuide.md
