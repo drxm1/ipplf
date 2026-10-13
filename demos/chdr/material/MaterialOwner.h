@@ -52,6 +52,22 @@ namespace chdr::material {
         }
     };
 
+    /** @brief Sample a shape at each cell centre and choose its relative permittivity.
+     * @details Geometry supplies device-callable contains(x, y, z). The inside and
+     * outside values are stored exactly as supplied; this adapter does not average
+     * partly covered cells. Marked records geometric membership even when both
+     * material values are equal. This adapter uses position rather than cell index.
+     */
+    template <class Geometry>
+    struct TwoMaterialMap {
+        Geometry geometry_m;
+        double inside_m, outside_m;
+        KOKKOS_INLINE_FUNCTION double operator()(CellIndex, Position centre, bool& marked) const {
+            marked = geometry_m.contains(centre[0], centre[1], centre[2]);
+            return marked ? inside_m : outside_m;
+        }
+    };
+
     namespace detail {
         /// SplitMix64 finalizer, preserving the mesh/ occupied-ID checksum.
         KOKKOS_INLINE_FUNCTION std::uint64_t hash(std::uint64_t id) {
@@ -77,6 +93,23 @@ namespace chdr::material {
                 for (unsigned d = 0; d < 3; ++d)
                     result[d] = origin_m[d] + (global[d] + 0.5) * spacing_m[d];
                 return result;
+            }
+            /** @brief Find the global owned cell whose value belongs in an allocation cell.
+             * @details Owned cells and inter-rank ghosts already have an index inside
+             * the global domain, so their index stays unchanged. Only indices beyond
+             * a global boundary wrap (periodic) or clamp (physical). Applying the
+             * rule independently to all axes also handles edges and corners.
+             * @pre The input is at most one ghost layer outside the global domain;
+             * adding one domain length then makes the remainder nonnegative.
+             */
+            KOKKOS_INLINE_FUNCTION CellIndex source(CellIndex global) const {
+                for (unsigned d = 0; d < 3; ++d) {
+                    const int relative = global[d] - lower_m[d];
+                    global[d]          = lower_m[d]
+                                + (periodic_m ? (relative + count_m[d]) % count_m[d]
+                                              : Kokkos::clamp(relative, 0, count_m[d] - 1));
+                }
+                return global;
             }
             KOKKOS_INLINE_FUNCTION std::uint64_t id(CellIndex global) const {
                 return (std::uint64_t(global[0] - lower_m[0]) * count_m[1] + global[1] - lower_m[1])
@@ -257,7 +290,7 @@ namespace chdr::material {
      */
     class MaterialOwner {
     public:
-        /** @brief Rasterize owned cells, and exchange/extend ghosts.
+        /** @brief Rasterize owned cells, exchange/extend ghosts, and verify placement.
          * @param mesh Uniform Cartesian geometry; the caller keeps it alive while this
          * owner or any solver using its fields exists.
          * @param layout Distributed ownership and periodicity, with the same lifetime
@@ -265,13 +298,14 @@ namespace chdr::material {
          * @param map Device-copyable double(CellIndex, Position, bool&) functor. It must
          * return the same bits at the same coordinates and set its marked flag.
          * @details One owned-cell device reduction computes all statistics; only
-         * reduced scalars cross to the host.
+         * reduced scalars cross to the host. Verification accepts unchanged NaN bits.
          */
         template <class Map>
         MaterialOwner(Mesh& mesh, Layout& layout, const Map& map)
             : epsilon_m(mesh, detail::checkedLayout(layout)) {
             statistics_m = detail::rasterize(epsilon_m, map);
             detail::synchronize(epsilon_m);
+            verify(map);
         }
         MaterialOwner(const MaterialOwner&)            = delete;
         MaterialOwner& operator=(const MaterialOwner&) = delete;
@@ -304,5 +338,41 @@ namespace chdr::material {
     private:
         ScalarField epsilon_m;
         MapStatistics statistics_m;
+
+    public:
+        // NVCC requires public enclosing functions for extended device lambdas.
+        // These construction/cache helpers are not mutation entry points for callers.
+        /** @brief Collectively check owned values and every face, edge and corner ghost.
+         * @details Resolve each allocation index to its global source cell, then
+         * reevaluate the map there using the same centre arithmetic as rasterize().
+         * Physical ghosts sample the boundary cell's centre, not a point outside
+         * the domain. The map must therefore return the same bits on repeated calls.
+         *
+         * Compare representations rather than floating-point values: an unchanged
+         * NaN passes, while a changed NaN payload fails. This checks placement and
+         * copying, not whether the values are suitable for a solver formulation.
+         * The marked flag does not enter this check; the field stores only values.
+         * One MPI sum makes every rank throw if any rank finds a mismatch.
+         * @throws std::runtime_error If any allocated sample has unexpected bits.
+         */
+        template <class Map>
+        void verify(Map map) const {
+            const auto coordinates = detail::coordinates(mesh(), layout());
+            const auto view        = epsilon();
+            std::uint64_t bad      = 0;
+            Kokkos::parallel_reduce(
+                "Verify complete material", detail::allocationPolicy(epsilon_m),
+                KOKKOS_LAMBDA(int i, int j, int k, std::uint64_t& errors) {
+                    const auto source     = coordinates.source(coordinates.global(i, j, k));
+                    bool marked           = false;
+                    const double expected = map(source, coordinates.centre(source), marked);
+                    errors += Kokkos::bit_cast<std::uint64_t>(view(i, j, k))
+                              != Kokkos::bit_cast<std::uint64_t>(expected);
+                },
+                bad);
+            MPI_Allreduce(MPI_IN_PLACE, &bad, 1, MPI_UINT64_T, MPI_SUM, layout().comm);
+            if (bad)
+                throw std::runtime_error("Material field/halo verification failed");
+        }
     };
 }  // namespace chdr::material
