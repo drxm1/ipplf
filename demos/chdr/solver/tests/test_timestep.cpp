@@ -11,6 +11,7 @@
 #include <limits>
 
 #include "CoreTestSupport.h"
+#include "MediumOracles.h"
 #include "MonitorTestSupport.h"
 #include "SpatialDimension.h"
 
@@ -139,7 +140,12 @@ namespace {
         }
     }
 
-    /// @brief Store maxima over the frozen first and last observation windows.
+    /** @brief Compare global scalar-potential amplitudes over fixed observation windows.
+     * @details For the bounded run, first_m and last_m are maxima over the first
+     * and last 1,000 solves of 10,000. For the unstable run, first_m is the
+     * amplitude after the first solve, and last_m is the largest of solves 2--60.
+     * These are amplitude envelopes, not energy or a conserved quantity.
+     */
     struct Envelope {
         double first_m = 0, last_m = 0;
         void observe(int step, bool bounded, double value) {
@@ -150,13 +156,20 @@ namespace {
         }
     };
 
-    /// @brief Advance unchanged updates and observe the scalar maximum after each solve.
+    /// @brief Record the global maximum absolute scalar potential over owned cells.
+    /// The value is sampled after each solve.
     template <class SolverType>
-    void observeEnvelope(SolverType& solver, bool bounded, Envelope& envelope) {
+    void observeEnvelope(SolverType& solver, bool bounded, Envelope& envelope,
+                         bool medium = false) {
         const int steps = bounded ? 10000 : 60;
-        Monitors monitors(solver.sourceField());
+        std::unique_ptr<Monitors> monitors;
+        if (!medium)
+            monitors = std::make_unique<Monitors>(solver.sourceField());
         for (int step = 0; step < steps; ++step) {
-            chdr::solver::test::advanceWithFinalMonitor(solver, monitors, step + 1 == steps);
+            if (medium)
+                solver.solve();
+            else
+                chdr::solver::test::advanceWithFinalMonitor(solver, *monitors, step + 1 == steps);
             const auto view    = solver.A_n.getView();
             const double local = localMaximum(
                 solver.A_n,
@@ -230,5 +243,49 @@ namespace {
     }
     TEST(TimeStepLong, NonStandardBounded) {
         stability<NonStandardSolverPeriodic>({16, 16, 24}, {1, 1, 1}, true);
+    }
+
+    /** @brief Check the medium step API and then compare deterministic growth envelopes.
+     * @details The expected bound comes from mediumMaxStableTimeStep, independently
+     * of the solver's bound. The bounded run uses the production safety-factor
+     * setter; the unstable run bypasses its refusal to exercise a step above the bound.
+     * randomSlots seeds the current and previous scalar-potential histories with
+     * 4321 and 7890, then removes each global mean. This excites many spatial modes
+     * without the constant-mode growth described by removeGlobalMean.
+     * The anisotropic case changes spacings as well as cell counts.
+     */
+    void mediumStability(double eps, bool anisotropic, bool bounded) {
+        auto fields = makePeriodicFieldContainer(
+            anisotropic ? std::array<int, 3>{20, 24, 16} : std::array<int, 3>{16, 16, 16},
+            {1, anisotropic ? 0.96 : 1, 1}, 0);
+        initializeFieldStorage(fields);
+        auto handle = makeTestSolver<StandardSolverPeriodic>(
+            fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R2,
+            SpatialDiscretization::Collocated, eps);
+        auto& solver       = *handle;
+        const double bound = mediumMaxStableTimeStep(eps, fields.getHr());
+        checkAllowedFactors(solver, bound);
+        checkRejectedFactors(solver, bound);
+        if (bounded)
+            solver.setSafetyFactor(0.98);
+        else
+            solver.setTimeStepUnchecked(1.02 * bound);
+        randomSlots(solver);
+        Envelope envelope;
+        observeEnvelope(solver, bounded, envelope, true);
+        std::cout << "medium stability epsilon=" << eps << " anisotropic=" << anisotropic
+                  << " formulation=" << solver.formulationName()
+                  << " alpha=" << solver.formulationParameters().alpha_m << '\n';
+        expectEnvelope(envelope, bounded);
+    }
+    TEST(MediumTimeStep, BoundAndUnstableGrowth) {
+        for (double eps : {2.13, 4.0})
+            for (bool anisotropic : {false, true})
+                mediumStability(eps, anisotropic, false);
+    }
+    TEST(MediumTimeStepLong, Bounded) {
+        for (double eps : {2.13, 4.0})
+            for (bool anisotropic : {false, true})
+                mediumStability(eps, anisotropic, true);
     }
 }  // namespace
