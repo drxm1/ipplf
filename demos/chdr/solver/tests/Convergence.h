@@ -270,7 +270,9 @@ namespace chdr::solver::test {
         if (eps == 0)
             monitors = std::make_unique<Monitors>(solver.A_n);
         advanceWave(solver, wave, monitors.get());
-        if (holdout)
+        // Repeat the 32-cell medium cases on MPI_COMM_SELF to isolate decomposition
+        // effects from continuum error. Held cases request this comparison at every level.
+        if (holdout || (eps > 0 && n == 32))
             verifySerialReference(solver, wave, int(solver.completedSolves()),
                                   spatialDiscretization, !recordOnly);
         if (monitors)

@@ -26,8 +26,8 @@ foreach(
   Guard
   Equivalence
   Manufactured
-  Dispersion
   TimeStep
+  Dispersion
   Source)
   chdr_solver_medium_test(${suite} "Medium${suite}.*")
 endforeach()
@@ -41,3 +41,32 @@ foreach(reading Collocated Staggered)
   chdr_solver_medium_test(long.Convergence.${reading} "MediumConvergenceLong.${reading}")
   chdr_solver_medium_test(long.Source.${reading} "MediumSourceLong.${reading}")
 endforeach()
+
+# The existing reader compares manufactured histories and measured mode phases. Continuum cases
+# perform their communicator-self comparison inside the executable. The generation fixture clears
+# old outputs before either rank count runs. Both producer suites must finish before comparison,
+# which checks the complete expected file set as well as values.
+if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
+  set(mediumRoot "${CHDR_SOLVER_RECORD_ROOT}/medium-ranks")
+  add_test(NAME chdr.solver.medium.ranks.prepare
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/prepare_rank_records.py"
+                   "${mediumRoot}")
+  set_tests_properties(
+    chdr.solver.medium.ranks.prepare PROPERTIES FIXTURES_SETUP chdr_medium_generation TIMEOUT 10
+                                                LABELS "chdr;solver;unit;ranks")
+  foreach(suite Manufactured Dispersion)
+    foreach(variant serial mpi2)
+      set_tests_properties(
+        chdr.solver.medium.${suite}.${variant}
+        PROPERTIES
+          FIXTURES_SETUP chdr_medium_ranks FIXTURES_REQUIRED chdr_medium_generation ENVIRONMENT
+          "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;CHDR_SOLVER_RECORD_DIR=${mediumRoot}/${variant}")
+    endforeach()
+  endforeach()
+  add_test(NAME chdr.solver.medium.ranks
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compare_ranks.py"
+                   "${mediumRoot}/serial" "${mediumRoot}/mpi2" --medium)
+  set_tests_properties(
+    chdr.solver.medium.ranks PROPERTIES FIXTURES_REQUIRED chdr_medium_ranks TIMEOUT 60 LABELS
+                                        "chdr;solver;unit;ranks;mpi")
+endif()

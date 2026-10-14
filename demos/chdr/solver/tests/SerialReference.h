@@ -13,6 +13,7 @@
 #include <iostream>
 
 #include "ChdrSolver.h"
+#include "CoreTestSupport.h"
 #include "OwnedStatistics.h"
 #include "PeriodicSetup.h"
 #include "RankRecords.h"
@@ -101,13 +102,24 @@ namespace chdr::solver::test {
         }
     };
 
-    /// Repeat the same labelled initial/source samples and number of actual solver steps.
+    /** @brief Replay the distributed run with the same solver on a single-rank layout.
+     * @details Copy the distributed material's cached uniform permittivity and
+     * actual step; neither is re-estimated from a mean or a new safety factor.
+     * The owner-free vacuum path remains owner-free. This reference isolates
+     * decomposition effects; it shares the production update and is not an
+     * independent reference for the underlying equations.
+     */
     template <class SolverType, class AnalyticWave>
     SerialState evolveSerialReference(SerialFields& fields, SolverType& distributed,
                                       const AnalyticWave& wave, int steps,
                                       SpatialDiscretization spatialDiscretization) {
-        SolverType serial(fields.source_m, fields.electric_m, fields.magnetic_m,
-                          distributed.ebReconstructionConvention(), spatialDiscretization);
+        using Base  = std::conditional_t<SolverType::stencil() == Stencil::Standard,
+                                         StandardSolverPeriodic, NonStandardSolverPeriodic>;
+        auto handle = coreTest::makeTestSolver<Base>(
+            fields.source_m, fields.electric_m, fields.magnetic_m,
+            distributed.ebReconstructionConvention(), spatialDiscretization,
+            distributed.hasMaterial() ? distributed.homogeneousPermittivity() : 0);
+        auto& serial = *handle;
         serial.setTimeStepUnchecked(distributed.getDt());
         loadHistory(serial, wave);
         serial.evaluateInitialFields();
