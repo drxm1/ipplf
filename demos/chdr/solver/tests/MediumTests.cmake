@@ -20,7 +20,15 @@ function(chdr_solver_medium_test suite filter)
     endif()
   endforeach()
 endfunction()
-foreach(suite Validity Guard Equivalence Manufactured Dispersion TimeStep)
+foreach(
+  suite
+  Validity
+  Guard
+  Equivalence
+  Manufactured
+  Dispersion
+  TimeStep
+  Source)
   chdr_solver_medium_test(${suite} "Medium${suite}.*")
 endforeach()
 foreach(reading Collocated Staggered)
@@ -31,4 +39,5 @@ chdr_solver_medium_test(record.Dispersion "MediumDispersionRecord.*")
 chdr_solver_medium_test(long.TimeStep "MediumTimeStepLong.*")
 foreach(reading Collocated Staggered)
   chdr_solver_medium_test(long.Convergence.${reading} "MediumConvergenceLong.${reading}")
+  chdr_solver_medium_test(long.Source.${reading} "MediumSourceLong.${reading}")
 endforeach()

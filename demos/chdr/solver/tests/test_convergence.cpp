@@ -121,4 +121,19 @@ namespace chdr::solver::test {
     TEST(MediumConvergenceLong, Staggered) {
         mediumLadders(true, false, SpatialDiscretization::Staggered);
     }
+    // This ladder samples analytic physical charge/current at each step; it does
+    // not manufacture a discrete forcing as test_manufactured.cpp does. The final
+    // field errors therefore include source discretization and accumulated evolution.
+    TEST(MediumSource, Collocated) {
+        mediumLadders(false, true, SpatialDiscretization::Collocated);
+    }
+    TEST(MediumSource, Staggered) {
+        mediumLadders(false, true, SpatialDiscretization::Staggered);
+    }
+    TEST(MediumSourceLong, Collocated) {
+        mediumLadders(true, true, SpatialDiscretization::Collocated);
+    }
+    TEST(MediumSourceLong, Staggered) {
+        mediumLadders(true, true, SpatialDiscretization::Staggered);
+    }
 }  // namespace chdr::solver::test
