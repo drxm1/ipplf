@@ -378,4 +378,45 @@ namespace chdr::solver::test {
                                           true, vacuumSet);
     }
 
+    /** @brief Independently held anisotropic single-root phase and rank comparison.
+     * @details The serial reference repeats the same measured cumulative phase on
+     * MPI_COMM_SELF. It is deliberately absent from ordinary test registration.
+     * The mesh is the finest held continuum-wave mesh, but initialization uses
+     * the discrete prediction to isolate one travelling root. First require
+     * agreement with that independent symbol, then compare the two measured
+     * phases across rank counts. The root-only replay uses exactly the distributed
+     * step; serialFrequency also means radians per step, as in PhaseMeasurement.
+     */
+    TEST(MediumHoldout, DISABLED_Phase) {
+        const DispersionInput input{{120, 144, 160}, {-1, 2, 3}, {1, 1, 1}, 0.9, "medium-held",
+                                    false,           3.7,        false,     1};
+        auto fields = makePeriodicFieldContainer(input.cells_m, input.lengths_m, input.splitAxis());
+        initializeFieldStorage(fields);
+        auto handle = coreTest::makeTestSolver<StandardSolverPeriodic>(
+            fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R2,
+            SpatialDiscretization::Collocated, input.epsilon_m);
+        auto& solver = *handle;
+        solver.setSafetyFactor(input.safety_m);
+        const auto expected = prediction(solver, input);
+        PhaseMeasurement measured;
+        measurePhase(solver, expected, measured);
+        requirePhase(solver, input, expected, measured);
+        double serialFrequency = 0;
+        if (ippl::Comm->rank() == 0) {
+            SerialFields serial(solver.A_n);
+            auto reference = coreTest::makeTestSolver<StandardSolverPeriodic>(
+                serial.source_m, serial.electric_m, serial.magnetic_m,
+                EBReconstructionConvention::R2, SpatialDiscretization::Collocated, input.epsilon_m);
+            reference->setTimeStepUnchecked(solver.getDt());
+            PhaseMeasurement result;
+            measurePhase(*reference, expected, result);
+            serialFrequency = result.frequency();
+        }
+        MPI_Bcast(&serialFrequency, 1, MPI_DOUBLE, 0, fields.getFL().comm);
+        EXPECT_LE(std::abs(measured.frequency() / serialFrequency - 1), 1e-12);
+        auto record                   = dispersionRecord(solver, input, expected, measured);
+        record["serial_omega"]        = serialFrequency;
+        record["rank_phase_relative"] = std::abs(measured.frequency() / serialFrequency - 1);
+        writeDispersion(input, record);
+    }
 }  // namespace chdr::solver::test

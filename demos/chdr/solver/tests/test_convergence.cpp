@@ -136,4 +136,17 @@ namespace chdr::solver::test {
     TEST(MediumSourceLong, Staggered) {
         mediumLadders(true, true, SpatialDiscretization::Staggered);
     }
+    /** @brief Independent anisotropic refinement with both component placements.
+     * @details The holdout flag in runWave selects an anisotropic mesh family
+     * and y decomposition. Each level compares evolved E/B with continuum
+     * samples at their labels and repeats the evolution on MPI_COMM_SELF.
+     * The separate held phase test initializes a discrete single-root mode;
+     * these field runs retain continuum initial histories. Disabled by default
+     * and absent from the development CTest filters.
+     */
+    TEST(MediumHoldout, DISABLED_Fields) {
+        for (auto reading : {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
+            waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2, true, reading,
+                                               true, false, 3.7);
+    }
 }  // namespace chdr::solver::test
