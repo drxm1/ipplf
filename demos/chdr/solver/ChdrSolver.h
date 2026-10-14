@@ -358,13 +358,19 @@ namespace chdr::solver {
                        ? Stencil::Standard
                        : Stencil::NonStandard;
         }
-        /** @brief Return the vacuum stability bound used by both step-selection methods.
+        /** @brief Return the selected update's stability bound for both step-selection methods.
+         * @details The bound applies to the physical step returned by getDt(), not
+         * HomogeneousUpdate's reduced internal step. Delegation makes safetyFactor()
+         * and setSafetyFactor() use the same material-dependent normalization.
+         * The owner-free route retains the stencil's vacuum bound.
          * @return Positive maximum stable time spacing for this update and mesh.
          */
         double maxStableTimeStep() const {
+            if (update_m)
+                return update_m->maxStableTimeStep(this->hr_m);
             return chdr::solver::maxStableTimeStep(this->hr_m, stencil());
         }
-        /// @return Current time step divided by the vacuum stability bound.
+        /// @return Current physical time step divided by the selected update's stability bound.
         double safetyFactor() const { return this->getDt() / maxStableTimeStep(); }
 
         /** @brief Select an effective CFL factor before the first solve.
