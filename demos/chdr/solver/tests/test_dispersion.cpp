@@ -15,9 +15,12 @@
 #include <iostream>
 
 #include "ChdrSolver.h"
+#include "CoreTestSupport.h"
+#include "MediumOracles.h"
 #include "MonitorTestSupport.h"
 #include "PeriodicSetup.h"
 #include "RankRecords.h"
+#include "SerialReference.h"
 #include "SpatialDimension.h"
 
 static_assert(
@@ -74,14 +77,25 @@ namespace chdr::solver::test {
         return {sums[0], sums[1]};
     }
 
+    /** @brief Geometry and measurement policy for one periodic potential mode.
+     * @details epsilon_m equal to zero selects the owner-free vacuum solver;
+     * a positive value constructs a uniform material. recordOnly_m suppresses
+     * the symbol-agreement assertion, but still measures and records the phase.
+     * splitAxis_m overrides the usual decomposition along a varying direction.
+     */
     struct DispersionInput {
         std::array<int, SpatialDim> cells_m, mode_m;
         std::array<double, SpatialDim> lengths_m;
         double safety_m;
         std::string name_m;
         bool rankRecord_m;
+        double epsilon_m  = 0;
+        bool recordOnly_m = false;
+        int splitAxis_m   = -1;
         /// Split an axis where the wave varies, so the MPI seam is exercised.
         unsigned splitAxis() const {
+            if (splitAxis_m >= 0)
+                return unsigned(splitAxis_m);
             unsigned split = 0;
             while (split < 2 && mode_m[split] == 0)
                 ++split;
@@ -110,6 +124,10 @@ namespace chdr::solver::test {
             compact2[d] = std::pow(2 * std::sin(k[d] * h[d] / 2) / h[d], 2);
             kn2 += k[d] * k[d];
         }
+        if (input.epsilon_m > 0) {
+            const double theta = mediumPhasePerStep(k, h, dt, input.epsilon_m);
+            return {{k, theta / dt}, theta, kn2};
+        }
         const double alpha =
             0.25 * (1 + 0.02 / (std::pow(h[2] / h[0], 2) + std::pow(h[2] / h[1], 2)));
         const double sz = SolverType::stencil() == Stencil::NonStandard
@@ -120,6 +138,12 @@ namespace chdr::solver::test {
         return {{k, omegaStep / dt}, omegaStep, kn2};
     }
 
+    /** @brief Cumulative phase of the evolved Fourier coefficient, in radians.
+     * @details The travelling mode has decreasing Fourier phase, so frequency()
+     * negates the accumulated increments. Despite its name it returns radians
+     * per step, not per unit time; divide by the actual step for angular frequency.
+     * expected is used only for the increment-error diagnostic, not the measurement.
+     */
     struct PhaseMeasurement {
         double phase_m = 0, largestIncrementError_m = 0;
         int steps_m = 0;
@@ -147,9 +171,15 @@ namespace chdr::solver::test {
         solver.evaluateInitialFields();
         measured.steps_m = std::ceil(2 * Kokkos::numbers::pi_v<double> / expected.omegaStep_m);
         auto previous    = projectMode(solver.A_n, expected.wave_m.waveNumber_m);
-        Monitors monitors(solver.A_n);
+        // Monitors implements vacuum residuals; medium phase needs only the evolved potentials.
+        std::unique_ptr<Monitors> monitors;
+        if (!solver.hasMaterial())
+            monitors = std::make_unique<Monitors>(solver.A_n);
         for (int n = 0; n < measured.steps_m; ++n) {
-            advanceWithFinalMonitor(solver, monitors, n == measured.steps_m - 1);
+            if (monitors)
+                advanceWithFinalMonitor(solver, *monitors, n == measured.steps_m - 1);
+            else
+                solver.solve();
             const auto current = projectMode(solver.A_n, expected.wave_m.waveNumber_m);
             ASSERT_GT(std::abs(current), 0);
             measured.observe(current, previous, expected.omegaStep_m);
@@ -170,17 +200,35 @@ namespace chdr::solver::test {
         }
     }
 
+    /** @brief Compare measured and discrete-symbol phase with the continuum medium wave.
+     * @details frequency is the continuum angular frequency from mediumFrequency;
+     * measured.frequency() and omegaStep_m are respectively measured and predicted
+     * phase advances per step. Dividing either by denominator gives phase velocity
+     * relative to the continuum velocity. phaseErrorPerWavelength converts its
+     * relative error to radians per dielectric wavelength; see that oracle's
+     * derivation from [fallahi2020mithra20fullwavesimulation, Eq. (3.17)].
+     */
     template <class SolverType>
     nlohmann::json dispersionRecord(SolverType& solver, const DispersionInput& input,
                                     const DispersionPrediction& expected,
                                     const PhaseMeasurement& measured) {
-        const double denominator = solver.getDt() * std::sqrt(expected.waveNormSquared_m);
+        const double frequency =
+            input.epsilon_m > 0 ? mediumFrequency(expected.wave_m.waveNumber_m, input.epsilon_m)
+                                : std::sqrt(expected.waveNormSquared_m);
+        const double denominator = solver.getDt() * frequency;
         return {{"name", input.name_m},
                 {"cells", input.cells_m},
                 {"lengths", input.lengths_m},
                 {"mode", input.mode_m},
                 {"dt", solver.getDt()},
                 {"safety", solver.safetyFactor()},
+                {"epsilon", input.epsilon_m > 0 ? input.epsilon_m : 1},
+                {"formulation", solver.formulationName()},
+                {"alpha", solver.formulationParameters().alpha_m},
+                {"phase_per_wavelength",
+                 phaseErrorPerWavelength(measured.frequency() / denominator - 1)},
+                {"phase_per_wavelength_prediction",
+                 phaseErrorPerWavelength(expected.omegaStep_m / denominator - 1)},
                 {"steps", measured.steps_m},
                 {"omega", measured.frequency()},
                 {"omega_prediction", expected.omegaStep_m},
@@ -213,26 +261,42 @@ namespace chdr::solver::test {
         }
     }
 
+    /** @brief Evolve one discrete mode at the requested step and record its phase.
+     * @details The production path applies safety to the material step bound.
+     * vacuumSet instead selects the smaller vacuum-bound step through the unchecked
+     * test entry. This records the phase error from retaining a vacuum-bound step;
+     * the material remains uniform with permittivity eps.
+     * Both initialization and prediction use getDt() after this selection.
+     * recordOnly cases record dispersion without imposing the development threshold.
+     */
     template <class PotentialSolverBase>
     void dispersionCase(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
                         std::array<int, SpatialDim> mode, double safety, const std::string& name,
-                        bool rankRecord) {
-        const DispersionInput input{cells, mode, lengths, safety, name, rankRecord};
+                        bool rankRecord, double eps = 0, bool recordOnly = false,
+                        bool vacuumSet = false, int splitAxis = -1) {
+        const DispersionInput input{cells,      mode, lengths,    safety,   name,
+                                    rankRecord, eps,  recordOnly, splitAxis};
         auto fields = makePeriodicFieldContainer(cells, lengths, input.splitAxis());
         initializeFieldStorage(fields);
-        ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
-                                               EBReconstructionConvention::R1);
+        auto handle = coreTest::makeTestSolver<PotentialSolverBase>(
+            fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R1,
+            SpatialDiscretization::Collocated, eps);
+        auto& solver = *handle;
         if (safety > 0)
             solver.setSafetyFactor(safety);
+        if (vacuumSet)
+            solver.setTimeStepUnchecked(recordTimeStep(eps, fields.getHr(), safety, true));
         const auto expected = prediction(solver, input);
         PhaseMeasurement measured;
         ASSERT_NO_FATAL_FAILURE(measurePhase(solver, expected, measured));
-        requirePhase(solver, input, expected, measured);
+        if (!recordOnly)
+            requirePhase(solver, input, expected, measured);
         writeDispersion(input, dispersionRecord(solver, input, expected, measured));
     }
 
     void standardDirection(int n, int direction, std::array<int, SpatialDim> mode, double safety,
-                           bool ranks) {
+                           bool ranks, double eps = 0, bool recordOnly = false,
+                           bool vacuumSet = false) {
         std::array<int, SpatialDim> cells      = {n, n, n};
         std::array<double, SpatialDim> lengths = {1, 1, 1};
         if (direction < static_cast<int>(SpatialDim))
@@ -241,11 +305,12 @@ namespace chdr::solver::test {
                     cells[d]   = 8;
                     lengths[d] = 8.0 / n;
                 }
-        dispersionCase<StandardSolverPeriodic>(cells, lengths, mode, safety,
-                                               "Std-" + std::to_string(n) + "-"
-                                                   + std::to_string(direction) + "-"
-                                                   + std::to_string(safety),
-                                               ranks);
+        dispersionCase<StandardSolverPeriodic>(
+            cells, lengths, mode, safety,
+            (eps > 0 ? "Medium-" + std::to_string(eps) + "-" : "") + "Std-" + std::to_string(n)
+                + "-" + std::to_string(direction) + "-" + std::to_string(safety)
+                + (vacuumSet ? "-vacuum" : ""),
+            ranks, eps, recordOnly, vacuumSet);
     }
     void standardDispersion(int n, bool ranks) {
         const std::array<std::array<int, SpatialDim>, 5> modes = {
@@ -281,4 +346,36 @@ namespace chdr::solver::test {
         for (int n : {24, 48, 96})
             nonstandardDispersion(n, false);
     }
+
+    /** @brief Check the discrete phase for axial, face-diagonal and body-diagonal medium modes.
+     * @details standardDirection keeps eight cells in directions where an axial
+     * wave is constant, while preserving the same spacing as the full cubic cases.
+     * ranks requests a separate cumulative-phase record for rank-count comparison.
+     */
+    void mediumDispersion(int n, bool ranks) {
+        const std::array<std::array<int, 3>, 5> modes = {
+            {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 1, 0}, {1, 1, 1}}};
+        for (double eps : {2.13, 4.0})
+            for (int direction = 0; direction < 5; ++direction)
+                for (double safety : {std::sqrt(3.0) / 2, 0.98})
+                    standardDirection(n, direction, modes[direction], safety, ranks, eps);
+    }
+    TEST(MediumDispersion, RankCases) {
+        mediumDispersion(32, true);
+    }
+    TEST(MediumDispersionLong, ResolvedModes) {
+        mediumDispersion(64, false);
+    }
+    // Pair the medium-bound and vacuum-bound steps at each resolution and direction.
+    // Record-only cases omit the measured-versus-symbol agreement assertion.
+    TEST(MediumDispersionRecord, WavelengthError) {
+        const std::array<std::array<int, 3>, 3> modes = {{{1, 0, 0}, {1, 1, 0}, {1, 1, 1}}};
+        for (int n : {16, 32, 64, 128})
+            for (int d = 0; d < 3; ++d)
+                for (double safety : {0.9, std::sqrt(3.0) / 2})
+                    for (bool vacuumSet : {false, true})
+                        standardDirection(n, d == 0 ? 0 : d + 2, modes[d], safety, false, 2.13,
+                                          true, vacuumSet);
+    }
+
 }  // namespace chdr::solver::test
