@@ -33,7 +33,7 @@ namespace chdr::solver {
 
     /** @brief Select the material equations and their generalized-gauge coefficient.
      * @details alpha_m is the dimensionless gauge parameter of
-     * [chew2014generalizedgauge, Eq. (14) and text after Eq. (18)]. The implemented
+     * [chew2014generalizedgauge, Eqs. (15) and (18), p. 3]. The implemented
      * homogeneous Lorenz update accepts unity only; it is not a time-step factor.
      */
     struct FormulationParameters {
