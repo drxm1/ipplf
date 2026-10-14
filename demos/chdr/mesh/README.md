@@ -207,9 +207,11 @@ only for display. There is no full 3D field gather or host mirror.
 
 Rasterization uses a Kokkos kernel in the configured execution/memory space.
 Cell coordinates are `lower + (globalIndex + 0.5)*h`, independent of MPI
-partitioning. Owned cells are filled, epsilon halos exchanged, and all
-in-domain owned/halo samples checked against the analytic predicate. External
-nonperiodic ghost cells are not electromagnetic boundary conditions.
+partitioning. `MaterialOwner` samples owned cells, exchanges epsilon halos and
+copies the nearest domain cell into every physical ghost. It verifies all cells
+by bit pattern against the predicate at their source cells. This continues the
+boundary medium outward [mur1981AbsorbingBoundaryFdtd, section II, p. 378]; it
+does not impose an electromagnetic boundary condition.
 A rank's local dimensions must each have at least two cells for IPPL's halo
 exchange; incompatible decompositions fail before field allocation.
 

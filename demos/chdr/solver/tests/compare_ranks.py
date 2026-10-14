@@ -21,8 +21,22 @@ def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def expected_names():
-    """List the registered producer cases, so matching omissions cannot pass."""
+def expected_names(medium=False):
+    """List the registered producer cases, so matching omissions cannot pass.
+
+    Medium records contain both potential histories and E/B after manufactured
+    evolution, plus the measured mean phase per step for each dispersion case.
+    Continuum-wave comparisons run inside the executable on MPI_COMM_SELF and
+    do not contribute files to this directory.
+    """
+    if medium:
+        names = {f"MediumMMS-{eps:.6f}-{reading}-{field}.json"
+                 for eps in (2.13, 4) for reading in (0, 1)
+                 for field in ("current", "previous", "E", "B")}
+        names.update(f"T5-Medium-{eps:.6f}-Std-32-{direction}-{safety:.6f}.json"
+                     for eps in (2.13, 4) for direction in range(5)
+                     for safety in (math.sqrt(3) / 2, .98))
+        return names
     states = [f"T1-{stencil}-{r}" for stencil in ("Std", "NS") for r in range(3)]
     states += [f"T2-{stencil}" for stencil in ("Std", "NS")]
     states += [f"{family}-{stencil}-{r}-0-{n}" for family in ("T3", "T4")
@@ -41,13 +55,13 @@ def expected_names():
     return names
 
 
-def matching_names(left, right):
+def matching_names(left, right, medium=False):
     """Require the same nonempty set of records from the two fresh fixture runs."""
     names = {path.name for path in left.glob("*.json")}
     other = {path.name for path in right.glob("*.json")}
     if not names or names != other:
         raise AssertionError(f"Missing or mismatched rank records: {names ^ other}")
-    expected = expected_names()
+    expected = expected_names(medium)
     if names != expected:
         raise AssertionError(f"Producer coverage mismatch: {names ^ expected}")
     return sorted(names)
@@ -115,8 +129,8 @@ def compare_metrics(name, left, right):
             raise AssertionError(f"Metadata mismatch {name}: {key}")
 
 
-def compare(left, right):
-    names = matching_names(left, right)
+def compare(left, right, medium=False):
+    names = matching_names(left, right, medium)
     max_cell = max_reduction = max_norm = 0
     bitwise_fields = fields = 0
     for name in names:
@@ -141,4 +155,4 @@ def compare(left, right):
 
 
 if __name__ == "__main__":
-    compare(Path(sys.argv[1]), Path(sys.argv[2]))
+    compare(Path(sys.argv[1]), Path(sys.argv[2]), len(sys.argv) > 3 and sys.argv[3] == "--medium")

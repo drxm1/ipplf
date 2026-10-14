@@ -94,4 +94,59 @@ namespace chdr::solver::test {
     TEST(Convergence, NonStandardSourcedR2Prime) {
         waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R2Prime, false);
     }
+
+    /** @brief Refine each medium wave without changing its physical direction or polarization.
+     * @details Source-free cases span axial, face-diagonal and body-diagonal
+     * propagation, each with transverse-only and mixed potentials. Sourced cases
+     * use one fixed driven wave from initializeWave. longRun includes the finest
+     * 128-cell level, so both required refinement pairs are checked.
+     * Collocated and staggered readings share the wave but compare their outputs
+     * at the different component positions prescribed by LevelContract.
+     */
+    void mediumLadders(bool longRun, bool sourced, SpatialDiscretization reading) {
+        for (int direction = 0; direction < (sourced ? 1 : 3); ++direction)
+            for (int gamma = sourced ? 1 : 0; gamma <= 1; ++gamma)
+                waveLadder<StandardSolverPeriodic>(sourced, EBReconstructionConvention::R2, longRun,
+                                                   reading, false, false, 2.13, direction, gamma);
+    }
+    TEST(MediumConvergence, Collocated) {
+        mediumLadders(false, false, SpatialDiscretization::Collocated);
+    }
+    TEST(MediumConvergence, Staggered) {
+        mediumLadders(false, false, SpatialDiscretization::Staggered);
+    }
+    TEST(MediumConvergenceLong, Collocated) {
+        mediumLadders(true, false, SpatialDiscretization::Collocated);
+    }
+    TEST(MediumConvergenceLong, Staggered) {
+        mediumLadders(true, false, SpatialDiscretization::Staggered);
+    }
+    // This ladder samples analytic physical charge/current at each step; it does
+    // not manufacture a discrete forcing as test_manufactured.cpp does. The final
+    // field errors therefore include source discretization and accumulated evolution.
+    TEST(MediumSource, Collocated) {
+        mediumLadders(false, true, SpatialDiscretization::Collocated);
+    }
+    TEST(MediumSource, Staggered) {
+        mediumLadders(false, true, SpatialDiscretization::Staggered);
+    }
+    TEST(MediumSourceLong, Collocated) {
+        mediumLadders(true, true, SpatialDiscretization::Collocated);
+    }
+    TEST(MediumSourceLong, Staggered) {
+        mediumLadders(true, true, SpatialDiscretization::Staggered);
+    }
+    /** @brief Independent anisotropic refinement with both component placements.
+     * @details The holdout flag in runWave selects an anisotropic mesh family
+     * and y decomposition. Each level compares evolved E/B with continuum
+     * samples at their labels and repeats the evolution on MPI_COMM_SELF.
+     * The separate held phase test initializes a discrete single-root mode;
+     * these field runs retain continuum initial histories. Disabled by default
+     * and absent from the development CTest filters.
+     */
+    TEST(MediumHoldout, DISABLED_Fields) {
+        for (auto reading : {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
+            waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2, true, reading,
+                                               true, false, 3.7);
+    }
 }  // namespace chdr::solver::test

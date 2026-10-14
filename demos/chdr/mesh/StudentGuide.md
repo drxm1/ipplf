@@ -164,8 +164,11 @@ a global cell index through:
 globalIndex = viewIndex + firstOwnedGlobalIndex - numberOfGhostCells
 ```
 
-An interior halo cell belongs to a different rank; an exterior ghost maps
-outside the global domain and is skipped by the material halo check.
+An interior halo cell belongs to a different rank. `MaterialOwner` copies the
+nearest domain cell into each exterior physical ghost, including edges and
+corners. Its placement check covers every allocated cell. Continuing the
+boundary medium outward follows the homogeneous exterior assumed by Mur
+[mur1981AbsorbingBoundaryFdtd, section II, p. 378].
 
 Using this global index is essential: the same physical point must get the
 same epsilon_r regardless of which rank owns it. The geometry object contains
@@ -176,12 +179,13 @@ The sequence in `construct` is:
 
 1. Construct FEL's uniform mesh and field layout; require at least two owned
    cells per local axis for IPPL halo exchange.
-2. Allocate and zero E, B, J and three potential levels; allocate epsilon_r.
-3. Fill owned material cells in a Kokkos reduction, accumulating occupied count
-   and an unsigned checksum of global occupied-cell IDs.
-4. Exchange epsilon_r halos and check owned/in-domain halo values against the
-   same geometric predicate. Exterior nonperiodic ghosts do not define an
-   electromagnetic boundary condition.
+2. Allocate and zero E, B, J and three potential levels; construct `MaterialOwner`
+   on the same mesh and layout with a `TwoMaterialMap` geometry adapter.
+3. The owner samples cell centres in a Kokkos reduction, accumulating occupied
+   count, occupied-ID checksum, a value-sensitive checksum and finite extrema.
+4. The owner exchanges epsilon_r halos, extends physical ghosts and verifies
+   every cell by bit pattern against the same predicate at its source cell.
+   This material extension does not impose an electromagnetic boundary condition.
 5. Reduce diagnostics. Build identical bounded preview-index lists on all ranks.
 6. Sample the actual field on each owning rank. Nonowners contribute zero;
    MPI_SUM assembles each sample on rank zero.

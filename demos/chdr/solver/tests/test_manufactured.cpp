@@ -17,6 +17,8 @@
 #include <utility>
 
 #include "ChdrSolver.h"
+#include "CoreTestSupport.h"
+#include "MediumOracles.h"
 #include "MonitorTestSupport.h"
 #include "Operators.h"
 #include "PeriodicSetup.h"
@@ -57,26 +59,34 @@ namespace chdr::solver::test {
             }
         };
 
-        /** @brief Apply the literal discrete MMS source to exact sampled slots.
-         * @details \f$s=(\psi_{n+1}-2\psi_n+\psi_{n-1})/\Delta t^2-L_h\psi_n\f$.
-         * This is a deduction from the cited wave update. Only the middle spatial
+        /** @brief Convert an exact discrete potential history into physical charge and current.
+         * @details First form the medium forcing
+         * \f$s_\varepsilon=(\psi_{n+1}-2\psi_n+\psi_{n-1})/\Delta t^2
+         * -L_h\psi_n/\varepsilon\f$ (deduction from the wave update cited above).
+         * factors_m converts this forcing to physical sources: its charge entry
+         * is \f$\varepsilon^2\f$, and its current entries are \f$\varepsilon\f$
+         * [chew2014generalizedgauge, Eqs. (12)-(13)]; controls deliberately alter them.
+         * Only the middle spatial
          * sample needs a halo; time neighbours are read at the same owned cell.
          * old_m, current_m and next_m contain consecutive exact potential samples:
          * scalar potential at component 0, vector potential at components 1 through
-         * SpatialDim. source_m receives the corresponding four-component forcing.
+         * SpatialDim. source_m receives charge followed by the three current components.
          * @tparam Scheme Solver's spatial wave stencil, fixed before kernel launch.
          */
         template <Stencil Scheme>
         struct Forcing {
             FourComponentView old_m, current_m, next_m, source_m;
             ippl::Vector<double, SpatialDim> spacing_m;
-            double dt_m;
+            double dt_m, epsilon_m = 1;
+            Kokkos::Array<double, 4> factors_m{1, 1, 1, 1};
             KOKKOS_INLINE_FUNCTION void operator()(int i, int j, int k) const {
                 for (unsigned c = 0; c < 4; ++c)
                     source_m(i, j, k)[c] =
-                        (next_m(i, j, k)[c] - 2 * current_m(i, j, k)[c] + old_m(i, j, k)[c])
-                            / (dt_m * dt_m)
-                        - laplacian<Scheme>(component(current_m, c), i, j, k, spacing_m);
+                        factors_m[c]
+                        * ((next_m(i, j, k)[c] - 2 * current_m(i, j, k)[c] + old_m(i, j, k)[c])
+                               / (dt_m * dt_m)
+                           - laplacian<Scheme>(component(current_m, c), i, j, k, spacing_m)
+                                 / epsilon_m);
             }
         };
 
@@ -87,19 +97,44 @@ namespace chdr::solver::test {
                 for (auto& field : samples_m)
                     field.initialize(prototype.get_mesh(), prototype.getLayout());
             }
+            /** @brief Sample the prescribed history at the solver's space and time labels.
+             * @details The solver source field is temporary sampling storage here;
+             * three copies retain the exact samples before Forcing replaces it with
+             * physical sources. Only the middle copy needs spatial neighbours.
+             * Control 0 uses physicalSourceFactor unchanged. Control 1 omits the
+             * source conversion factors but retains the medium Laplacian factor.
+             * Control 2 supplies too little current by a factor of epsilon; control 3
+             * supplies too much charge by that factor. These emulate an extra current
+             * division or a missing charge division in HomogeneousUpdate::copySource.
+             * Control 4 shifts only charge sampling by half a step through sample.
+             * All controls change test inputs; the production update is unchanged.
+             */
             template <class SolverType>
-            void write(SolverType& solver, Manufactured sample, int step) {
+            void write(SolverType& solver, Manufactured sample, int step, double eps = 1,
+                       int control = 0) {
                 for (int slot = 0; slot < 3; ++slot) {
                     writeSource(solver, sample, step + slot - 1);
                     Kokkos::deep_copy(samples_m[slot].getView(), solver.sourceField().getView());
                 }
                 samples_m[1].fillHalo();
+                Kokkos::Array<double, 4> factors;
+                for (unsigned c = 0; c < 4; ++c) {
+                    factors[c] = physicalSourceFactor(c, eps);
+                    if (control == 1)
+                        factors[c] = 1;
+                    if (control == 2 && c != 0)
+                        factors[c] /= eps;
+                    if (control == 3 && c == 0)
+                        factors[c] *= eps;
+                }
                 const Forcing<SolverType::stencil()> forcing{samples_m[0].getView(),
                                                              samples_m[1].getView(),
                                                              samples_m[2].getView(),
                                                              solver.sourceField().getView(),
                                                              solver.A_n.get_mesh().getMeshSpacing(),
-                                                             solver.getDt()};
+                                                             solver.getDt(),
+                                                             eps,
+                                                             factors};
                 Kokkos::parallel_for("discrete MMS forcing", solver.A_n.getFieldRangePolicy(),
                                      forcing);
             }
@@ -121,13 +156,18 @@ namespace chdr::solver::test {
             double dt_m;
             int step_m, phiLabel_m;
             bool normalization_m;
+            LevelContract contract_m;
             KOKKOS_INLINE_FUNCTION void operator()(int i, int j, int k, double& result) const {
                 const double x = (i + first_m[0] - 0.5) * spacing_m[0],
                              y = (j + first_m[1] - 0.5) * spacing_m[1];
                 const double z = (k + first_m[2] - 0.5) * spacing_m[2];
                 for (unsigned c = 0; c < 4; ++c) {
+                    const auto offset = contract_m.positionOffset(
+                        c == 0 ? Quantity::Phi : Quantity::VectorPotential, c == 0 ? 0 : c - 1);
                     const double expected =
-                        exact_m(x, y, z, (step_m + 1 + (c == 0 ? 0.5 * phiLabel_m : 0)) * dt_m, c);
+                        exact_m(x + offset[0] * spacing_m[0], y + offset[1] * spacing_m[1],
+                                z + offset[2] * spacing_m[2],
+                                (step_m + 1 + (c == 0 ? 0.5 * phiLabel_m : 0)) * dt_m, c);
                     const double difference = current_m(i, j, k)[c] - expected;
                     const double error      = Kokkos::isfinite(difference)
                                                   ? Kokkos::abs(difference)
@@ -146,7 +186,8 @@ namespace chdr::solver::test {
                          solver.getDt(),
                          step,
                          solver.levelContract().halfStepLabel(Quantity::Phi).count(),
-                         false};
+                         false,
+                         solver.levelContract()};
             double values[2] = {};
             Kokkos::parallel_reduce("T1 error", solver.A_n.getFieldRangePolicy(), sample,
                                     Kokkos::Max<double>(values[0]));
@@ -212,5 +253,54 @@ namespace chdr::solver::test {
     }
     TEST(Manufactured, NonStandardLabelsAndNegativeControls) {
         manufacturedLabels<NonStandardSolverPeriodic>();
+    }
+
+    /** @brief Evolve the discrete manufactured history with physical medium sources.
+     * @details The independent physicalSourceFactor supplies each conversion.
+     * Negative controls change only the generated inputs to emulate missing source
+     * conversion, an extra current division, an omitted charge division in
+     * HomogeneousUpdate::copySource, or a half-step charge shift. Each must fail by
+     * at least 0.001 after one step; the correct history runs 256 steps without replacement.
+     * maximumError compares all owned cells and all four potential components
+     * with their exact samples, using a global maximum and each step's reference
+     * maximum as normalization. worst retains the largest relative error over
+     * the run. Reconstructed fields are not the acceptance quantity here.
+     */
+    void mediumManufactured(double eps, SpatialDiscretization reading, int control) {
+        auto fields = makePeriodicFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
+        initializeFieldStorage(fields);
+        auto handle = coreTest::makeTestSolver<StandardSolverPeriodic>(
+            fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R2, reading,
+            eps);
+        auto& solver = *handle;
+        solver.setSafetyFactor(std::sqrt(3.0) / 2);
+        const mmsDetail::Manufactured exact, source{control == 4 ? solver.getDt() / 2 : 0};
+        loadHistory(solver, exact);
+        mmsDetail::Sources samples(solver.A_n);
+        double worst = 0;
+        for (int n = 0; n < (control ? 1 : 256); ++n) {
+            samples.write(solver, source, n, eps, control);
+            solver.solve();
+            worst = std::max(worst, mmsDetail::maximumError(solver, exact, n));
+        }
+        std::cout << "medium MMS epsilon=" << eps << " reading=" << int(reading)
+                  << " formulation=" << solver.formulationName()
+                  << " alpha=" << solver.formulationParameters().alpha_m << " control=" << control
+                  << " error=" << worst << '\n';
+        ASSERT_TRUE(std::isfinite(worst));
+        if (control) {
+            EXPECT_GE(worst, 1e-3);
+        } else {
+            EXPECT_LE(worst, 1e-12);
+            recordState("MediumMMS-" + std::to_string(eps) + "-" + std::to_string(int(reading)),
+                        solver);
+        }
+    }
+    TEST(MediumManufactured, PhysicalSourcesAndControls) {
+        for (double eps : {2.13, 4.0})
+            for (auto reading :
+                 {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
+                for (int control = 0; control <= 4; ++control)
+                    mediumManufactured(eps, reading, control);
     }
 }  // namespace chdr::solver::test

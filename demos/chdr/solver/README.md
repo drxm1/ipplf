@@ -1,9 +1,10 @@
 # Periodic ChDR solver audit
 
-This module adds a periodic, normalized-vacuum shell over IPPL's Standard and
-NonStandard potential solvers. The inherited `step()` remains the update;
-`ChdrSolver<Base>` supplies reconstruction of fields and time labels and the optional
-time-step setter.
+This module adds a periodic shell over IPPL's Standard and NonStandard potential
+solvers in normalized units. `ChdrSolver<Base>` supplies field reconstruction,
+time labels and the optional timestep setter. Without a material owner, its
+update remains the inherited vacuum step. A bound material selects its update
+through the host formulation interface.
 
 Five residual monitors and Fourier probe are separate objects that might be useful for measurements along the line.
 All work is under `demos/chdr/solver`; the existing vacuum demo and `src/MaxwellSolvers` are reference implementations.
@@ -11,8 +12,8 @@ All work is under `demos/chdr/solver`; the existing vacuum demo and `src/Maxwell
 The module provides **both spatial readings**; applications select their
 sampling convention explicitly. The supported common-time contract is
 R2; R2Prime is its relabelled equivalence experiment, and R1 is the inherited
-regression/control. Material, particles and open boundaries belong to later
-units.
+regression/control. Homogeneous dielectric materials are supported; particles,
+interfaces and open boundaries remain outside this module's present scope.
 
 The constructor requires an explicit reconstruction. Select `EBReconstructionConvention::R2`
 for the common-time contract. Both collocated and staggered routes are retained
@@ -20,6 +21,49 @@ as selectable implementations for later material and sourced applications; the
 choice for a particular result will follow its benchmarks. The present vacuum
 module supports Standard and NonStandard in the collocated reading, and Standard
 in the staggered reading. Record the selected `SpatialDiscretization` and stencil with every result.
+
+## Homogeneous material
+
+Construct `chdr::material::MaterialOwner` on the fields' mesh and layout, then pass
+it after the explicit reconstruction and spatial reading in the solver constructor.
+`FormulationParameters` selects `MaterialFormulation::Homogeneous` and `alpha_m = 1` by
+default. The guard requires `alpha_m = 1`, the Standard stencil and a finite constant
+relative permittivity \f$\varepsilon\ge1\f$. This is the value sampled into the
+owner's `epsilon()` field, not a derived coefficient. Homogeneity is checked
+over owned samples across all ranks; halo copies do not contribute statistics.
+The guard reads cached rank-identical statistics before
+the base constructor enters collective operations. Nonuniform maps are permanently
+outside this formulation's validity. Future interface formulations provide their
+own guards, updates and bounds through `MaterialFormulation.h`.
+
+The four potential components are \f$\psi=(\phi,\mathbf A)\f$, and the corresponding
+physical source remains \f$(\rho,\mathbf J)\f$. For unit permeability,
+\f$\partial_t^2\psi=\varepsilon^{-1}\nabla^2\psi+
+(\rho/\varepsilon^2,\mathbf J/\varepsilon)\f$
+[chew2014generalizedgauge, section 2, Eqs. (11)–(13)]. `HomogeneousUpdate` copies
+\f$(\rho/\varepsilon,\mathbf J)\f$ into its own source field and calls the inherited
+kernel with \f$\Delta t/\sqrt\varepsilon\f$ (deduction by substitution).
+The shell restores the physical timestep and source binding on every exit path;
+all time labels and reconstructions use the physical step. Unit permittivity
+therefore reproduces the vacuum path bit for bit. The workspace stores four doubles
+per allocated cell. Each step launches one device copy/scaling kernel over owned
+cells, with no additional MPI exchange.
+
+`maxStableTimeStep()` returns the Standard vacuum bound multiplied by
+\f$\sqrt\varepsilon\f$ [fallahi2020mithra20fullwavesimulation, Eq. (3.20), with
+medium speed]. `setSafetyFactor()` uses that bound. Construction retains the
+inherited default timestep; select the desired safety factor before loading
+histories. `Monitors::beforeSolve()` refuses non-unit material permittivity because
+its residual identities are vacuum identities. Medium convergence tests evaluate
+their own gauge and Gauss norms.
+
+Mesh, layout and source/output owners must retain their addresses for the shell's
+lifetime. The material owner is borrowed only during construction; the update
+retains its scalar value and private workspace. Record `formulationName()`,
+`formulationParameters().alpha_m` and `homogeneousPermittivity()` beside stencil,
+spatial reading and reconstruction. Medium tests cover source scaling, phase,
+stability and continuum convergence using independent expected values in
+`tests/MediumOracles.h`. Rank comparisons repeat the same update on one and two ranks.
 
 ## Units and labels
 

@@ -2,10 +2,13 @@
  * @file mesh-1.cpp
  * @brief Distributed FEL-layout mesh and staircased dielectric-radiator inspection.
  *
- * Positions are laboratory-frame SI metres internally. The static material is
- * sampled at lower + (globalIndex + 1/2)*h. No Maxwell update or particle source
- * is applied. E, B, J and three four-potential levels use the existing FEL
- * aliases/container; epsilon adds one scalar field on the same mesh/layout.
+ * Positions are laboratory-frame SI metres internally. No Maxwell update or
+ * particle source is applied. E, B, J and three four-potential levels use the
+ * existing FEL aliases/container. chdr::material::MaterialOwner owns the scalar
+ * permittivity on the same mesh/layout and samples the geometry at cell centres.
+ * It exchanges inter-rank ghosts, then extends the nearest boundary-cell value
+ * into physical ghost faces, edges and corners without evaluating the geometry
+ * outside the domain.
  *
  * @ingroup chdr_mesh
  * @details All ranks read and validate the same YAML, instantiate either
@@ -32,6 +35,7 @@
 #include "BrickGeometry.h"
 #include "ChdrMeshConfig.h"
 #include "FELFieldContainer.hpp"
+#include "MaterialOwner.h"
 #include "MaterialViewer.h"
 #include "PrismGeometry.h"
 
@@ -49,8 +53,6 @@ namespace {
     using Clock = std::chrono::steady_clock;
     /// FEL-compatible three-component vector for positions and E/B values.
     using Vec = ippl::Vector<double, Dim>;
-    /// Scalar IPPL field used for relative permittivity on the shared layout.
-    using ScalarField = Field<double, Dim>;
 
     /** @brief Bounded preview point, expressed in global integer cell indices. */
     struct Sample {
@@ -245,10 +247,13 @@ namespace {
      * determine cell-centre coordinates. Changing MPI decomposition must preserve
      * the occupied-cell count, checksum, and exported slice values.
      *
-     * Each rank allocates FEL E/B/J, three four-potential levels, and epsilon_r.
-     * All electromagnetic values remain zero. Only epsilon_r is rasterized and
-     * halo-exchanged. The all-cell/halo check reuses the production predicate;
-     * independent geometric references live in verify_mesh_output.py.
+     * Each rank allocates FEL E/B/J and three four-potential levels, all kept zero.
+     * chdr::material::MaterialOwner owns and rasterizes the scalar permittivity
+     * on the same mesh/layout. After inter-rank exchange, it fills physical ghost
+     * faces, edges and corners from the nearest boundary cells. Its complete
+     * allocation check evaluates the production predicate at the wrapped or
+     * clamped source-cell coordinates; independent geometric references live in
+     * verify_mesh_output.py.
      *
      * @tparam Geometry Trivially copyable type exposing a const device-callable
      * contains(x,y,z) in metres and a host volume() in cubic metres.
@@ -256,7 +261,8 @@ namespace {
      * @param radiator Analytic shape selected from cfg.geometryType.
      * @return 0 on success; 1 if rank-zero output fails (broadcast to all ranks).
      * @pre IPPL/MPI and Kokkos are initialized; all ranks call this collectively.
-     * @throws std::runtime_error On unsuitable local cell counts or halo mismatch.
+     * @throws std::runtime_error If the early collective check finds fewer than
+     * two owned cells per local axis, or the owner's field/halo verification fails.
      * Allocation/other exceptions propagate to main(), which aborts the communicator.
      */
     template <class Geometry>
@@ -291,65 +297,22 @@ namespace {
             potential.initialize(fields.getMesh(), fields.getFL());
             potential = 0.0;
         }
-        ScalarField epsilon(fields.getMesh(), fields.getFL());
-        epsilon         = cfg.backgroundEpsilon;
-        const auto view = epsilon.getView();
-        const int ghost = epsilon.getNghost();
+        const chdr::material::MaterialOwner material(
+            fields.getMesh(), fields.getFL(),
+            chdr::material::TwoMaterialMap<Geometry>{radiator, cfg.radiatorEpsilon,
+                                                     cfg.backgroundEpsilon});
+        const auto view = material.epsilon();
+        // The demo reports geometric occupancy, even if both materials have the
+        // same permittivity. Use the marked statistics, not the full-map hash.
+        const auto& statistics = material.statistics();
+        const int ghost        = 1;
         const ippl::Vector<int, 3> first{local[0].first(), local[1].first(), local[2].first()};
         const ippl::Vector<int, 3> length{static_cast<int>(local[0].length()),
                                           static_cast<int>(local[1].length()),
                                           static_cast<int>(local[2].length())};
-        const ippl::Vector<int, 3> count{cfg.cells[0], cfg.cells[1], cfg.cells[2]};
-        const double epsVacuum = cfg.backgroundEpsilon, epsRadiator = cfg.radiatorEpsilon;
-        std::uint64_t localCount = 0, localChecksum = 0;
-        Kokkos::parallel_reduce(
-            "ChDR material rasterization", epsilon.getFieldRangePolicy(),
-            KOKKOS_LAMBDA(int i, int j, int k, std::uint64_t& occupied, std::uint64_t& checksum) {
-                const int gi = i + first[0] - ghost;
-                const int gj = j + first[1] - ghost;
-                const int gk = k + first[2] - ghost;
-                const bool inside =
-                    radiator.contains(lower[0] + (gi + 0.5) * h[0], lower[1] + (gj + 0.5) * h[1],
-                                      lower[2] + (gk + 0.5) * h[2]);
-                view(i, j, k) = inside ? epsRadiator : epsVacuum;
-                if (inside) {
-                    ++occupied;
-                    // Commutative unsigned checksum of global material-cell IDs.
-                    std::uint64_t id = (std::uint64_t(gi) * count[1] + gj) * count[2] + gk;
-                    id += UINT64_C(0x9e3779b97f4a7c15);
-                    id = (id ^ (id >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
-                    id = (id ^ (id >> 27)) * UINT64_C(0x94d049bb133111eb);
-                    checksum += id ^ (id >> 31);
-                }
-            },
-            localCount, localChecksum);
-        epsilon.fillHalo();
-        std::uint64_t badHalos = 0;
-        using Policy           = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
-        Kokkos::parallel_reduce(
-            "ChDR verify material including internal halos",
-            Policy({0, 0, 0},
-                   {length[0] + 2 * ghost, length[1] + 2 * ghost, length[2] + 2 * ghost}),
-            KOKKOS_LAMBDA(int i, int j, int k, std::uint64_t& bad) {
-                const int gi = i + first[0] - ghost, gj = j + first[1] - ghost,
-                          gk = k + first[2] - ghost;
-                if (gi < 0 || gj < 0 || gk < 0 || gi >= count[0] || gj >= count[1]
-                    || gk >= count[2])
-                    return;
-                const bool inside =
-                    radiator.contains(lower[0] + (gi + 0.5) * h[0], lower[1] + (gj + 0.5) * h[1],
-                                      lower[2] + (gk + 0.5) * h[2]);
-                if (view(i, j, k) != (inside ? epsRadiator : epsVacuum))
-                    ++bad;
-            },
-            badHalos);
-        std::uint64_t localStats[3] = {localCount, localChecksum, badHalos}, globalStats[3]{};
-        MPI_Allreduce(localStats, globalStats, 3, MPI_UINT64_T, MPI_SUM, communicator);
-        if (globalStats[2])
-            throw std::runtime_error("Material field/halo verification failed");
         // Include halo storage and the actual vector sizeof in the measured allocation.
         std::uint64_t allocated =
-            epsilon.getView().span() * sizeof(double) + fields.getE().getView().span() * sizeof(Vec)
+            material.allocatedBytes() + fields.getE().getView().span() * sizeof(Vec)
             + fields.getB().getView().span() * sizeof(Vec)
             + fields.getJ().getView().span() * sizeof(ippl::Vector<double, 4>);
         for (auto& potential : potentials)
@@ -392,9 +355,9 @@ namespace {
         int writeFailed = 0;
         if (rank == 0) {
             try {
-                writeOutput(cfg, radiator, rankBounds, samples, combined, cuts, globalStats[0],
-                            globalStats[1], totalAllocated, maxSeconds, ranks);
-                std::cout << "mesh-1: " << cellCount(cfg) << " cells, " << globalStats[0]
+                writeOutput(cfg, radiator, rankBounds, samples, combined, cuts, statistics.marked_m,
+                            statistics.markedChecksum_m, totalAllocated, maxSeconds, ranks);
+                std::cout << "mesh-1: " << cellCount(cfg) << " cells, " << statistics.marked_m
                           << " dielectric cells; " << ranks << " MPI rank(s)\n"
                           << "Core fields: " << cellCount(cfg) * BytesPerCell / 1e9
                           << " GB; allocated including halos: " << totalAllocated / 1e9 << " GB\n"

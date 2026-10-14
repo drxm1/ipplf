@@ -25,10 +25,13 @@
 // Solver internals use the communication declarations provided by the IPPL umbrella.
 #include "Ippl.h"
 
+#include <limits>
 #include <type_traits>
 
 #include "FELFieldContainer.hpp"
 #include "LevelContract.h"
+#include "MaterialFormulation.h"
+#include "MaterialStepContext.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "Operators.h"
 #include "Reconstruction.h"
@@ -46,11 +49,6 @@ namespace chdr::solver {
 
     /// Three-component electric or magnetic field storage type on an IPPL mesh.
     using EMFieldsType = VField_t<double, SpatialDim>;
-
-    /// Four-component scalar/vector potential or charge/current storage type.
-    /// Component zero stores \f$\phi\f$ or \f$\rho\f$; components 1 through SpatialDim
-    /// store the Cartesian components of \f$\mathbf A\f$ or \f$\mathbf J\f$.
-    using AJFourFieldsType = SourceField_t<double, SpatialDim>;
 
     /// Periodic Standard FDTD Solver, like in the vacuum example.
     /// Later on we will enable different boundary conditions,
@@ -125,6 +123,56 @@ namespace chdr::solver {
             requirePeriodic(source);
             requirePeriodic(electric);
             requirePeriodic(magnetic);
+        }
+
+        /** @brief Bind a material formulation on the source mesh and layout.
+         * @details Mesh and layout owners must outlive the shell; the material
+         * owner itself is borrowed only during construction. Validity uses its cached
+         * statistics before the delegated constructor can enter a collective.
+         * The source remains physical charge/current; the formulation applies its
+         * factors internally. Reconstruction always uses the physical timestep.
+         * The inherited default step is retained: on cubic cells it corresponds to
+         * \f$S=(\sqrt3/2)/\sqrt\varepsilon\f$ for the homogeneous update
+         * (deduction from [fallahi2020mithra20fullwavesimulation, Eq. (3.20)]).
+         * Select setSafetyFactor explicitly to use a prescribed medium step.
+         * The owner must use the exact source mesh/layout objects, not merely an
+         * equivalent grid. Validation runs in the delegating argument before the
+         * vacuum constructor; workspace allocation follows successful construction.
+         * HomogeneousUpdate copies the uniform permittivity, so it does not retain
+         * the owner or a reference to its field. Source and E/B storage remain borrowed.
+         */
+        ChdrSolver(AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic,
+                   EBReconstructionConvention reconstruction, SpatialDiscretization spatial,
+                   const material::MaterialOwner& owner, FormulationParameters parameters = {})
+            : ChdrSolver(checkedMaterialSource(source, owner, parameters,
+                                               {stencil(), spatial, reconstruction}),
+                         electric, magnetic, reconstruction, spatial) {
+            update_m =
+                makeMaterialUpdate(parameters, owner, {stencil(), spatial, reconstruction}, source);
+            homogeneousPermittivity_m = owner.statistics().homogeneous()
+                                            ? owner.homogeneousValue()
+                                            : std::numeric_limits<double>::quiet_NaN();
+            formulationParameters_m   = parameters;
+        }
+
+        /// The service adapter borrows this shell's address; bindings cannot be copied or moved.
+        ChdrSolver(const ChdrSolver&)            = delete;
+        ChdrSolver& operator=(const ChdrSolver&) = delete;
+        ChdrSolver(ChdrSolver&&)                 = delete;
+        ChdrSolver& operator=(ChdrSolver&&)      = delete;
+
+        /** @brief Produce the next potential slot without relabelling or counting a solve.
+         * @details Each selected update finishes its own halos and boundaries.
+         * The owner-free path retains the inherited step unchanged.
+         * Both paths write A_np1 from A_n and A_nm1. A direct step() call leaves
+         * those slot names, completedSolves() and E/B outputs unchanged; solve()
+         * subsequently rotates histories, increments the count and reconstructs E/B.
+         */
+        void step() override {
+            if (update_m)
+                update_m->advance(context_m);
+            else
+                PotentialSolverBase::step();
         }
 
         /** @brief Advance the potentials, relabel the slots, then reconstruct this solve's output.
@@ -260,6 +308,22 @@ namespace chdr::solver {
         }
         /// @return Immutable shared position/time table for the selected reading.
         const LevelContract& levelContract() const { return contract_m; }
+        /// Whether a material formulation is bound rather than the inherited vacuum step.
+        bool hasMaterial() const { return bool(update_m); }
+        /// Uniform relative permittivity, cached at construction; the owner-free
+        /// vacuum route returns one. Reserved nonuniform metadata is NaN.
+        double homogeneousPermittivity() const { return homogeneousPermittivity_m; }
+        /// Parameters to record beside stencil, spatial placement and reconstruction.
+        /// Without a material update these are defaults, not a selected formulation.
+        const FormulationParameters& formulationParameters() const {
+            return formulationParameters_m;
+        }
+        /// Stable formulation label for run records; distinguish the owner-free route.
+        const char* formulationName() const {
+            return hasMaterial()
+                       ? chdr::solver::formulationName(formulationParameters_m.formulation_m)
+                       : "Vacuum";
+        }
 
         /** @brief Interpret an integer solve/source index through the shared label table.
          * @param quantity Output, potential or source channel whose label is requested.
@@ -294,13 +358,19 @@ namespace chdr::solver {
                        ? Stencil::Standard
                        : Stencil::NonStandard;
         }
-        /** @brief Return the vacuum stability bound used by both step-selection methods.
+        /** @brief Return the selected update's stability bound for both step-selection methods.
+         * @details The bound applies to the physical step returned by getDt(), not
+         * HomogeneousUpdate's reduced internal step. Delegation makes safetyFactor()
+         * and setSafetyFactor() use the same material-dependent normalization.
+         * The owner-free route retains the stencil's vacuum bound.
          * @return Positive maximum stable time spacing for this update and mesh.
          */
         double maxStableTimeStep() const {
+            if (update_m)
+                return update_m->maxStableTimeStep(this->hr_m);
             return chdr::solver::maxStableTimeStep(this->hr_m, stencil());
         }
-        /// @return Current time step divided by the vacuum stability bound.
+        /// @return Current physical time step divided by the selected update's stability bound.
         double safetyFactor() const { return this->getDt() / maxStableTimeStep(); }
 
         /** @brief Select an effective CFL factor before the first solve.
@@ -339,6 +409,82 @@ namespace chdr::solver {
         }
 
     private:
+        /** @brief Check immutable material metadata before delegating to the base constructor.
+         * @details Formulation refusal uses rank-identical cached statistics and
+         * performs no collective or allocation. Field identity is a caller invariant.
+         * The owner already reduced statistics during construction; this function
+         * does not synchronize ranks. Parameters and selection must agree across
+         * ranks, and each rank must bind its own matching mesh/layout objects.
+         * Returning the original source permits this check to run while evaluating
+         * the delegated-constructor argument, before its communication begins.
+         */
+        static AJFourFieldsType& checkedMaterialSource(
+            AJFourFieldsType& source, const material::MaterialOwner& owner,
+            const FormulationParameters& parameters,
+            const SolverDiscretizationSelection& selection) {
+            validateMaterialUpdate(parameters, owner.statistics(), selection);
+            if (&source.get_mesh() != &owner.mesh() || &source.getLayout() != &owner.layout())
+                throw IpplException("ChdrSolver", "Material must share the source mesh and layout");
+            return source;
+        }
+
+        /** @brief Temporarily substitute the inherited kernel's time spacing and source.
+         * @details The kernel captures coefficients and source views by value.
+         * Restoring the host bindings therefore preserves physical reconstruction
+         * labels even if the inherited step throws. The caller's source is never changed.
+         * The local guard saves references to the base members and copies their old
+         * values before either assignment. Its destructor restores both on normal
+         * return and exception unwinding. This restores parameters, not partially
+         * written field data; it is not a rollback of a failed numerical step.
+         * Direct assignment to JN_mp is confined here because the public source
+         * binding is fixed for the solver's lifetime. internalSource must outlive
+         * all device work launched by StandardFDTDSolver::step; the material update
+         * owns that scratch field. No history rotation or reconstruction happens here.
+         */
+        void baseStep(double internalDt, AJFourFieldsType& internalSource) {
+            struct Restore {
+                double& dt_m;
+                AJFourFieldsType*& source_m;
+                double savedDt_m;
+                AJFourFieldsType* savedSource_m;
+                ~Restore() {
+                    dt_m     = savedDt_m;
+                    source_m = savedSource_m;
+                }
+            } restore{this->dt, this->JN_mp, this->dt, this->JN_mp};
+            // beware: here the timestep is rescaled GLOBALLY across the whole domain
+            this->dt    = internalDt;
+            this->JN_mp = &internalSource;
+            PotentialSolverBase::step();
+        }
+
+        /** @brief Lend the existing potential slots and shell operations to an update.
+         * @details This member stores a reference to its enclosing shell, not copies
+         * of the fields. The shell is noncopyable and nonmovable so that the reference
+         * cannot silently point at an old instance. The update borrows this context
+         * only during advance(); all dispatch through this adapter occurs on the host.
+         */
+        class StepContext final : public MaterialStepContext {
+        public:
+            explicit StepContext(ChdrSolver& solver)
+                : solver_m(solver) {}
+            AJFourFieldsType& previous() override { return solver_m.A_nm1; }
+            AJFourFieldsType& current() override { return solver_m.A_n; }
+            AJFourFieldsType& next() override { return solver_m.A_np1; }
+            AJFourFieldsType& source() override { return solver_m.sourceField(); }
+            double dt() const override { return solver_m.getDt(); }
+            void baseStep(double step, AJFourFieldsType& source) override {
+                solver_m.baseStep(step, source);
+            }
+            void finishStep() override {
+                next().fillHalo();
+                solver_m.applyBCs();
+            }
+
+        private:
+            ChdrSolver& solver_m;
+        };
+
         /// Validate collectively before the base constructor performs halo communication.
         static AJFourFieldsType& checkedSource(AJFourFieldsType& source,
                                                const EMFieldsType& electric,
@@ -369,6 +515,13 @@ namespace chdr::solver {
                                     "Requires an all-periodic layout and one-cell halos");
         }
         LevelContract contract_m;
+        /// Own formulation workspace; a null pointer selects the inherited vacuum step.
+        std::unique_ptr<MaterialUpdate> update_m;
+        /// Borrow this stable shell address without creating a new adapter per step.
+        StepContext context_m{*this};
+        /// Cached material metadata for queries; the formulation owns its numerical data.
+        double homogeneousPermittivity_m = 1.0;
+        FormulationParameters formulationParameters_m;
         long long completed_m                = 0;
         double overriddenDt_m                = 0;
         bool hasStepOverride_m               = false;

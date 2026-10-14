@@ -1,7 +1,8 @@
 /** @file Convergence.h
  * @brief Execute source-free and sourced Lorenz-wave refinement ladders.
- * @details WaveNorms.h defines continuum comparisons. Monitors verifies the
- * independent discrete identities on the last evolved step. RankRecords.h
+ * @details WaveNorms.h defines continuum comparisons. For vacuum cases, Monitors
+ * verifies the independent discrete identities on the last evolved step. Medium
+ * cases use WaveNorms.h's material Gauss and gauge residuals instead. RankRecords.h
  * records owned fields for decomposition comparisons; approximation errors
  * remain separate JSONL records.
  * Helpers parameterized by PotentialSolverBase select the inherited Standard or
@@ -15,6 +16,7 @@
 #include <iostream>
 
 #include "ChdrSolver.h"
+#include "CoreTestSupport.h"
 #include "Monitors.h"
 #include "PeriodicSetup.h"
 #include "RankRecords.h"
@@ -27,11 +29,22 @@ static_assert(chdr::solver::SpatialDim == 3,
               "Convergence.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
+    /** @brief Select one analytic wave and the solver representation used to evolve it.
+     * @details epsilon_m equal to zero selects the owner-free vacuum path.
+     * For source-free medium waves, direction_m selects axial, face-diagonal or
+     * body-diagonal propagation (0, 1 or 2). gamma_m selects a transverse wave
+     * (0) or one with an additional longitudinal potential (1); makeMediumWave
+     * supplies the corresponding scalar potential through the independent oracle.
+     * Sourced and held cases have their own fixed wave vectors.
+     */
     struct WaveOptions {
         bool sourced_m;
         EBReconstructionConvention ebReconstructionConvention_m;
         SpatialDiscretization spatialDiscretization_m;
         bool holdout_m, recordOnly_m;
+        double epsilon_m = 0;
+        int direction_m  = 0;
+        double gamma_m   = 1;
     };
 
     /** @brief Return ordinary or anisotropic mesh counts for one refinement level.
@@ -49,7 +62,12 @@ namespace chdr::solver::test {
                        : std::array<int, SpatialDim>{n, n, NS ? 3 * n / 2 : n};
     }
 
-    /// Load analytic histories at the shell's labels, then reconstruct the initial fields.
+    /** @brief Load continuum samples at the shell's labels and reconstruct initial fields.
+     * @details Select the medium step before sampling either initial history slot.
+     * makeMediumWave supplies continuum frequency and amplitudes independently
+     * of the discrete update. Their evolution error is therefore retained in
+     * this convergence check; the dispersion test instead initializes a discrete mode.
+     */
     template <class SolverType>
     LorenzWave initializeWave(SolverType& solver, const WaveOptions& options) {
         if (options.holdout_m)
@@ -58,6 +76,16 @@ namespace chdr::solver::test {
         const double pi = Kokkos::numbers::pi_v<double>;
         if (options.holdout_m)
             wave = makeSourcedWave({4 * pi, -2 * pi, 6 * pi}, 4 * pi);
+        if (options.epsilon_m > 0) {
+            solver.setSafetyFactor(options.holdout_m ? 0.9 : std::sqrt(3.0) / 2);
+            const ippl::Vector<double, SpatialDim> mode =
+                options.holdout_m   ? ippl::Vector<double, SpatialDim>(-1, 2, 3)
+                : options.sourced_m ? ippl::Vector<double, SpatialDim>(1, 2, 2)
+                                    : ippl::Vector<double, SpatialDim>(1, options.direction_m > 0,
+                                                                       options.direction_m > 1);
+            wave = makeMediumWave(2 * pi * mode, options.epsilon_m, options.gamma_m,
+                                  options.sourced_m);
+        }
         wave.requirePeriodic({1, 1, 1});
         loadHistory(solver, wave);
         solver.evaluateInitialFields();
@@ -69,15 +97,17 @@ namespace chdr::solver::test {
      * period substituted afterward. Sources are written before each solve.
      * Monitoring the final transition retains its consumed source and previous
      * history without allocating diagnostics for every intermediate step.
+     * A null monitors pointer selects the medium path, where the vacuum identity
+     * formulas do not apply. waveErrors still measures material continuum residuals.
      */
     template <class SolverType>
-    void advanceWave(SolverType& solver, const LorenzWave& wave, Monitors& monitors) {
+    void advanceWave(SolverType& solver, const LorenzWave& wave, Monitors* monitors) {
         const double pi = Kokkos::numbers::pi_v<double>;
         const int steps = std::lround(2 * pi / wave.omega_m / solver.getDt());
         for (int k = 0; k < steps; ++k) {
             writeSource(solver, wave.sources(), k);
-            if (k == steps - 1)
-                monitors.advance(solver);
+            if (k == steps - 1 && monitors)
+                monitors->advance(solver);
             else
                 solver.solve();
         }
@@ -105,6 +135,13 @@ namespace chdr::solver::test {
      */
     template <class SolverType>
     std::string waveCaseName(int n, const WaveOptions& options) {
+        if (options.epsilon_m > 0)
+            return std::string(options.holdout_m   ? "MediumHeld"
+                               : options.sourced_m ? "MediumSource"
+                                                   : "MediumWave")
+                   + "-" + std::to_string(options.direction_m) + "-"
+                   + std::to_string(int(options.gamma_m)) + "-"
+                   + std::to_string(int(options.spatialDiscretization_m)) + "-" + std::to_string(n);
         return std::string(options.holdout_m   ? "H1"
                            : options.sourced_m ? "T4"
                                                : "T3")
@@ -115,13 +152,17 @@ namespace chdr::solver::test {
     }
 
     /// Keep continuum errors at every mesh, separately from the field-comparison JSON inputs.
-    inline void writeWaveErrors(const std::string& name, const WaveErrors& errors) {
+    template <class SolverType>
+    void writeWaveErrors(const std::string& name, const WaveErrors& errors, SolverType& solver) {
         std::filesystem::create_directories(recordDirectory());
         std::ofstream out(recordDirectory() / (name + "-errors.jsonl"));
         out << nlohmann::json{{"electric", errors.electric_m},
                               {"magnetic", errors.magnetic_m},
                               {"gauss", errors.gauss_m},
-                              {"gauge", errors.gauge_m}}
+                              {"gauge", errors.gauge_m},
+                              {"epsilon", solver.homogeneousPermittivity()},
+                              {"formulation", solver.formulationName()},
+                              {"alpha", solver.formulationParameters().alpha_m}}
                    .dump()
             << '\n';
     }
@@ -187,7 +228,7 @@ namespace chdr::solver::test {
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         if (rank != 0)
             return;
-        writeWaveErrors(name, errors);
+        writeWaveErrors(name, errors, solver);
         if (SolverType::stencil() == Stencil::NonStandard && options.sourced_m)
             writeSourceAmplitude(name, solver, wave);
     }
@@ -197,30 +238,50 @@ namespace chdr::solver::test {
      * copied or moved after allocation. The source, mesh and layout therefore
      * outlive all kernels and monitor work fields. The independent anisotropic case is registered
      * separately as a disabled test and never entered by a development ladder.
+     * For a medium holdout, n is a refinement label rather than an axis count:
+     * n=16 gives 15 by 18 by 20 cells, doubled at each subsequent level.
+     * Its y decomposition differs from the development cases' x decomposition.
      */
     template <class PotentialSolverBase>
     WaveErrors runWave(
         int n, bool sourced, EBReconstructionConvention ebReconstructionConvention,
         SpatialDiscretization spatialDiscretization = SpatialDiscretization::Collocated,
-        bool holdout = false, bool recordOnly = false) {
-        const WaveOptions options{sourced, ebReconstructionConvention, spatialDiscretization,
-                                  holdout, recordOnly};
-        auto fields =
-            makePeriodicFieldContainer(waveCells<PotentialSolverBase>(n, holdout), {1, 1, 1}, 0);
+        bool holdout = false, bool recordOnly = false, double eps = 0, int direction = 0,
+        double gamma = 1) {
+        const WaveOptions options{sourced,
+                                  ebReconstructionConvention,
+                                  spatialDiscretization,
+                                  holdout,
+                                  recordOnly,
+                                  eps,
+                                  direction,
+                                  gamma};
+        const auto cells = eps > 0 && holdout
+                               ? std::array<int, 3>{15 * n / 16, 18 * n / 16, 20 * n / 16}
+                               : waveCells<PotentialSolverBase>(n, holdout);
+        auto fields      = makePeriodicFieldContainer(cells, {1, 1, 1}, eps > 0 && holdout ? 1 : 0);
         initializeFieldStorage(fields);
-        ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
-                                               ebReconstructionConvention, spatialDiscretization);
+        auto handle = coreTest::makeTestSolver<PotentialSolverBase>(
+            fields.getJ(), fields.getE(), fields.getB(), ebReconstructionConvention,
+            spatialDiscretization, eps);
+        auto& solver    = *handle;
         const auto wave = initializeWave(solver, options);
-        Monitors monitors(solver.A_n);
-        advanceWave(solver, wave, monitors);
-        if (holdout)
+        std::unique_ptr<Monitors> monitors;
+        if (eps == 0)
+            monitors = std::make_unique<Monitors>(solver.A_n);
+        advanceWave(solver, wave, monitors.get());
+        // Repeat the 32-cell medium cases on MPI_COMM_SELF to isolate decomposition
+        // effects from continuum error. Held cases request this comparison at every level.
+        if (holdout || (eps > 0 && n == 32))
             verifySerialReference(solver, wave, int(solver.completedSolves()),
                                   spatialDiscretization, !recordOnly);
-        requireWaveIdentities(monitors.report(), recordOnly);
+        if (monitors)
+            requireWaveIdentities(monitors->report(), recordOnly);
         const auto errors = waveErrors(solver, wave);
         recordWave(n, options, solver, wave, errors);
-        writeWaveIdentities(waveCaseName<ChdrSolver<PotentialSolverBase>>(n, options),
-                            monitors.report());
+        if (monitors)
+            writeWaveIdentities(waveCaseName<ChdrSolver<PotentialSolverBase>>(n, options),
+                                monitors->report());
         return errors;
     }
 
@@ -261,6 +322,17 @@ namespace chdr::solver::test {
      * On waveLadder's 32-to-64 and 64-to-128 pairs, magnetic-field order must be
      * at least 1.8. R2 and R2Prime require the same electric/Gauss order; R1 instead
      * requires electric/Gauss order from 0.8 through 1.2 on 64-to-128 only.
+     * In a medium, Gauss order is asserted only when the fine-mesh Gauss error
+     * exceeds \f$10^{-12}\f$, using the same floor as the gauge-order check.
+     * This floor skips only the residual's order assertion; electric and magnetic
+     * field orders remain required on both checked pairs.
+     * For the transverse cases with equal nonzero wave-number components on a
+     * cubic grid, the discrete Gauss residual vanishes in exact arithmetic:
+     * the divergence weights are proportional to the wave number and the
+     * polarization is transverse (Deduction from the Gauss constraint
+     * [chew2014generalizedgauge, Eq. (4)]). Its measured round-off residual has
+     * no defined truncation-error order (Deduction from the order definition
+     * [salari2000CodeVerificationMms, section 4.2]).
      * For sourced non-holdout cases, gauge order must also be at least 1.8 when
      * the fine-mesh relative gauge error exceeds \f$10^{-12}\f$.
      * These are end-of-period comparisons, not temporal-envelope bounds. A driven
@@ -276,7 +348,9 @@ namespace chdr::solver::test {
             requireFirstOrderControl(a, b, pair);
         else {
             EXPECT_GE(order(a.electric_m, b.electric_m), 1.8);
-            EXPECT_GE(order(a.gauss_m, b.gauss_m), 1.8);
+            if (options.epsilon_m == 0 || b.gauss_m > 1e-12) {
+                EXPECT_GE(order(a.gauss_m, b.gauss_m), 1.8);
+            }
         }
         EXPECT_GE(order(a.magnetic_m, b.magnetic_m), 1.8);
         if (options.sourced_m && !options.holdout_m && b.gauge_m > 1e-12) {
@@ -288,16 +362,23 @@ namespace chdr::solver::test {
     void waveLadder(bool sourced, EBReconstructionConvention ebReconstructionConvention,
                     bool longRun,
                     SpatialDiscretization spatialDiscretization = SpatialDiscretization::Collocated,
-                    bool holdout = false, bool recordOnly = false) {
-        const WaveOptions options{sourced, ebReconstructionConvention, spatialDiscretization,
-                                  holdout, recordOnly};
+                    bool holdout = false, bool recordOnly = false, double eps = 0,
+                    int direction = 0, double gamma = 1) {
+        const WaveOptions options{sourced,
+                                  ebReconstructionConvention,
+                                  spatialDiscretization,
+                                  holdout,
+                                  recordOnly,
+                                  eps,
+                                  direction,
+                                  gamma};
         std::vector<WaveErrors> errors;
         for (int n : {16, 32, 64, 128}) {
             if (n == 128 && !longRun)
                 break;
             errors.push_back(runWave<PotentialSolverBase>(n, sourced, ebReconstructionConvention,
                                                           spatialDiscretization, holdout,
-                                                          recordOnly));
+                                                          recordOnly, eps, direction, gamma));
         }
         for (std::size_t pair = 1; pair < errors.size(); ++pair)
             requireOrders(errors[pair - 1], errors[pair], pair, options);

@@ -7,6 +7,7 @@
  * TODO: REVIEW.
  */
 #pragma once
+#include "MediumOracles.h"
 #include "PeriodicMode.h"
 #include "SpatialDimension.h"
 
@@ -14,16 +15,26 @@ static_assert(chdr::solver::SpatialDim == 3,
               "LorenzWave.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {
-    /** @brief Real part of a complex Lorenz-gauge plane wave.
-     * @details \f$\widehat\phi=(k\cdot\widehat A)/\Omega\f$ and
-     * \f$s=(|k|^2-\Omega^2)\psi\f$. Deduction from
-     * fallahi2020mithra20fullwavesimulation, Eqs. (3.6)-(3.9).
+    /** @brief Analytic potentials, physical sources and fields for one continuum plane wave.
+     * @details Defaults describe vacuum; makeMediumWave supplies the uniform relative
+     * permittivity and caches the scalar amplitude and separate charge/current factors.
+     * In vacuum, \f$\widehat\phi=(k\cdot\widehat A)/\Omega\f$ and
+     * \f$s=(|k|^2-\Omega^2)\psi\f$ (deduction from
+     * [fallahi2020mithra20fullwavesimulation, Eqs. (3.6)-(3.9)]).
+     * The medium amplitudes instead obey [chew2014generalizedgauge, Eqs. (11)-(13)].
      */
     struct LorenzWave {
         ippl::Vector<double, SpatialDim> waveNumber_m, realA_m, imagA_m;
         double omega_m, sourceFactor_m;
-        /// @brief Obtain one part of the scalar amplitude from the continuum Lorenz relation.
+        /// Uniform relative permittivity and host-computed medium scalar/source data.
+        double epsilon_m = 1, realPhi_m = 0, imagPhi_m = 0, chargeFactor_m = 0;
+        /** @brief Obtain one part of the scalar amplitude from the continuum Lorenz relation.
+         * @details Medium values come from the independent host oracle. The vacuum branch
+         * retains the existing arithmetic and also supports directly constructed waves.
+         */
         KOKKOS_INLINE_FUNCTION double phiAmplitude(bool imaginary) const {
+            if (epsilon_m != 1)
+                return imaginary ? imagPhi_m : realPhi_m;
             const auto a = imaginary ? imagA_m : realA_m;
             return (waveNumber_m[0] * a[0] + waveNumber_m[1] * a[1] + waveNumber_m[2] * a[2])
                    / omega_m;
@@ -42,11 +53,15 @@ namespace chdr::solver {
             const double imag = c == 0 ? phiAmplitude(true) : imagA_m[c - 1];
             return real * Kokkos::cos(phase(x, y, z, t)) - imag * Kokkos::sin(phase(x, y, z, t));
         }
-        /// @brief Apply the continuum wave-operator multiplier, retaining IPPL's positive source
-        /// sign.
+        /** @brief Sample physical charge (component zero) or current (components one to three).
+         * @details The medium charge and current use different multipliers, as derived in
+         * drivenSourceFactor from [chew2014generalizedgauge, Eqs. (12)-(13)]. These values
+         * are input sources; the material update applies its own dielectric scaling.
+         */
         KOKKOS_INLINE_FUNCTION double source(double x, double y, double z, double t,
                                              unsigned c) const {
-            return sourceFactor_m * (*this)(x, y, z, t, c);
+            return (epsilon_m != 1 && c == 0 ? chargeFactor_m : sourceFactor_m)
+                   * (*this)(x, y, z, t, c);
         }
         /// @brief Copy a device-callable source functor; no reference to the host wave object
         /// escapes.
@@ -113,5 +128,32 @@ namespace chdr::solver {
                                                   -k[0] * e1[2] / norm, k[0] * e1[1] / norm);
         const ippl::Vector<double, SpatialDim> imaginary = 0.5 * e2 + k / norm;
         return {k, e1, imaginary, norm, 0.0};
+    }
+
+    /** @brief Prepare device samples from the independent medium-wave oracles.
+     * @details The host supplies all medium-dependent amplitudes and source factors.
+     * Device sampling retains the field definitions of LorenzWave; the gauge and
+     * forcing follow [chew2014generalizedgauge, Eqs. (11)-(13)].
+     * A free wave uses the medium frequency and gamma sets its longitudinal amplitude.
+     * A driven wave uses a fixed polarization and two thirds of that frequency, so its
+     * physical source is nonzero; gamma is unused in that branch. This detuning is a
+     * test input, not an approximation to the source-free dispersion relation.
+     */
+    inline LorenzWave makeMediumWave(ippl::Vector<double, SpatialDim> k, double eps,
+                                     double gamma = 1, bool sourced = false) {
+        const double omega = mediumFrequency(k, eps) * (sourced ? 2.0 / 3 : 1);
+        LorenzWave wave;
+        if (sourced) {
+            wave = makeSourcedWave(k, omega);
+        } else {
+            const auto amplitude = mediumWaveAmplitude(k, gamma);
+            wave                 = LorenzWave{k, amplitude.real_m, amplitude.imag_m, omega, 0};
+        }
+        wave.epsilon_m      = eps;
+        wave.realPhi_m      = mediumScalarAmplitude(k, wave.realA_m, eps, omega);
+        wave.imagPhi_m      = mediumScalarAmplitude(k, wave.imagA_m, eps, omega);
+        wave.sourceFactor_m = sourced ? drivenSourceFactor(1, k, eps, omega) : 0;
+        wave.chargeFactor_m = sourced ? drivenSourceFactor(0, k, eps, omega) : 0;
+        return wave;
     }
 }  // namespace chdr::solver
