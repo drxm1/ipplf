@@ -195,10 +195,13 @@ namespace chdr::solver::test {
 
     /** @brief Relative E/B L2 errors and the frozen Gauss/gauge norm ratios.
      * @details The common cell volume cancels on each uniform grid. Gauss is
-     * normalized by relative permittivity times the continuum field norm and
-     * wave-number magnitude, matching the medium Gauss residual's factor;
-     * gauge by the numerical vector-potential divergence norm.
+     * normalized by the continuum electric-field norm, wave-number magnitude
+     * and relative permittivity; gauge by the current numerical vector-potential
+     * divergence norm. The material residual factors follow constraintFactor
+     * [chew2014generalizedgauge, Eqs. (4), (11)].
      * Only owned cells enter any sum; ghost values are used solely by differences.
+     * A zero gauge denominator returns zero only for an exactly zero residual;
+     * otherwise it returns infinity, so undefined relative error cannot pass silently.
      */
     template <class SolverType>
     WaveErrors waveErrors(SolverType& solver, const LorenzWave& wave) {
@@ -209,6 +212,7 @@ namespace chdr::solver::test {
             kn2 += wave.waveNumber_m[d] * wave.waveNumber_m[d];
         return {std::sqrt(sums[0] / sums[1]), std::sqrt(sums[2] / sums[3]),
                 std::sqrt(sums[4] / (kn2 * sums[1])) / constraintFactor(wave.epsilon_m),
-                std::sqrt(sums[6] / sums[5])};
+                sums[5] == 0 ? (sums[6] == 0 ? 0 : std::numeric_limits<double>::infinity())
+                             : std::sqrt(sums[6] / sums[5])};
     }
 }  // namespace chdr::solver::test
