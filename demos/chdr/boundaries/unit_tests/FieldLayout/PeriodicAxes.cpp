@@ -1,6 +1,7 @@
 #include "Ippl.h"
 
 #include "../MaxwellSolvers/BoundaryOracles.h"
+#include "LinearSolvers/Multigrid.h"
 #include "TestUtils.h"
 #include "gtest/gtest.h"
 
@@ -65,6 +66,57 @@ namespace {
                 << "local index " << i << ',' << j << ',' << k;
         });
     }
+
+    /// Distinct positive integer deposits; owned cells receive no initial deposit.
+    double deposit(const ippl::NDIndex<3>& local, int rank, int i, int j, int k) {
+        if (i > 0 && i <= int(local[0].length()) && j > 0 && j <= int(local[1].length()) && k > 0
+            && k <= int(local[2].length())) {
+            return 0;
+        }
+        return 1 + i + 10 * j + 100 * k + 1000 * rank;
+    }
+
+    /** @brief Sum every rank's ghost deposits into the oracle's global destinations.
+     * No neighbour list or fill operation enters this reference. In particular,
+     * an open-face deposit has no destination even at a wrap/seam corner.
+     */
+    auto expectedDeposits(Box& box, Axes periodic) {
+        std::array<double, cells[0] * cells[1] * cells[2]> sums{};
+        for (int rank = 0; rank < box.layout.comm.size(); ++rank) {
+            const auto local = box.layout.getLocalNDIndex(rank);
+            ippl::detail::nestedLoop<3>(
+                [](unsigned) {
+                    return 0;
+                },
+                [&](unsigned d) {
+                    return local[d].length() + 2;
+                },
+                [&](int i, int j, int k) {
+                    const int target = source(local, periodic, i, j, k);
+                    if (target >= 0) {
+                        sums[target] += deposit(local, rank, i, j, k);
+                    }
+                });
+        }
+        return sums;
+    }
+
+    /// Check exact sums in owned cells, including simultaneous wraps and rank seams.
+    void checkAccumulation(Box& box, Axes periodic) {
+        const auto expected = expectedDeposits(box, periodic);
+        auto local          = box.layout.getLocalNDIndex();
+        auto mirror         = Kokkos::create_mirror_view(box.field.getView());
+        nestedViewLoop(mirror, 0, [&](int i, int j, int k) {
+            mirror(i, j, k) = deposit(local, box.layout.comm.rank(), i, j, k);
+        });
+        Kokkos::deep_copy(box.field.getView(), mirror);
+        box.field.accumulateHalo();
+        Kokkos::deep_copy(mirror, box.field.getView());
+        nestedViewLoop(mirror, 1, [&](int i, int j, int k) {
+            EXPECT_EQ(mirror(i, j, k), expected[source(local, periodic, i, j, k)])
+                << "local index " << i << ',' << j << ',' << k;
+        });
+    }
 }  // namespace
 
 TEST(PeriodicAxes, FillEveryGhost) {
@@ -89,6 +141,41 @@ TEST(PeriodicAxes, BooleanInterface) {
         box.layout =
             ippl::FieldLayout<3>(MPI_COMM_WORLD, box.domain, {false, false, true}, periodic);
         checkFill(box, periodicAxes(periodic ? 7 : 0));
+    }
+}
+
+TEST(PeriodicAxes, AccumulateEveryGhost) {
+    for (unsigned mask = 0; mask < 8; ++mask) {
+        for (unsigned split = 0; split < 3; ++split) {
+            SCOPED_TRACE(::testing::Message() << "mask " << mask << ", split " << split);
+            const auto periodic = periodicAxes(mask);
+            Box box(periodic, split);
+            checkAccumulation(box, periodic);
+        }
+    }
+}
+
+TEST(PeriodicAxes, MixedMultigridIsRejected) {
+    Box box(periodicAxes(6), 2);
+    auto op = [](Field& field) {
+        return -laplace(field);
+    };
+    ippl::multigrid_preconditioner<Field, decltype(op)> multigrid(std::move(op));
+    EXPECT_THROW(multigrid.init_fields(box.field), IpplException);
+}
+
+/// Uniform layouts remain accepted, with enough cells for coarse levels on both rank counts.
+TEST(PeriodicAxes, UniformMultigridIsAccepted) {
+    const ippl::NDIndex<3> domain(ippl::Index(16), ippl::Index(16), ippl::Index(16));
+    for (bool periodic : {false, true}) {
+        ippl::FieldLayout<3> layout(MPI_COMM_WORLD, domain, {false, false, true}, periodic);
+        Mesh mesh(domain, ippl::Vector<double, 3>(1), ippl::Vector<double, 3>(0));
+        Field field(mesh, layout);
+        auto op = [](Field& values) {
+            return -laplace(values);
+        };
+        ippl::multigrid_preconditioner<Field, decltype(op)> multigrid(std::move(op));
+        EXPECT_NO_THROW(multigrid.init_fields(field));
     }
 }
 
