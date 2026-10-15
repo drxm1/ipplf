@@ -156,7 +156,7 @@ namespace ippl {
         if (layout_m->comm.size() > 1) {
             halo_m.fillHalo(dview_m, layout_m, nghost_m);
         }
-        if (layout_m->isAllPeriodic_m) {
+        if (layout_m->isAnyPeriodic()) {
             using Op = typename detail::HaloCells<T, Dim, ViewArgs...>::assign;
             halo_m.template applyPeriodicSerialDim<Op>(dview_m, layout_m, nghost_m);
         }
