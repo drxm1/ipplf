@@ -4,12 +4,13 @@
 using std::size_t;
 #include "Types/Vector.h"
 
+#include "Utility/ViewUtils.h"
+
 #include "FieldLayout/FieldLayout.h"
 #include "MaxwellSolvers/AbsorbingBC.h"
 #include "MaxwellSolvers/Maxwell.h"
 #include "Meshes/UniformCartesian.h"
 #include "Particle/ParticleBase.h"
-#include "Utility/ViewUtils.h"
 
 namespace ippl {
     enum fdtd_bc {
@@ -76,13 +77,31 @@ namespace ippl {
          * @brief Evaluates the electric and magnetic fields.
          */
         void evaluate_EB();
-    
+
         /**
          * @brief Initializes the solver. This is a pure virtual function.
          */
         virtual void initialize() = 0;
 
     protected:
+        /**
+         * @brief Complete the potential update and publish its final owned values.
+         *
+         * Absorbing faces, edges and corners must finish before halo exchange:
+         * otherwise neighboring ranks retain the previous boundary values when
+         * timeShift() copies the histories. Mur reads the old histories and
+         * locally available new inward values; it needs no preceding exchange
+         * when each local extent is at least two cells, as required by HaloCells.
+         * This is the owner-to-ghost ordering described by Oskooi et al. (2010),
+         * "Meep: A flexible free-software package for electromagnetic simulations
+         * by the FDTD method", section 2.3.
+         *
+         * The periodic path retains its existing exchange and field-BC order.
+         * Derived potential updates must call this once after their interior
+         * kernel has completed and before shifting the histories.
+         */
+        virtual void finishPotentialStep();
+
         /**
          * @brief Applies the boundary conditions.
          */
