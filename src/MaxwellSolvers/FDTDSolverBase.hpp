@@ -63,6 +63,17 @@ namespace ippl {
         detail::deepCopyIfDifferent(this->A_n.getView(), this->A_np1.getView());
     }
 
+    template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
+    void FDTDSolverBase<EMField, SourceField, boundary_conditions>::finishPotentialStep() {
+        if constexpr (boundary_conditions == periodic) {
+            A_np1.fillHalo();
+            applyBCs();
+        } else {
+            applyBCs();
+            A_np1.fillHalo();
+        }
+    }
+
     /**
      * @brief Applies the boundary conditions.
      *

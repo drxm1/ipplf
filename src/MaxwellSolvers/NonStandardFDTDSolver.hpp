@@ -93,8 +93,7 @@ namespace ippl {
                 }
             });
         Kokkos::fence();
-        this->A_np1.fillHalo();
-        this->applyBCs();
+        this->finishPotentialStep();
     }
 
     /**
