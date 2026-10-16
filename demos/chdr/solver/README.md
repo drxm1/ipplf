@@ -1,19 +1,19 @@
-# Periodic ChDR solver audit
+# ChDR potential solver
 
-This module adds a periodic shell over IPPL's Standard and NonStandard potential
-solvers in normalized units. `ChdrSolver<Base>` supplies field reconstruction,
+This module provides `ChdrSolver<Base>`, which extends IPPL's Standard and
+NonStandard potential solvers in normalized units. It supplies field reconstruction,
 time labels and the optional timestep setter. Without a material owner, its
 update remains the inherited vacuum step. A bound material selects its update
 through the host formulation interface.
 
 Five residual monitors and Fourier probe are separate objects that might be useful for measurements along the line.
-All work is under `demos/chdr/solver`; the existing vacuum demo and `src/MaxwellSolvers` are reference implementations.
+`ChdrSolver` is under `demos/chdr/solver`; shared boundary operators are in `src/MaxwellSolvers`.
 
 The module provides **both spatial readings**; applications select their
 sampling convention explicitly. The supported common-time contract is
 R2; R2Prime is its relabelled equivalence experiment, and R1 is the inherited
-regression/control. Homogeneous dielectric materials are supported; particles,
-interfaces and open boundaries remain outside this module's present scope.
+regression/control. Homogeneous dielectric materials and mixed periodic/Mur
+boundaries are supported. Particles and material interfaces require further work.
 
 The constructor requires an explicit reconstruction. Select `EBReconstructionConvention::R2`
 for the common-time contract. Both collocated and staggered routes are retained
@@ -43,7 +43,7 @@ physical source remains \f$(\rho,\mathbf J)\f$. For unit permeability,
 [chew2014generalizedgauge, section 2, Eqs. (11)–(13)]. `HomogeneousUpdate` copies
 \f$(\rho/\varepsilon,\mathbf J)\f$ into its own source field and calls the inherited
 kernel with \f$\Delta t/\sqrt\varepsilon\f$ (deduction by substitution).
-The shell restores the physical timestep and source binding on every exit path;
+`ChdrSolver` restores the physical timestep and source binding on every exit path;
 all time labels and reconstructions use the physical step. Unit permittivity
 therefore reproduces the vacuum path bit for bit. The workspace stores four doubles
 per allocated cell. Each step launches one device copy/scaling kernel over owned
@@ -57,13 +57,128 @@ histories. `Monitors::beforeSolve()` refuses non-unit material permittivity beca
 its residual identities are vacuum identities. Medium convergence tests evaluate
 their own gauge and Gauss norms.
 
-Mesh, layout and source/output owners must retain their addresses for the shell's
-lifetime. The material owner is borrowed only during construction; the update
+Mesh, layout and source/output owners must retain their addresses for the
+`ChdrSolver` instance's lifetime. The material owner is borrowed only during construction; the update
 retains its scalar value and private workspace. Record `formulationName()`,
 `formulationParameters().alpha_m` and `homogeneousPermittivity()` beside stencil,
 spatial reading and reconstruction. Medium tests cover source scaling, phase,
 stability and continuum convergence using independent expected values in
 `tests/MediumOracles.h`. Rank comparisons repeat the same update on one and two ranks.
+
+## Periodic and Mur boundaries
+
+`BoxSetup.h` constructs boxes with independent periodic axes. Its default is
+periodic in every direction. These flags select the layout's exchange topology,
+not an electromagnetic boundary condition. `ChdrSolver` selects Mur conditions
+on the two global faces normal to each nonperiodic axis. The following example
+uses Mur faces normal to x, periodic y and z axes, and decomposition along z:
+
+```cpp
+using namespace chdr::solver;
+auto fields = makeBoxFieldContainer({40, 4, 48}, {40., 4., 48.}, 2,
+                                   {false, true, true});
+initializeFieldStorage(fields);
+ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
+    EBReconstructionConvention::R2, SpatialDiscretization::Staggered);
+solver.setSafetyFactor(0.9);
+```
+
+`ChdrSolver` supports Mur faces with Standard only. Periodic NonStandard remains
+available with the collocated reading. Source and output fields must refer to the
+same mesh and layout objects, with one ghost layer. Every rank needs at least two
+owned cells per axis; each nonperiodic axis needs at least three global cells.
+Global indices start at zero.
+
+`ChdrSolver` retains the alias names `StandardSolverPeriodic` and
+`NonStandardSolverPeriodic` for existing callers, but both select `ippl::configured`.
+`ChdrSolver` derives and validates the face description before constructing its base.
+Direct library users construct `StandardFDTDSolver<..., ippl::configured>` or
+`NonStandardFDTDSolver<..., ippl::configured>` with
+`(source, electric, magnetic, const FDTDBoundary&)`. The `periodic` and `absorbing`
+specializations accept only the three fields; `absorbing` selects Mur on every
+face and rejects periodically wrapping layouts; it does not infer face kinds from
+the layout. `boundary()` is read-only. There is no
+`setBoundary()`; construct a new solver to change faces or speeds.
+
+`FDTDBoundary` describes six faces. Face `2*d` is lower, and `2*d+1` is upper.
+Periodic faces agree with the layout and occur in opposing pairs. Mur faces
+use the second-order condition of Mur [mur1981AbsorbingBoundaryFdtd, section IV,
+Eq. (16)]. Edges and corners use the compatibility conditions of
+[bamberger1987SecondOrderCorner, section II, Eqs. (2.10)–(2.11)].
+
+`MurSpeed::physical(v)` specifies a speed in the time coordinate of
+`ChdrSolver::getDt()`, with vacuum propagation speed normalized to one.
+For `Homogeneous`, let \f$n=\sqrt{\varepsilon_r}\f$: the potential update uses
+\f$\Delta t_{\mathrm{update}}=\Delta t/n\f$
+[chew2014generalizedgauge, section 2, Eqs. (11)–(13); `HomogeneousUpdate.h`].
+The Mur coefficients depend on speed times timestep
+[mur1981AbsorbingBoundaryFdtd, section IV, Eq. (16)]. `ChdrSolver` therefore
+passes \f$nv\f$ to Mur, so that
+\f$(nv)\Delta t_{\mathrm{update}}=v\Delta t\f$ (deduction).
+Without homogeneous timestep rescaling, the conversion factor is one.
+
+`MurSpeed::matched()` instead passes exactly one to the Mur coefficient
+constructors, equal to the propagation speed in the reused potential-update
+equations. This corresponds to speed \f$1/n\f$ in the time coordinate of
+`getDt()`. The API name does not assert perfect absorption. Pass the policy
+after the spatial reading, or after the owner and formulation parameters for
+a material solver. Material metadata and owner identity are validated before
+reading permittivity; conversion and boundary validation finish before base
+construction, not through a later setter.
+
+Direct library callers supply `FDTDBoundary` speeds in the time coordinate of
+the potential update; the library does not apply the conversion above. The
+speed passed to each Mur face must be finite, positive and below \f$\sqrt{2}\f$.
+This continuum guard is not a discrete stability proof
+[trefethen1986OneWayWellPosed, Theorem 2, p. 424]. If Mur is selected on two or
+three axes, every selected speed must be exactly one: the retained edge/corner
+updates use the unit-interior-speed compatibility equations
+[bamberger1987SecondOrderCorner, section II, Eqs. (2.10)–(2.11)]. With Mur on
+only one axis, its two opposing faces do not intersect, and direct library
+callers may supply separate validated speeds. A Mur–periodic intersection does
+not impose the unit-speed restriction.
+
+Ghost cells are extra storage around each rank's owned subdomain. `fillHalo()`
+supplies inter-rank ghosts and periodic-wrap ghosts. Separate boundary helpers
+supply exterior ghosts beyond nonperiodic global faces. The outermost owned
+cells at those faces are not ghosts: Mur updates those owned cells.
+
+With Mur faces selected, each step updates interior cells, then the selected
+Mur faces, edges and corners. It exchanges the completed potentials before
+filling exterior physical ghosts. `fillOpenFaceGhosts()` uses
+\f$g=3u_0-3u_1+u_2\f$, where the three samples start at the outermost owned
+cell and proceed inward. This gives a second-order one-sided derivative through
+the unchanged centred reconstruction [fornberg1988FiniteDifferenceFormulas,
+Table 3, p. 704]. Axis sweeps include transverse ghosts to complete edge and
+corner values. `loadHistory()` prepares both stored potential levels with the
+same halo exchange and exterior-ghost rule.
+After loading arrays directly, call `markHistoryLoaded()` and `prepareHistories()`
+before reconstruction or stepping. Preparation does not apply Mur to loaded owned samples.
+
+Material ghosts wrap along periodic axes and copy the nearest material sample
+beyond nonperiodic global faces. Fourier probes accept potentials on the
+outermost owned Mur layer, but reject electric, averaged magnetic and raw
+magnetic probe boxes touching that layer. `Monitors` requires an all-periodic
+layout. Keep particle deposits off the Mur layer: its update does not consume
+a source, and halo accumulation does not wrap deposits across nonperiodic
+global boundaries.
+
+`OpenReflection`, `OpenFieldReflection` and `OpenReflectionRefinement` compare
+propagating, grazing and evanescent modes with independent discrete reflection
+values. `OpenFamilies` checks local edge/corner compatibility. `OpenStability`
+checks fixed long trajectories, not stability for arbitrary initial data;
+`OpenBeam` compares a finite beam in an all-Mur box with a reference run using
+periodic transverse axes and Mur faces normal to x. The disabled reflection
+holdout is configured separately.
+
+Tests labelled `record` also print dense three-mesh reflection tables, vacuum
+gauge and Gauss residuals, the field error from an unfilled physical ghost, and
+the drift from unrestricted initial boundary data. The positive potential
+diagnostic in `OpenStabilityRecords` is defined by its temporal differences and
+spatial links; it is not a conserved energy. `OpenGaugeRecords` distinguishes
+the closed physical layer from an interior comparison with the plane-wave
+oracle. These records carry their own labels and normalization and impose no
+additional acceptance bounds.
 
 ## Units and labels
 
@@ -227,7 +342,7 @@ rank-record writer and the serial-reference comparison.
 
 Load histories after selecting the time step, then call
 `evaluateInitialFields()`. Before each solve, write the source at the labels
-returned by the shell. For diagnostics, `Monitors::advance(solver)` performs
+returned by `ChdrSolver`. For diagnostics, `Monitors::advance(solver)` performs
 the before/after snapshots around the solve. Seed its previous source when
 the first continuity report is needed. `solve()` itself remains usable without
 allocating monitor work fields.
@@ -366,6 +481,7 @@ The citation keys used in source comments identify these works:
 
 - `fallahi2020mithra20fullwavesimulation`: Arya Fallahi (2020), [MITHRA 2.0: A Full-Wave Simulation Tool for Free Electron Lasers][fallahi].
 - `christlieb2024GaugeConserving`: Andrew J. Christlieb, William A. Sands and Stephen R. White (2025), [A Particle-in-Cell Method for Plasmas with a Generalized Momentum Formulation, Part III: A Family of Gauge Conserving Methods][gauge].
+- `kreiss2002SecondOrderWave`: Heinz-Otto Kreiss, N. Anders Petersson and Jacob Yström (2002), [Difference Approximations for the Second Order Wave Equation](https://doi.org/10.1137/S0036142901397435), SIAM J. Numer. Anal. 40, 1940–1967.
 - `chew2014generalizedgauge`: Weng Cho Chew (2014), [Vector Potential Electromagnetic Theory with Generalized Gauge for Inhomogeneous Anisotropic Media][chew].
 - `ryu2016potentialfdtd`: Christopher J. Ryu, Aiyin Y. Liu, Wei E. I. Sha and Weng Cho Chew (2016), [Finite-Difference Time-Domain Simulation of the Maxwell–Schrödinger System][ryu].
 - `trefethen1996FiniteDifferenceSpectral`: Lloyd N. Trefethen (1996), [Finite Difference and Spectral Methods for Ordinary and Partial Differential Equations][trefethen].
@@ -373,7 +489,12 @@ The citation keys used in source comments identify these works:
 - `clemens2001FiniteIntegration`: Markus Clemens and Thomas Weiland (2001), [Discrete Electromagnetism with the Finite Integration Technique][fit].
 - `jeannerod2013ImprovedErrorBounds`: Claude-Pierre Jeannerod and Siegfried M. Rump (2013), [Improved Error Bounds for Inner Products in Floating-Point Arithmetic][roundoff].
 - `oskooi2010meep`: Ardavan F. Oskooi et al. (2010), [Meep: A Flexible Free-Software Package for Electromagnetic Simulations by the FDTD Method][meep].
+- `jones1988MultiPointImpedance`: Michael G. Jones and Tony L. Parrott (1988), [Evaluation of a Multi-Point Method for Determining Acoustic Impedance](https://ntrs.nasa.gov/citations/19880017529), NASA TM-100637; Analysis, equations (1)–(3), p. 3.
 - `heinzel2002SpectrumSpectralDensity`: Gerhard Heinzel, Albrecht Rüdiger and Roland Schilling (2002), [Spectrum and Spectral Density Estimation by the Discrete Fourier Transform (DFT), Including a Comprehensive List of Window Functions and Some New Flat-Top Windows][window].
+- `mur1981AbsorbingBoundaryFdtd`: Gerrit Mur (1981), [Absorbing Boundary Conditions for the Finite-Difference Approximation of the Time-Domain Electromagnetic-Field Equations](https://doi.org/10.1109/TEMC.1981.303970).
+- `bamberger1987SecondOrderCorner`: Alain Bamberger, Patrick Joly and Jean E. Roberts (1987), [Second Order Absorbing Boundary Conditions for the Wave Equation: A Solution for the Corner Problem](https://inria.hal.science/inria-00075909).
+- `fornberg1988FiniteDifferenceFormulas`: Bengt Fornberg (1988), [Generation of Finite Difference Formulas on Arbitrarily Spaced Grids](https://doi.org/10.1090/S0025-5718-1988-0935077-0).
+- `trefethen1986OneWayWellPosed`: Lloyd N. Trefethen and Laurence Halpern (1986), [Well-Posedness of One-Way Wave Equations and Absorbing Boundary Conditions](https://doi.org/10.1090/S0025-5718-1986-0856695-2).
 
 [fallahi]: https://arxiv.org/abs/2009.13645
 [gauge]: https://arxiv.org/abs/2410.18414
