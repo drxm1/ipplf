@@ -1,5 +1,5 @@
-/** @file PeriodicSetup.h
- * @brief Runtime periodic boxes with a single selectable decomposition axis.
+/** @file BoxSetup.h
+ * @brief Runtime boxes with selectable periodic axes and one decomposition axis.
  */
 #pragma once
 
@@ -9,7 +9,7 @@
 #include "SpatialDimension.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
-              "PeriodicSetup.h requires three spatial dimensions for its Cartesian implementation");
+              "BoxSetup.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {
     /** @brief Construct mesh/layout ownership; allocate with initializeFieldStorage.
@@ -19,14 +19,15 @@ namespace chdr::solver {
      *                  Size of the whole container, in each axis.
      * @param splitAxis Axis eligible for MPI decomposition: 0=x, 1=y, 2=z.
      *                  The other two axes remain undistributed. Defaults to x.
+     * @param periodic Periodic wrap flags for x, y and z; default all periodic.
      * @return Prvalue container; retain its address once its fields are allocated.
      * @details Construction defines mesh and MPI ownership only. Allocation is a separate
      * operation because the field objects retain pointers to this owner's mesh and layout.
      * Do not return or move an already allocated container through a setup helper.
      */
-    ChDRFieldContainer makePeriodicFieldContainer(std::array<int, SpatialDim> cells,
-                                                  std::array<double, SpatialDim> lengths,
-                                                  unsigned splitAxis = 0);
+    ChDRFieldContainer makeBoxFieldContainer(
+        std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
+        unsigned splitAxis = 0, std::array<bool, SpatialDim> periodic = {true, true, true});
 
     /// Reusing from the vacuum wave example
     using chdr::vacuum::checkLocalDomain;
@@ -80,7 +81,7 @@ namespace chdr::solver {
         Kokkos::fence();
     }
 
-    /** @brief Load both potential slots and synchronize their halos, without reconstructing E/B.
+    /** @brief Load both potential slots, synchronize halos and close physical ghosts.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * ChdrSolver enforces this choice and supplies the required history and label interface.
      * @tparam AnalyticSampler Device-copyable scalar-valued analytic potential sampler.
@@ -107,8 +108,7 @@ namespace chdr::solver {
         writeSamples(solver.A_n, sample, {phi, a, a, a}, solver.levelContract());
         writeSamples(solver.A_nm1, sample, {phi - dt, a - dt, a - dt, a - dt},
                      solver.levelContract());
-        preparePotentialHalo(solver.A_n);
-        preparePotentialHalo(solver.A_nm1);
+        solver.prepareHistories();
     }
 
     /** @brief Write the source consumed by the next solve; stepping reads owned source cells only.

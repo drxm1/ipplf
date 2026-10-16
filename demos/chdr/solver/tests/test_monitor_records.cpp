@@ -57,7 +57,7 @@ namespace {
     template <class PotentialSolverBase>
     void checkGaussReconstruction(std::array<int, SpatialDim> cells,
                                   EBReconstructionConvention ebReconstructionConvention) {
-        auto fields = makePeriodicFieldContainer(cells, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer(cells, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                ebReconstructionConvention);

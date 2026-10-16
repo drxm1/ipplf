@@ -16,12 +16,12 @@
 #include <iostream>
 #include <utility>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "CoreTestSupport.h"
 #include "MediumOracles.h"
 #include "MonitorTestSupport.h"
 #include "Operators.h"
-#include "PeriodicSetup.h"
 #include "RankRecords.h"
 #include "SpatialDimension.h"
 
@@ -222,7 +222,7 @@ namespace chdr::solver::test {
     template <class PotentialSolverBase>
     void runManufactured(EBReconstructionConvention ebReconstructionConvention, bool wrongLabel) {
         constexpr bool NS = std::is_same_v<PotentialSolverBase, NonStandardSolverPeriodic>;
-        auto fields       = makePeriodicFieldContainer({16, 16, NS ? 24 : 16}, {1, 1, 1}, 0);
+        auto fields       = makeBoxFieldContainer({16, 16, NS ? 24 : 16}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                ebReconstructionConvention);
@@ -267,7 +267,7 @@ namespace chdr::solver::test {
      * the run. Reconstructed fields are not the acceptance quantity here.
      */
     void mediumManufactured(double eps, SpatialDiscretization reading, int control) {
-        auto fields = makePeriodicFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
+        auto fields = makeBoxFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         auto handle = coreTest::makeTestSolver<StandardSolverPeriodic>(
             fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R2, reading,

@@ -117,8 +117,8 @@ namespace {
     /// @brief Construct both owners in their final locations before allocating dependent fields.
     template <class PotentialSolverBase>
     void equivalent(std::array<int, SpatialDim> cells) {
-        auto fields      = makePeriodicFieldContainer(cells, {1, 1, 1});
-        auto primeFields = makePeriodicFieldContainer(cells, {1, 1, 1});
+        auto fields      = makeBoxFieldContainer(cells, {1, 1, 1});
+        auto primeFields = makeBoxFieldContainer(cells, {1, 1, 1});
         initializeFieldStorage(fields);
         initializeFieldStorage(primeFields);
         ChdrSolver<PotentialSolverBase> r2(fields.getJ(), fields.getE(), fields.getB(),
@@ -171,7 +171,7 @@ namespace {
      */
     void vacuumMaterialEquivalent(EBReconstructionConvention reconstruction,
                                   SpatialDiscretization reading) {
-        auto fields = makePeriodicFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
+        auto fields = makeBoxFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         auto vacuum = makeTestSolver<StandardSolverPeriodic>(
             fields.getJ(), fields.getE(), fields.getB(), reconstruction, reading);

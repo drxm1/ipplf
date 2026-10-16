@@ -56,8 +56,15 @@ namespace chdr::solver {
          * sourceInternal must remain alive until its launched device work finishes.
          */
         virtual void baseStep(double dtInternal, AJFourFieldsType& sourceInternal) = 0;
-        /// Complete next() after custom kernels: exchange inter-rank halos, then
-        /// apply its boundary conditions. baseStep() already performs this work.
+        /** @brief Complete next() after custom kernels at the solver's physical timestep.
+         * @details All-periodic layouts exchange halos, then apply field conditions. With Mur
+         * faces, use dt() and the stored boundary().speed values for Mur, exchange the completed
+         * potentials, then fill exterior ghosts
+         * [mur1981AbsorbingBoundaryFdtd, section IV, Eq. (16)]. A custom update with a different
+         * internal timestep must account for that step in its boundary speeds; finishStep() does
+         * not rescale them. baseStep() already completes its
+         * boundaries while its temporary internal timestep is active; do not finish it again.
+         */
         virtual void finishStep() = 0;
 
     protected:

@@ -80,7 +80,7 @@ namespace {
     template <class PotentialSolverBase>
     void checkReconstruction(std::array<int, SpatialDim> cells,
                              EBReconstructionConvention ebReconstructionConvention) {
-        auto fields = makePeriodicFieldContainer(cells, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer(cells, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                ebReconstructionConvention);
@@ -141,7 +141,7 @@ namespace {
     }
 
     TEST(ChdrMonitors, ZeroNormalizationAndOrderingGuard) {
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2);
@@ -160,7 +160,7 @@ namespace {
 
     /// Exercise the retained-source wiring with independently constructed conserved charge.
     void checkLifecycleContinuity(EBReconstructionConvention ebReconstructionConvention) {
-        auto fields = makePeriodicFieldContainer({12, 10, 8}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({12, 10, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   ebReconstructionConvention);
@@ -198,7 +198,7 @@ namespace {
     }
 
     TEST(ChdrMonitors, SparseAndReloadedSourcesAreUnavailable) {
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2);

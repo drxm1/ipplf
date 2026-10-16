@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 #include "StaggeredOperators.h"
 
 namespace {
@@ -54,7 +54,7 @@ namespace {
     };
 
     TEST(CompactOperators, NaturalPositionSingleModeSymbols) {
-        auto fields = makePeriodicFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         const auto spacing = fields.getMesh().getMeshSpacing();
         const auto waveNumber =

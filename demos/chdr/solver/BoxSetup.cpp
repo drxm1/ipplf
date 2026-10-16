@@ -1,16 +1,17 @@
-/** @file PeriodicSetup.cpp
- * @brief Construct a periodic mesh/layout owner without allocating its field views.
+/** @file BoxSetup.cpp
+ * @brief Construct a mesh/layout owner without allocating its field views.
  */
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 
 #include <cmath>
 #include <stdexcept>
 
 namespace chdr::solver {
 
-    ChDRFieldContainer makePeriodicFieldContainer(std::array<int, SpatialDim> cells,
-                                                  std::array<double, SpatialDim> lengths,
-                                                  unsigned splitAxis) {
+    ChDRFieldContainer makeBoxFieldContainer(std::array<int, SpatialDim> cells,
+                                             std::array<double, SpatialDim> lengths,
+                                             unsigned splitAxis,
+                                             std::array<bool, SpatialDim> periodic) {
         // The axis along which MPI decomposition happens must be one of x,y,z.
         if (splitAxis >= SpatialDim) {
             throw std::invalid_argument("Split axis must be 0, 1 or 2");
@@ -26,7 +27,7 @@ namespace chdr::solver {
         for (unsigned d = 0; d < SpatialDim; ++d) {
             // Validate each global cell count and the length of the whole box
             if (cells[d] < 2 || !std::isfinite(lengths[d]) || lengths[d] <= 0.0) {
-                throw std::invalid_argument("Periodic box needs positive lengths and >= 2 cells");
+                throw std::invalid_argument("Box needs positive lengths and >= 2 cells");
             }
             // Index domain
             domain[d] = ippl::Index(cells[d]);
@@ -36,6 +37,6 @@ namespace chdr::solver {
         }
         // Leave the field allocation to the caller:
         // allocated fields retain pointers to this container's mesh and layout.
-        return ChDRFieldContainer(spacing, lower, upper, decomposition, domain, lower, true);
+        return ChDRFieldContainer(spacing, lower, upper, decomposition, domain, lower, periodic);
     }
 }  // namespace chdr::solver

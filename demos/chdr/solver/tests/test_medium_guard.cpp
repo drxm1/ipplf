@@ -3,11 +3,11 @@
  */
 #include <gtest/gtest.h>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "MediumCases.h"
 #include "MediumOracles.h"
 #include "Monitors.h"
-#include "PeriodicSetup.h"
 
 namespace chdr::solver::test {
     /** @brief Check map-wide validity and the bound without advancing a solver.
@@ -16,7 +16,7 @@ namespace chdr::solver::test {
      * independently evaluated mediumMaxStableTimeStep oracle, including vacuum.
      */
     TEST(MediumValidity, CachedTableAndBound) {
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1}, 0);
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         for (const auto row : MediumCases) {
             const material::MaterialOwner owner(fields.getMesh(), fields.getFL(), GuardMap{row});
@@ -75,7 +75,7 @@ namespace chdr::solver::test {
      * make every rank refuse before entering the inherited solver's communication.
      */
     TEST(MediumGuard, ConstructorTableAndMonitor) {
-        auto fields = makePeriodicFieldContainer({8, 8, 12}, {1, 1, 1}, 0);
+        auto fields = makeBoxFieldContainer({8, 8, 12}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         for (const auto row : MediumCases) {
             const material::MaterialOwner owner(fields.getMesh(), fields.getFL(), GuardMap{row});

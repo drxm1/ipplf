@@ -13,9 +13,9 @@
 #include <memory>
 #include <string>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "FourierProbe.h"
-#include "PeriodicSetup.h"
 #include "SpatialDimension.h"
 
 static_assert(

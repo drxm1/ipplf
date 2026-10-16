@@ -6,9 +6,9 @@
 #pragma once
 #include <limits>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "MaterialOwner.h"
-#include "PeriodicSetup.h"
 #include "SpatialDimension.h"
 
 static_assert(

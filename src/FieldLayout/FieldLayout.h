@@ -8,6 +8,7 @@
 #ifndef IPPL_FIELD_LAYOUT_H
 #define IPPL_FIELD_LAYOUT_H
 
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <map>
@@ -202,6 +203,15 @@ namespace ippl {
         FieldLayout(mpi::Communicator, const NDIndex<Dim>& domain, std::array<bool, Dim> decomp,
                     bool isAllPeriodic = false, int nghost = 1);
 
+        /**
+         * @brief Construct a layout with independently periodic axes.
+         * @param periodic One flag per axis; true identifies the two opposite faces.
+         * @details Halo exchange wraps only these axes. Ghosts beyond an open face
+         * remain the responsibility of the field's boundary conditions.
+         */
+        FieldLayout(mpi::Communicator, const NDIndex<Dim>& domain, std::array<bool, Dim> decomp,
+                    std::array<bool, Dim> periodic, int nghost = 1);
+
         // Destructor: Everything deletes itself automatically ... the base
         // class destructors inform all the FieldLayoutUser's we're going away.
         virtual ~FieldLayout() = default;
@@ -213,6 +223,20 @@ namespace ippl {
 
         void initialize(const NDIndex<Dim>& domain, std::array<bool, Dim> decomp,
                         bool isAllPeriodic = false, int nghost = 1);
+
+        /// Initialize per-axis periodicity; the Boolean overload sets every axis alike.
+        void initialize(const NDIndex<Dim>& domain, std::array<bool, Dim> decomp,
+                        std::array<bool, Dim> periodic, int nghost = 1);
+
+        /// Whether halo exchange identifies the two global faces normal to axis d.
+        bool isPeriodic(unsigned d) const { return periodic_m[d]; }
+
+        /// Whether any global face pair requires periodic halo exchange.
+        bool isAnyPeriodic() const {
+            return std::any_of(periodic_m.begin(), periodic_m.end(), [](bool p) {
+                return p;
+            });
+        }
 
         // Return the domain.
         const NDIndex<Dim>& getDomain() const { return gDomain_m; }
@@ -300,8 +324,8 @@ namespace ippl {
         static int getMatchingIndex(int index);
 
         /*!
-         * Recursively finds neighbor ranks for layouts with all periodic boundary
-         * conditions
+         * Recursively finds neighbor ranks across the periodic axes, including
+         * edge and corner images. Open axes contribute no periodic offset.
          * @param nghost number of ghost cells
          * @param localDomain the rank's local domain
          * @param grown the local domain, grown by the number of ghost cells
@@ -338,11 +362,14 @@ namespace ippl {
 
         void updateLayout(const std::vector<NDIndex_t>& domains);
 
-        bool isAllPeriodic_m;
+        /// Conjunction of the axis flags, retained for existing layout consumers.
+        bool isAllPeriodic_m = false;
 
         mpi::Communicator comm;
 
     private:
+        std::array<bool, Dim> periodic_m{};
+
         /*!
          * Obtain the bounds to send / receive. The second domain, i.e.,
          * nd2, is grown by nghost cells in each dimension in order to

@@ -13,7 +13,7 @@
 #include <tuple>
 #include <vector>
 
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 #include "SpatialDimension.h"
 
 static_assert(

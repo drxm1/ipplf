@@ -12,10 +12,10 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "CoreTestSupport.h"
 #include "OwnedStatistics.h"
-#include "PeriodicSetup.h"
 #include "RankRecords.h"
 #include "SpatialDimension.h"
 
@@ -94,7 +94,9 @@ namespace chdr::solver::test {
             : mesh_m(distributed.getLayout().getDomain(), distributed.get_mesh().getMeshSpacing(),
                      distributed.get_mesh().getOrigin())
             , layout_m(MPI_COMM_SELF, distributed.getLayout().getDomain(), {false, false, false},
-                       true) {
+                       std::array<bool, 3>{distributed.getLayout().isPeriodic(0),
+                                           distributed.getLayout().isPeriodic(1),
+                                           distributed.getLayout().isPeriodic(2)}) {
             source_m.initialize(mesh_m, layout_m);
             electric_m.initialize(mesh_m, layout_m);
             magnetic_m.initialize(mesh_m, layout_m);

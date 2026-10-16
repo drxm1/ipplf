@@ -18,7 +18,7 @@ namespace {
     using namespace chdr::solver::test;
 
     void sourcedWitness(SpatialDiscretization spatialDiscretization) {
-        auto fields = makePeriodicFieldContainer({16, 16, 16}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({16, 16, 16}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2,

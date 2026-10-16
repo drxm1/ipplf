@@ -82,14 +82,14 @@ namespace {
 
     TEST(StableStatistics, OddOwnedBlocksExcludeNaNGhosts) {
         const int ranks = ippl::Comm->size();
-        auto fields     = makePeriodicFieldContainer({3, 3, 3 * ranks}, {1.0, 1.0, 1.0}, 2);
+        auto fields     = makeBoxFieldContainer({3, 3, 3 * ranks}, {1.0, 1.0, 1.0}, 2);
         initializeFieldStorage(fields);
         checkIntegerValues(fields.getJ(), 27 * ranks);
         checkIntegerValues(fields.getE(), 27 * ranks);
     }
 
     TEST(StableStatistics, OwnedNaNCannotDisappearFromMaximum) {
-        auto fields = makePeriodicFieldContainer({4, 4, 4}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({4, 4, 4}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         fields.getJ()     = std::numeric_limits<double>::quiet_NaN();
         const auto result = ownedStatistics(fields.getJ());

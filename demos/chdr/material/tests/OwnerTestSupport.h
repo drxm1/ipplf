@@ -12,7 +12,8 @@ namespace chdr::material::test {
     inline const CellIndex Cells(12, 14, 16);
 
     /// Select one decomposition axis while exercising nonzero origins and unequal spacings.
-    inline FELFieldContainer<double, 3> makeGrid(unsigned axis, bool periodic) {
+    template <class Periodicity>
+    inline FELFieldContainer<double, 3> makeGrid(unsigned axis, Periodicity periodic) {
         Position h(0.125, 0.25, 0.5), lower(-0.5, 1.0, 2.0), upper;
         ippl::NDIndex<3> domain;
         std::array<bool, 3> decomposition{false, false, false};

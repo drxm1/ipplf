@@ -80,7 +80,7 @@ namespace {
     }
 
     TEST(ChdrStaggered, RandomCompositionAndIdentities) {
-        auto fields = makePeriodicFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2,
@@ -144,7 +144,7 @@ namespace {
     }
 
     TEST(ChdrStaggered, SpatialOffsetsReachHistoryAndSource) {
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2,
@@ -182,7 +182,7 @@ namespace {
     }
 
     TEST(ChdrStaggered, ConservingAndPlantedContinuity) {
-        auto fields = makePeriodicFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         AJFourFieldsType previous;
         previous.initialize(fields.getMesh(), fields.getFL());
@@ -206,7 +206,7 @@ namespace {
     }
 
     TEST(ChdrStaggered, NonStandardReadingRefused) {
-        auto fields = makePeriodicFieldContainer({8, 8, 12}, {1.0, 1.0, 1.0}, 0);
+        auto fields = makeBoxFieldContainer({8, 8, 12}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
         EXPECT_THROW((ChdrSolver<NonStandardSolverPeriodic>(
                          fields.getJ(), fields.getE(), fields.getB(),
@@ -315,7 +315,7 @@ namespace {
 
     void checkGaugeWave(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
                         ippl::Vector<double, SpatialDim> waveNumber, unsigned fixedSteps) {
-        auto fields = makePeriodicFieldContainer(cells, lengths, 0);
+        auto fields = makeBoxFieldContainer(cells, lengths, 0);
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2,

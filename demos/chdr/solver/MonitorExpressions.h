@@ -22,8 +22,8 @@
 #include <cmath>
 #include <limits>
 
+#include "BoxSetup.h"
 #include "Operators.h"
-#include "PeriodicSetup.h"
 #include "SpatialDimension.h"
 #include "StaggeredOperators.h"
 
