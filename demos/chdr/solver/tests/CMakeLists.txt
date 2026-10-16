@@ -132,6 +132,24 @@ foreach(variant serial mpi2)
     set_tests_properties(chdr.solver.open.records.${variant} PROPERTIES LABELS "chdr;solver;record")
   endif()
 endforeach()
+add_test(
+  NAME chdr.solver.open.holdout
+  COMMAND
+    "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
+    $<TARGET_FILE:test-chdr-solver> ${MPIEXEC_POSTFLAGS} --gtest_also_run_disabled_tests
+    --gtest_filter=OpenReflection.DISABLED_Holdout)
+set_tests_properties(
+  chdr.solver.open.holdout
+  PROPERTIES DISABLED
+             TRUE
+             PROCESSORS
+             2
+             TIMEOUT
+             1800
+             LABELS
+             "chdr;solver;holdout"
+             ENVIRONMENT
+             "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp
                                         test_open_probe.cpp)
 set(randomPotentialHistoryFixtureDirectory

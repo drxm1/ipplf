@@ -118,4 +118,30 @@ namespace chdr::solver::test::reflection {
                 checkPotentialCase(row, reading, true);
     }
 
+    /** @brief Separate configuration kept for one final validation run; disabled by default.
+     * @details The two modes use a separate permittivity, aspect ratio and integer
+     * periods. Their expressions are evaluated only if this disabled test is
+     * explicitly selected. The propagating row also checks both field polarizations.
+     */
+    TEST(OpenReflection, DISABLED_Holdout) {
+        const std::array<double, 3> h{1.15, 1, .85};
+        const double dt =
+            .9 * std::sqrt(3.1) / std::sqrt(1 / (h[0] * h[0]) + 1 + 1 / (h[2] * h[2]));
+        for (const Case row :
+             {Case{"reserved-propagating", 2, 36, 3.1, .17776026053686098, dt, h},
+              Case{"reserved-evanescent", 2, 19, 3.1, .17677322362748854, dt, h}}) {
+            checkPotentialCase(row, SpatialDiscretization::Staggered, false);
+            if (row.nz_m != 36)
+                continue;
+            auto fields = makeBoxFieldContainer(row.cells(), row.lengths(), 2, {false, true, true});
+            initializeFieldStorage(fields);
+            for (bool magnetic : {false, true}) {
+                const auto result = run(row, SpatialDiscretization::Staggered, magnetic, 0,
+                                        fields.getJ(), fields.getE(), fields.getB());
+                verifyRanks(row, SpatialDiscretization::Staggered, magnetic, fields.getJ(), result);
+                if (ippl::Comm->rank() == 0)
+                    checkFieldReflection(row, SpatialDiscretization::Staggered, magnetic, result);
+            }
+        }
+    }
 }  // namespace chdr::solver::test::reflection
