@@ -28,3 +28,8 @@ endif()
 if(IPPL_ENABLE_COLLISIONS)
   add_subdirectory(collisions)
 endif()
+
+# Boundary regressions also build on the standalone library branches.
+if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING AND IPPL_ENABLE_UNIT_TESTS)
+  add_subdirectory(chdr/boundaries/unit_tests)
+endif()

@@ -296,8 +296,7 @@ namespace ippl {
                 end[d] = static_cast<index_type>(subview.extent(d));
             }
             auto policy = createRangePolicy<Dim, exec_space>(begin, end);
-            ippl::parallel_for("HaloCells::unpack()", policy,
-                               functor_type{subview, buffer, op});
+            ippl::parallel_for("HaloCells::unpack()", policy, functor_type{subview, buffer, op});
             Kokkos::fence();
         }
 
@@ -306,8 +305,7 @@ namespace ippl {
                                                          const bound_type& intersect) {
             auto makeSub = [&]<size_t... Idx>(const std::index_sequence<Idx...>&) {
                 return Kokkos::submdspan(
-                    view.to_mdspan(),
-                    Kokkos::make_pair(intersect.lo[Idx], intersect.hi[Idx])...);
+                    view.to_mdspan(), Kokkos::make_pair(intersect.lo[Idx], intersect.hi[Idx])...);
             };
             return makeSub(std::make_index_sequence<Dim>{});
         }
@@ -337,7 +335,7 @@ namespace ippl {
                 end    = ext;
                 end[d] = nghost;
 
-                if (lDomains[myRank][d].length() == domain[d].length()) {
+                if (layout->isPeriodic(d) && lDomains[myRank][d].length() == domain[d].length()) {
                     int N = view.extent(d) - 1;
 
                     using index_array_type =
