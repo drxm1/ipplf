@@ -34,6 +34,11 @@ namespace fdtd_test {
         Field electric, magnetic;
         Fields(std::array<int, 3> n, ippl::Vector<double, 3> h, bool periodic,
                MPI_Comm comm = MPI_COMM_WORLD)
+            : Fields(n, h, std::array<bool, 3>{periodic, periodic, periodic}, comm) {}
+
+        /// Select periodic axis pairs while retaining the same one-axis decomposition.
+        Fields(std::array<int, 3> n, ippl::Vector<double, 3> h, std::array<bool, 3> periodic,
+               MPI_Comm comm = MPI_COMM_WORLD)
             : domain(ippl::Index(n[0]), ippl::Index(n[1]), ippl::Index(n[2]))
             , mesh(domain, h, ippl::Vector<double, 3>(0))
             , layout(comm, domain, {false, false, true}, periodic)

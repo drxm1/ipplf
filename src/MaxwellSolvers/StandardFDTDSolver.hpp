@@ -8,7 +8,16 @@ namespace ippl {
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
     StandardFDTDSolver<EMField, SourceField, boundary_conditions>::StandardFDTDSolver(
         SourceField& source, EMField& E, EMField& B)
+        requires(boundary_conditions == periodic || boundary_conditions == absorbing)
         : FDTDSolverBase<EMField, SourceField, boundary_conditions>(source, E, B) {
+        initialize();
+    }
+
+    template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
+    StandardFDTDSolver<EMField, SourceField, boundary_conditions>::StandardFDTDSolver(
+        SourceField& source, EMField& E, EMField& B, const FDTDBoundary& boundary)
+        requires(boundary_conditions == configured)
+        : FDTDSolverBase<EMField, SourceField, boundary_conditions>(source, E, B, boundary) {
         initialize();
     }
 
@@ -33,16 +42,11 @@ namespace ippl {
                           * (scalar(1) - Kokkos::pow(this->dt / this->hr_m[0], 2)
                              - Kokkos::pow(this->dt / this->hr_m[1], 2)
                              - Kokkos::pow(this->dt / this->hr_m[2], 2));
-        const scalar a2               = Kokkos::pow(this->dt / this->hr_m[0], 2);
-        const scalar a4               = Kokkos::pow(this->dt / this->hr_m[1], 2);
-        const scalar a6               = Kokkos::pow(this->dt / this->hr_m[2], 2);
-        const scalar a8               = Kokkos::pow(this->dt, 2);
-        Vector<uint32_t, Dim> true_nr = this->nr_m;
-        true_nr += (nghost * 2);
-        constexpr uint32_t one_if_absorbing_otherwise_0 =
-            boundary_conditions == absorbing
-                ? 1
-                : 0;  // 1 if absorbing, 0 otherwise, indicates the start index of the field
+        const scalar a2 = Kokkos::pow(this->dt / this->hr_m[0], 2);
+        const scalar a4 = Kokkos::pow(this->dt / this->hr_m[1], 2);
+        const scalar a6 = Kokkos::pow(this->dt / this->hr_m[2], 2);
+        const scalar a8 = Kokkos::pow(this->dt, 2);
+        const InteriorBounds interiorBounds(this->domain_m, this->boundary_m);
 
         // Update the field values
         Kokkos::parallel_for(
@@ -52,16 +56,8 @@ namespace ippl {
                 const uint32_t ig = i + ldom.first()[0];
                 const uint32_t jg = j + ldom.first()[1];
                 const uint32_t kg = k + ldom.first()[2];
-                // check if at a boundary of the field
-                uint32_t val =
-                    uint32_t(ig == one_if_absorbing_otherwise_0)
-                    + (uint32_t(jg == one_if_absorbing_otherwise_0) << 1)
-                    + (uint32_t(kg == one_if_absorbing_otherwise_0) << 2)
-                    + (uint32_t(ig == true_nr[0] - one_if_absorbing_otherwise_0 - 1) << 3)
-                    + (uint32_t(jg == true_nr[1] - one_if_absorbing_otherwise_0 - 1) << 4)
-                    + (uint32_t(kg == true_nr[2] - one_if_absorbing_otherwise_0 - 1) << 5);
-                // update the interior field values
-                if (val == 0) {
+                // Mur owns only the selected outermost layers; periodic axes stay interior.
+                if (interiorBounds.contains(ig, jg, kg)) {
                     SourceVector_t interior = -anm1view(i, j, k) + a1 * aview(i, j, k)
                                               + a2 * (aview(i + 1, j, k) + aview(i - 1, j, k))
                                               + a4 * (aview(i, j + 1, k) + aview(i, j - 1, k))
@@ -72,9 +68,6 @@ namespace ippl {
             });
         Kokkos::fence();
         this->finishPotentialStep();
-        if constexpr (boundary_conditions == absorbing) {
-            fillOpenFaceGhosts(this->A_np1);
-        }
     }
 
     /**
@@ -85,6 +78,9 @@ namespace ippl {
      */
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
     void StandardFDTDSolver<EMField, SourceField, boundary_conditions>::initialize() {
+        if constexpr (boundary_conditions != periodic) {
+            this->validateBoundaryFields(this->boundary_m);
+        }
         // get layout and mesh
         this->layout_mp = &(this->JN_mp->getLayout());
         this->mesh_mp   = &(this->JN_mp->get_mesh());
@@ -110,8 +106,6 @@ namespace ippl {
         this->A_np1 = 0.0;
 
         // set the mesh domain
-        if constexpr (boundary_conditions == periodic) {
-            this->setPeriodicBoundaryConditions();
-        }
+        this->configurePotentialBoundaryConditions();
     }
 }  // namespace ippl

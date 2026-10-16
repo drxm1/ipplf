@@ -3,7 +3,7 @@
 After loading `A_n` and `A_nm1`, call `prepareHistories()` before advancing
 the solver or evaluating fields. It exchanges both histories and completes
 their physical ghosts without changing owned values or applying Mur.
-Absorbing solvers require one ghost layer, three global cells per axis,
+Solvers require one ghost layer, three global cells on open axes,
 and two owned cells per rank and axis. Periodic templates retain their
 field boundary conditions, including on nonperiodic layouts.
 

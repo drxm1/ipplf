@@ -8,12 +8,30 @@ namespace ippl {
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
     FDTDSolverBase<EMField, SourceField, boundary_conditions>::FDTDSolverBase(SourceField& source,
                                                                               EMField& E,
-                                                                              EMField& B) {
+                                                                              EMField& B)
+        requires(boundary_conditions == periodic || boundary_conditions == absorbing)
+        : boundary_m([] {
+            FDTDBoundary boundary;
+            if constexpr (boundary_conditions == absorbing) {
+                boundary.kind.fill(FaceKind::mur);
+            }
+            return boundary;
+        }()) {
         Maxwell<EMField, SourceField>::setSources(source);
         Maxwell<EMField, SourceField>::setEMFields(E, B);
         if constexpr (boundary_conditions == absorbing) {
-            validateOpenFaceClosure(source);
+            validateBoundaryFields(boundary_m);
         }
+    }
+
+    template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
+    FDTDSolverBase<EMField, SourceField, boundary_conditions>::FDTDSolverBase(
+        SourceField& source, EMField& E, EMField& B, const FDTDBoundary& boundary)
+        requires(boundary_conditions == configured)
+        : boundary_m(boundary) {
+        Maxwell<EMField, SourceField>::setSources(source);
+        Maxwell<EMField, SourceField>::setEMFields(E, B);
+        validateBoundaryFields(boundary_m);
     }
 
     /**
@@ -54,18 +72,52 @@ namespace ippl {
     }
 
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
+    void FDTDSolverBase<EMField, SourceField, boundary_conditions>::validateBoundaryFields(
+        const FDTDBoundary& boundary) const {
+        validateBoundary(boundary, this->JN_mp->getLayout(), this->JN_mp->getNghost(),
+                         this->En_mp->getNghost(), this->Bn_mp->getNghost());
+    }
+
+    template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
+    void FDTDSolverBase<EMField, SourceField,
+                        boundary_conditions>::configurePotentialBoundaryConditions() {
+        if (boundary_m.murMask() == 0) {
+            setPeriodicBoundaryConditions();
+            return;
+        }
+        typename SourceField::BConds_t conditions;
+        for (unsigned face = 0; face < 2 * Dim; ++face) {
+            if (boundary_m.kind[face] == FaceKind::periodic) {
+                conditions[face] = std::make_shared<PeriodicFace<SourceField>>(face);
+            } else {
+                // FDTDSolverBase::applyBCs applies Mur using A_n, A_nm1 and A_np1.
+                // NoBcFace leaves findBCNeighbors(), apply() and assignGhostToPhysical()
+                // inactive here; field.getFieldBC().apply(field) must not perform a
+                // PeriodicFace wrap on a Mur face.
+                conditions[face] = std::make_shared<NoBcFace<SourceField>>(face);
+            }
+        }
+        for (auto* field : {&A_n, &A_nm1, &A_np1}) {
+            field->setFieldBC(conditions);
+        }
+    }
+
+    template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
     void FDTDSolverBase<EMField, SourceField, boundary_conditions>::prepareHistories() {
-        if constexpr (boundary_conditions == absorbing) {
-            validateOpenFaceClosure(A_n);
-            validateOpenFaceClosure(A_nm1);
+        const bool hasMurFaces                    = boundary_m.murMask() != 0;
+        constexpr bool requiresBoundaryValidation = boundary_conditions != periodic;
+        if (requiresBoundaryValidation) {
+            validateBoundaryFields(boundary_m);
+            validateBoundary(boundary_m, A_n.getLayout(), A_n.getNghost(), A_nm1.getNghost(),
+                             A_np1.getNghost());
         }
         for (auto* field : {&A_n, &A_nm1}) {
             field->fillHalo();
-            if constexpr (boundary_conditions == periodic) {
+            if (!hasMurFaces) {
                 // PeriodicFace BCs also support periodic solvers on nonperiodic layouts
                 field->getFieldBC().apply(*field);
             } else {
-                fillOpenFaceGhosts(*field);
+                fillOpenFaceGhosts(*field, boundary_m.murMask());
             }
         }
     }
@@ -85,12 +137,14 @@ namespace ippl {
 
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
     void FDTDSolverBase<EMField, SourceField, boundary_conditions>::finishPotentialStep() {
-        if constexpr (boundary_conditions == periodic) {
+        const bool allFacesPeriodic = boundary_m.murMask() == 0;
+        if (allFacesPeriodic) {
             A_np1.fillHalo();
             applyBCs();
         } else {
             applyBCs();
             A_np1.fillHalo();
+            fillOpenFaceGhosts(A_np1, boundary_m.murMask());
         }
     }
 
@@ -101,7 +155,8 @@ namespace ippl {
      */
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
     void FDTDSolverBase<EMField, SourceField, boundary_conditions>::applyBCs() {
-        if constexpr (boundary_conditions == periodic) {
+        const bool allFacesPeriodic = boundary_m.murMask() == 0;
+        if (allFacesPeriodic) {
             A_n.getFieldBC().apply(A_n);
             A_nm1.getFieldBC().apply(A_nm1);
             A_np1.getFieldBC().apply(A_np1);

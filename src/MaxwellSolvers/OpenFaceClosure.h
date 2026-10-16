@@ -5,35 +5,7 @@
 
 #include <Kokkos_Core.hpp>
 
-#include "Utility/IpplException.h"
-
 namespace ippl {
-    /** @brief Check the storage needed by the three-point physical ghost closure.
-     * @details All ranks inspect all local domains, so an undersized remote partition is also
-     * rejected before a caller exchanges halos. Two owned samples and one exchanged sample
-     * suffice on a boundary rank; the global axis must contain at least three samples.
-     */
-    template <typename Field>
-    void validateOpenFaceClosure(const Field& field) {
-        static_assert(Field::dim == 3, "The FDTD potential closure requires three dimensions.");
-        if (field.getNghost() != 1) {
-            throw IpplException("validateOpenFaceClosure", "Exactly one ghost layer is required.");
-        }
-        const auto& layout = field.getLayout();
-        for (unsigned d = 0; d < Field::dim; ++d) {
-            if (layout.getDomain()[d].length() < 3) {
-                throw IpplException("validateOpenFaceClosure",
-                                    "At least three global cells are required.");
-            }
-            for (int rank = 0; rank < layout.comm.size(); ++rank) {
-                if (layout.getLocalNDIndex(rank)[d].length() < 2) {
-                    throw IpplException("validateOpenFaceClosure",
-                                        "At least two local cells are required.");
-                }
-            }
-        }
-    }
-
     namespace detail {
         /** @brief Extrapolate one physical ghost plane, including its transverse ghost cells.
          * @details The caller selects only a locally owned physical face. The inward third
@@ -64,7 +36,7 @@ namespace ippl {
         }
     }  // namespace detail
 
-    /** @brief Extend every component through the physical ghost layer of an absorbing box.
+    /** @brief Extend every component through the selected open-face ghost layers.
      * @details Call after halo exchange. Only ranks owning a physical face write it. Axes are
      * completed in x, y, z order over the full transverse extent, including ghosts. Thus later
      * axes extend earlier extensions at edges and corners (a tensor-product deduction).
@@ -74,21 +46,22 @@ namespace ippl {
      * one-sided formula in Fornberg (1988), "Generation of Finite Difference Formulas on
      * Arbitrarily Spaced Grids", Table 3, p. 704, doi:10.1090/S0025-5718-1988-0935077-0.
      * No owned value is changed. The closure does not impose an additional wave condition.
-     * @pre validateOpenFaceClosure(field) succeeds. Owned values and exchanged interior
-     * samples are current. An exchange before Mur can leave its seam copies stale;
-     * this closure does not refresh them. Complete corner ghosts require the halo
-     * exchange to follow Mur's updates as well.
+     * @param openFaces Bit 2*d selects the lower face, bit 2*d+1 the upper face.
+     * The default selects all faces for an entirely absorbing box. Periodic faces
+     * must not be selected: halo exchange already supplies their correct values.
+     * @pre One ghost layer, at least three global cells on selected axes and two
+     * local cells per axis; all inter-rank and periodic halos are current.
      */
     template <typename Field>
-    void fillOpenFaceGhosts(Field& field) {
+    void fillOpenFaceGhosts(Field& field, unsigned openFaces = 63) {
         const auto& layout = field.getLayout();
         const auto& local  = layout.getLocalNDIndex();
         const auto& global = layout.getDomain();
         for (unsigned d = 0; d < Field::dim; ++d) {
-            if (local[d].first() == global[d].first()) {
+            if ((openFaces & (1u << (2 * d))) && local[d].first() == global[d].first()) {
                 detail::extrapolateOpenFace(field, d, false);
             }
-            if (local[d].last() == global[d].last()) {
+            if ((openFaces & (1u << (2 * d + 1))) && local[d].last() == global[d].last()) {
                 detail::extrapolateOpenFace(field, d, true);
             }
         }
