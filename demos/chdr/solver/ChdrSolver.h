@@ -102,7 +102,7 @@ namespace chdr::solver {
     /// Three-component electric or magnetic field storage type on an IPPL mesh.
     using EMFieldsType = VField_t<double, SpatialDim>;
 
-    /// Configured Standard base; retain the alias name (for now) for existing ChdrSolver callers.
+    /// Configured Standard base; retain the alias name for existing ChdrSolver callers.
     using StandardSolverPeriodic =
         ippl::StandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::configured>;
 

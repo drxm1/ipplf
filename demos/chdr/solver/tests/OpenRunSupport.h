@@ -33,7 +33,7 @@ namespace chdr::solver::test {
          * coefficient speeds therefore changes all three operators, including intersections.
          * The interior has already advanced. Pass a local step and speed copy directly
          * to the Mur dispatcher; neither the solver step nor its const descriptor changes.
-         * The shipped-order control omits the final exchange and ghost closure, as before.
+         * The shipped-order control omits the final exchange and ghost closure.
          */
         void finishPotentialStep() override {
             if (speed_m > 0 && this->boundary().murMask() != 0)
@@ -60,8 +60,9 @@ namespace chdr::solver::test {
         }
 
         /** @brief Perturb all Mur primitives without mutating production configuration.
-         * Unit face speeds with the scaled local step reproduce the former temporary
-         * override, including edge/corner primitives whose coefficient speed is fixed.
+         * Unit face speeds with the scaled local step perturb faces, edges and corners
+         * alike, because each Mur weight depends only on the product of speed and step;
+         * this includes the edge and corner primitives whose coefficient speed is fixed.
          * Periodic faces retain their copied entries and are excluded by the face mask.
          */
         void applyControlBoundary() {
