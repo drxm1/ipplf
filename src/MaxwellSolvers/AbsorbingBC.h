@@ -44,11 +44,14 @@ struct second_order_abc_face {
      * @param hr Mesh spacing in each dimension.
      * @param dt Time step size.
      * @param _sign Sign of the main axis (1 or -1).
+     * @param waveSpeed Positive wave speed in the units of dt and hr; one preserves the default.
+     * The weights discretize Mur (1981), section IV, equation (16), extended
+     * to unequal tangential spacings [mur1981AbsorbingBoundaryFdtd].
      */
-    KOKKOS_FUNCTION second_order_abc_face(ippl::Vector<scalar, 3> hr, scalar dt, int _sign)
+    KOKKOS_FUNCTION second_order_abc_face(ippl::Vector<scalar, 3> hr, scalar dt, int _sign,
+                                          scalar waveSpeed = scalar(1))
         : sign(_sign) {
-        // Speed of light in the medium
-        constexpr scalar c = 1;
+        const scalar c = waveSpeed;
 
         // Check that the main axis is one of the three axes and the side axes are different from
         // each other and from the main axis
@@ -167,8 +170,10 @@ struct second_order_abc_edge {
      * @brief Constructor for the second-order ABC edge.
      * @param hr Mesh spacing in each dimension.
      * @param dt Time step size.
+     * @param waveSpeed Speed shared by the wave equation and the edge condition.
      */
-    KOKKOS_FUNCTION second_order_abc_edge(ippl::Vector<scalar, 3> hr, scalar dt) {
+    KOKKOS_FUNCTION second_order_abc_edge(ippl::Vector<scalar, 3> hr, scalar dt,
+                                          scalar waveSpeed = scalar(1)) {
         // Check that the edge axis is one of the three axes and the normal axes are different from
         // each other and from the edge axis
         static_assert(normal_axis1 != normal_axis2);
@@ -179,8 +184,10 @@ struct second_order_abc_edge {
                       || (edge_axis == 0 && normal_axis1 == 1 && normal_axis2 == 2)
                       || (edge_axis == 1 && normal_axis1 == 2 && normal_axis2 == 0));
 
-        // Speed of light in the medium
-        constexpr scalar c0_ = scalar(1);
+        // Speed of light in the medium.
+        // The same speed enters the wave equation and the edge compatibility
+        // condition [bamberger1987SecondOrderCorner, section II, equation (2.10)].
+        const scalar c0_ = waveSpeed;
 
         // Calculate prefactor for the weights used to calculate A_np1 at the boundary
         scalar d = (1.0 / hr[normal_axis1] + 1.0 / hr[normal_axis2]) / (4.0 * dt)
@@ -219,7 +226,8 @@ struct second_order_abc_edge {
         using ippl::apply;
 
         // Get the opposite direction of the normal vectors for the two normal axes (direction to
-        // the interior of the domain), 1 or -1 in the direction of the normal axis and 0 in the others
+        // the interior of the domain), 1 or -1 in the direction of the normal axis and 0 in the
+        // others
         ippl::Vector<int32_t, 3> normal_axis1_onehot =
             ippl::Vector<int32_t, 3>{normal_axis1 == 0, normal_axis1 == 1, normal_axis1 == 2}
             * int32_t(na1_zero ? 1 : -1);
@@ -293,9 +301,13 @@ struct second_order_abc_corner {
      * @brief Constructor for the second-order ABC corner.
      * @param hr Mesh spacing in each dimension.
      * @param dt Time step size.
+     * @param waveSpeed Speed shared by the wave equation and the corner condition.
      */
-    KOKKOS_FUNCTION second_order_abc_corner(ippl::Vector<scalar, 3> hr, scalar dt) {
-        constexpr scalar c0_ = scalar(1);
+    KOKKOS_FUNCTION second_order_abc_corner(ippl::Vector<scalar, 3> hr, scalar dt,
+                                            scalar waveSpeed = scalar(1)) {
+        // Time derivative of the matched-speed corner compatibility condition
+        // [bamberger1987SecondOrderCorner, section II, equation (2.11)].
+        const scalar c0_ = waveSpeed;
         Cweights[0] =
             (-1.0 / hr[0] - 1.0 / hr[1] - 1.0 / hr[2]) / (8.0 * dt) - 1.0 / (4.0 * c0_ * dt * dt);
         Cweights[1] =

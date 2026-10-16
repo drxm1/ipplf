@@ -30,7 +30,7 @@ set_tests_properties(
                                                 LABELS "unit;maxwell")
 set_tests_properties(OpenFaceClosureMPI PROPERTIES PROCESSORS 2 TIMEOUT 60)
 
-foreach(boundary_test FDTDBoundary)
+foreach(boundary_test FDTDBoundary MurSpeed)
   add_ippl_test(${boundary_test} NUM_PROCS 2 PROPERTIES PROCESSORS 2)
   add_test(NAME ${boundary_test}Serial COMMAND ${boundary_test})
   set_tests_properties(${boundary_test}Serial PROPERTIES PROCESSORS 1 TIMEOUT 60 LABELS unit)
