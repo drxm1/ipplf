@@ -12,6 +12,7 @@
 
 #include "BoxSetup.h"
 #include "SpatialDimension.h"
+#include "VacuumWave.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "test_shell.cpp requires three spatial dimensions for its Cartesian implementation");
@@ -46,6 +47,21 @@ namespace {
         return error;
     }
 
+    /** @brief Load the vacuum demo's reference samples into a configured solver.
+     * The demo initializer takes the fixed-periodic specialization. Reuse its wave
+     * evaluator and sample times here, without changing that independent demo API.
+     * Both histories use collocated cell centres, as in vacuum::initializePotentials.
+     */
+    void initializeVacuumHistories(StandardSolverPeriodic& solver) {
+        const auto sample = KOKKOS_LAMBDA(double, double, double z, double t, unsigned component) {
+            return chdr::vacuum::referencePotential(z, t)[component];
+        };
+        const double dt = solver.getDt();
+        writeSamples(solver.A_n, sample, {0, 0, 0, 0});
+        writeSamples(solver.A_nm1, sample, {-dt, -dt, -dt, -dt});
+        solver.prepareHistories();
+    }
+
     /// @brief Exercise the same base solve path for 128 steps, then check explicit reset counting.
     void compareBaseEvolution(StandardSolverPeriodic& base,
                               ChdrSolver<StandardSolverPeriodic>& shell,
@@ -67,12 +83,13 @@ namespace {
         auto shellFields = chdr::vacuum::makePeriodicFieldContainer();
         chdr::vacuum::initializeFieldStorage(baseFields);
         chdr::vacuum::initializeFieldStorage(shellFields);
-        StandardSolverPeriodic base(baseFields.getJ(), baseFields.getE(), baseFields.getB());
+        StandardSolverPeriodic base(baseFields.getJ(), baseFields.getE(), baseFields.getB(),
+                                    ippl::FDTDBoundary::fromLayout(baseFields.getFL()));
         ChdrSolver<StandardSolverPeriodic> shell(shellFields.getJ(), shellFields.getE(),
                                                  shellFields.getB(),
                                                  EBReconstructionConvention::R1);
-        chdr::vacuum::initializePotentials(base);
-        chdr::vacuum::initializePotentials(shell);
+        initializeVacuumHistories(base);
+        initializeVacuumHistories(shell);
         compareBaseEvolution(base, shell, baseFields, shellFields);
     }
 
@@ -123,7 +140,7 @@ namespace {
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2);
-        chdr::vacuum::initializePotentials(solver);
+        initializeVacuumHistories(solver);
         solver.evaluateInitialFields();
         EMFieldsType expected;
         expected.initialize(fields.getMesh(), fields.getFL());

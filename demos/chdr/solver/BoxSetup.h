@@ -1,5 +1,5 @@
 /** @file BoxSetup.h
- * @brief Runtime periodic boxes with a single selectable decomposition axis.
+ * @brief Runtime boxes with selectable periodic axes and one decomposition axis.
  */
 #pragma once
 
@@ -19,14 +19,15 @@ namespace chdr::solver {
      *                  Size of the whole container, in each axis.
      * @param splitAxis Axis eligible for MPI decomposition: 0=x, 1=y, 2=z.
      *                  The other two axes remain undistributed. Defaults to x.
+     * @param periodic Periodic wrap flags for x, y and z; default all periodic.
      * @return Prvalue container; retain its address once its fields are allocated.
      * @details Construction defines mesh and MPI ownership only. Allocation is a separate
      * operation because the field objects retain pointers to this owner's mesh and layout.
      * Do not return or move an already allocated container through a setup helper.
      */
-    ChDRFieldContainer makeBoxFieldContainer(std::array<int, SpatialDim> cells,
-                                             std::array<double, SpatialDim> lengths,
-                                             unsigned splitAxis = 0);
+    ChDRFieldContainer makeBoxFieldContainer(
+        std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
+        unsigned splitAxis = 0, std::array<bool, SpatialDim> periodic = {true, true, true});
 
     /// Reusing from the vacuum wave example
     using chdr::vacuum::checkLocalDomain;

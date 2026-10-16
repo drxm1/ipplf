@@ -66,7 +66,8 @@ namespace {
         auto fields = makeBoxFieldContainer({12, 14, 16}, {1.0, 1.5, 2.0}, axis);
         checkLocalDomain(fields.getFL());
         initializeFieldStorage(fields);
-        StandardSolverPeriodic solver(fields.getJ(), fields.getE(), fields.getB());
+        StandardSolverPeriodic solver(fields.getJ(), fields.getE(), fields.getB(),
+                                      ippl::FDTDBoundary::fromLayout(fields.getFL()));
         auto& potential  = solver.A_n;
         const auto local = fields.getFL().getLocalNDIndex();
         const ippl::Vector<int, SpatialDim> first(local[0].first(), local[1].first(),

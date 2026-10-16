@@ -6,11 +6,13 @@
 #ifndef IPPL_FEL_FIELD_CONTAINER_H
 #define IPPL_FEL_FIELD_CONTAINER_H
 
+#include "Ippl.h"
+
 #include <memory>
 
-#include "Manager/BaseManager.h"
-
 #include "datatypes.h"
+
+#include "Manager/BaseManager.h"
 
 /**
  * @brief Own the Cartesian mesh, MPI layout and three FEL field arrays.
@@ -53,19 +55,41 @@ public:
         , mesh_m(domain, hr, origin)
         , fl_m(MPI_COMM_WORLD, domain, decomp, isAllPeriodic) {}
 
+    /** @brief Construct mesh/layout ownership with independent periodic axes.
+     * @details Field views remain unallocated until initializeFields() is called.
+     * Periodicity controls halo wrapping, not the choice of a physical boundary
+     * operator such as Mur. The existing Boolean overload remains available.
+     * @param hr Uniform mesh spacing, cached in the container.
+     * @param rmin Lower physical bounds, cached in the container.
+     * @param rmax Upper physical bounds, cached in the container.
+     * @param decomp Axes eligible for MPI decomposition, independent of periodicity.
+     * @param domain Global grid-index domain shared by the mesh and layout.
+     * @param origin Physical mesh origin.
+     * @param periodic Per-axis periodic wrap flags in coordinate order.
+     */
+    FELFieldContainer(Vector_t<T, Dim>& hr, Vector_t<T, Dim>& rmin, Vector_t<T, Dim>& rmax,
+                      std::array<bool, Dim> decomp, ippl::NDIndex<Dim> domain,
+                      Vector_t<T, Dim> origin, std::array<bool, Dim> periodic)
+        : hr_m(hr)
+        , rmin_m(rmin)
+        , rmax_m(rmax)
+        , decomp_m(decomp)
+        , mesh_m(domain, hr, origin)
+        , fl_m(MPI_COMM_WORLD, domain, decomp, periodic) {}
+
     /// @brief Release owned mesh/layout objects and field handles.
     ~FELFieldContainer() {}
 
 private:
-    Vector_t<T, Dim> hr_m;          ///< Cached uniform spacing in caller-supplied length units.
-    Vector_t<T, Dim> rmin_m;        ///< Cached lower physical bounds.
-    Vector_t<T, Dim> rmax_m;        ///< Cached upper physical bounds.
-    std::array<bool, Dim> decomp_m; ///< Cached eligible decomposition directions.
-    VField_t<T, Dim> E_m;          ///< Reconstructed electric field, including local halos.
-    VField_t<T, Dim> B_m;          ///< Reconstructed magnetic field, including local halos.
-    SourceField_t<T, Dim> J_m;     ///< Deposited charge/current source, reset before each deposit.
-    Mesh_t<Dim> mesh_m;            ///< Uniform Cartesian geometry shared by the fields.
-    FieldLayout_t<Dim> fl_m;       ///< MPI ownership layout on MPI_COMM_WORLD.
+    Vector_t<T, Dim> hr_m;           ///< Cached uniform spacing in caller-supplied length units.
+    Vector_t<T, Dim> rmin_m;         ///< Cached lower physical bounds.
+    Vector_t<T, Dim> rmax_m;         ///< Cached upper physical bounds.
+    std::array<bool, Dim> decomp_m;  ///< Cached eligible decomposition directions.
+    VField_t<T, Dim> E_m;            ///< Reconstructed electric field, including local halos.
+    VField_t<T, Dim> B_m;            ///< Reconstructed magnetic field, including local halos.
+    SourceField_t<T, Dim> J_m;  ///< Deposited charge/current source, reset before each deposit.
+    Mesh_t<Dim> mesh_m;         ///< Uniform Cartesian geometry shared by the fields.
+    FieldLayout_t<Dim> fl_m;    ///< MPI ownership layout on MPI_COMM_WORLD.
 
 public:
     /// @brief Return mutable electric-field storage; no halo exchange is performed.

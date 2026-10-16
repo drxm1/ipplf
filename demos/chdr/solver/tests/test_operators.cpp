@@ -92,7 +92,8 @@ namespace {
     void checkFourierStencil() {
         auto fields = makeBoxFieldContainer({12, 16, 24}, {1, 1, 1});
         initializeFieldStorage(fields);
-        StandardSolverPeriodic storage(fields.getJ(), fields.getE(), fields.getB());
+        StandardSolverPeriodic storage(fields.getJ(), fields.getE(), fields.getB(),
+                                       ippl::FDTDBoundary::fromLayout(fields.getFL()));
         const ippl::Vector<double, 3> waveNumber =
             2 * Kokkos::numbers::pi_v<double> * ippl::Vector<double, 3>(1, 2, -5);
         loadFourierMode(storage.A_n, waveNumber);

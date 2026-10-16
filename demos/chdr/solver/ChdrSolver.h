@@ -1,5 +1,5 @@
 /** @file ChdrSolver.h
- * @brief Periodic demo-level shell; wave updates remain in IPPL's base solvers.
+ * @brief Demo-level potential solver shell with periodic or Mur faces.
  *
  * WHY ANOTHER SOLVER CLASS? WHY DO WE INHERIT FROM Standard / NonStandard FDTD SOLVERS?
  * This is done here because the regular FDTDSolverBase calls the following algorithm:
@@ -25,7 +25,9 @@
 // Solver internals use the communication declarations provided by the IPPL umbrella.
 #include "Ippl.h"
 
+#include <cmath>
 #include <limits>
+#include <stdexcept>
 #include <type_traits>
 
 #include "FELFieldContainer.hpp"
@@ -44,30 +46,77 @@ static_assert(chdr::solver::SpatialDim == 3,
 
 namespace chdr::solver {
 
+    /** @brief Select the propagation speed assumed by the Mur boundary formulas.
+     * @details physical() specifies a speed using the time coordinate of
+     * ChdrSolver::getDt(), with vacuum propagation speed normalized to one.
+     * HomogeneousUpdate calls the potential solver with the shorter timestep
+     * \f$\Delta t_{\mathrm{update}}=\Delta t/n\f$, where
+     * \f$n=\sqrt{\varepsilon_r}\f$; see HomogeneousUpdate and
+     * [chew2014generalizedgauge, section 2, Eqs. (11)-(13)].
+     * The Mur coefficients depend on speed times timestep
+     * [mur1981AbsorbingBoundaryFdtd, section IV, Eq. (16)]. Therefore kernel()
+     * returns \f$n v\f$ for an explicitly supplied speed \f$v\f$, so that
+     * \f$(n v)\Delta t_{\mathrm{update}}=v\Delta t\f$ (deduction).
+     * Without a homogeneous material update, the conversion uses \f$n=1\f$.
+     *
+     * matched() instead selects exactly one for the Mur formulas, equal to the
+     * propagation speed in the reused potential-update equations. In the time
+     * coordinate of getDt(), this corresponds to speed \f$1/n\f$. The name
+     * denotes this choice in this API; it does not assert perfect absorption.
+     */
+    class MurSpeed {
+    public:
+        /// Select exactly one as the speed passed to the Mur coefficient constructors.
+        static MurSpeed matched() { return MurSpeed(); }
+
+        /** @brief Specify the boundary propagation speed before timestep rescaling.
+         * @param speed Finite, positive speed in the time coordinate of ChdrSolver::getDt();
+         * vacuum propagation speed is one. kernel() converts it for the potential update.
+         */
+        static MurSpeed physical(double speed) {
+            if (!std::isfinite(speed) || speed <= 0)
+                throw std::invalid_argument("Mur speed must be finite and positive");
+            return MurSpeed(speed);
+        }
+        /** @brief Return the speed to pass to the Mur coefficient constructors.
+         * @param refractiveIndex Ratio of ChdrSolver::getDt() to the timestep used
+         * by the potential update: the homogeneous medium's refractive index, or one
+         * without that rescaling. The caller supplies the validated material value.
+         * @return Exactly one for matched(); otherwise the supplied speed multiplied
+         * by refractiveIndex. The private zero sentinel selects the first case;
+         * it is never passed to Mur as a zero propagation speed.
+         */
+        double kernel(double refractiveIndex) const {
+            return physical_m == 0 ? 1.0 : physical_m * refractiveIndex;
+        }
+
+    private:
+        explicit MurSpeed(double physical = 0)
+            : physical_m(physical) {}
+        double physical_m;
+    };
+
     /// Caller-owned mesh, layout, source and output storage container.
     using ChDRFieldContainer = FELFieldContainer<double, SpatialDim>;
 
     /// Three-component electric or magnetic field storage type on an IPPL mesh.
     using EMFieldsType = VField_t<double, SpatialDim>;
 
-    /// Periodic Standard FDTD Solver, like in the vacuum example.
-    /// Later on we will enable different boundary conditions,
-    /// maybe Mur or PML_ADI.
+    /// Configured Standard base; retain the alias name (for now) for existing ChdrSolver callers.
     using StandardSolverPeriodic =
-        ippl::StandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::periodic>;
+        ippl::StandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::configured>;
 
-    /// Periodic longitudinally(===z)-smoothed NonStandard vacuum update.
-    /// Later on we will enable different boundary conditions,
-    /// maybe Mur or PML_ADI.
+    /// Longitudinally (z) smoothed NonStandard update; ChdrSolver permits periodic faces only.
     using NonStandardSolverPeriodic =
-        ippl::NonStandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::periodic>;
+        ippl::NonStandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::configured>;
 
     /** @brief Own the solve count and reconstruction choice, preserving base slot storage.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * supplies the potential wave update, three history slots and caller-owned E/B bindings.
-     * @pre Source, E and B are allocated on the same all-periodic, one-halo layout.
-     * Every rank must own at least two cells per axis; construction checks this
-     * collectively before the base solver exchanges potential halos.
+     * @pre Source, E and B are allocated on the same one-halo layout.
+     * Open faces use Mur conditions; NonStandard supports periodic layouts only.
+     * Every rank must own at least two cells per axis. Each rank checks the stored
+     * partition metadata before the base solver exchanges potential halos.
      * @details In normalized units the component equations are
      * \f$(\partial_t^2-\nabla^2)\psi=s\f$, with \f$s=\rho\f$ for the scalar
      * potential and \f$s=J_d\f$ for each vector component. Thus
@@ -102,31 +151,21 @@ namespace chdr::solver {
          * fields.
          * @param spatialDiscretization Spatial component placement, collocated unless
          * explicitly staggered.
+         * @param murSpeed Speed assumed by the Mur formulas. The default passes exactly
+         * one, equal to the vacuum potential solver's propagation speed. An explicit
+         * physical() speed is unchanged here because no material timestep rescaling occurs.
          */
         ChdrSolver(
             AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic,
             const EBReconstructionConvention ebReconstructionConvention,
-            const SpatialDiscretization spatialDiscretization = SpatialDiscretization::Collocated)
-            : PotentialSolverBase(checkedSource(source, electric, magnetic), electric, magnetic)
-            , contract_m{ebReconstructionConvention, spatialDiscretization} {
-            // The staggered SpatialDiscretization currently works with R2 and the standard stencil
-            // only.
-            if (spatialDiscretization == SpatialDiscretization::Staggered
-                && (ebReconstructionConvention != EBReconstructionConvention::R2
-                    || stencil() != Stencil::Standard)) {
-                throw IpplException("ChdrSolver",
-                                    "Staggered reading requires R2 and the Standard stencil");
-            }
-
-            // Check that their layouts are periodic in every direction,
-            // and that they have exactly one ghost-cell layer.
-            requirePeriodic(source);
-            requirePeriodic(electric);
-            requirePeriodic(magnetic);
-        }
+            const SpatialDiscretization spatialDiscretization = SpatialDiscretization::Collocated,
+            MurSpeed murSpeed                                 = MurSpeed::matched())
+            : ChdrSolver(source, electric, magnetic, ebReconstructionConvention,
+                         spatialDiscretization,
+                         checkedBoundary(source, electric, magnetic, murSpeed.kernel(1.0))) {}
 
         /** @brief Bind a material formulation on the source mesh and layout.
-         * @details Mesh and layout owners must outlive the shell; the material
+         * @details Mesh and layout owners must outlive this ChdrSolver; the material
          * owner itself is borrowed only during construction. Validity uses its cached
          * statistics before the delegated constructor can enter a collective.
          * The source remains physical charge/current; the formulation applies its
@@ -136,17 +175,23 @@ namespace chdr::solver {
          * (deduction from [fallahi2020mithra20fullwavesimulation, Eq. (3.20)]).
          * Select setSafetyFactor explicitly to use a prescribed medium step.
          * The owner must use the exact source mesh/layout objects, not merely an
-         * equivalent grid. Validation runs in the delegating argument before the
-         * vacuum constructor; workspace allocation follows successful construction.
+         * equivalent grid. The delegating argument validates the owner before reading
+         * its permittivity, converts the speed and validates the final face description.
+         * Base construction receives that description; workspace allocation follows.
          * HomogeneousUpdate copies the uniform permittivity, so it does not retain
          * the owner or a reference to its field. Source and E/B storage remain borrowed.
+         * @param murSpeed Speed assumed by the Mur formulas. The default passes exactly
+         * one to agree with the reused potential-update equations. For Homogeneous,
+         * physical(v) passes v times the refractive index to compensate for the shorter
+         * update timestep; MurSpeed documents the conversion and its sources.
          */
         ChdrSolver(AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic,
                    EBReconstructionConvention reconstruction, SpatialDiscretization spatial,
-                   const material::MaterialOwner& owner, FormulationParameters parameters = {})
-            : ChdrSolver(checkedMaterialSource(source, owner, parameters,
-                                               {stencil(), spatial, reconstruction}),
-                         electric, magnetic, reconstruction, spatial) {
+                   const material::MaterialOwner& owner, FormulationParameters parameters = {},
+                   MurSpeed murSpeed = MurSpeed::matched())
+            : ChdrSolver(source, electric, magnetic, reconstruction, spatial,
+                         checkedMaterialBoundary(source, electric, magnetic, owner, parameters,
+                                                 {stencil(), spatial, reconstruction}, murSpeed)) {
             update_m =
                 makeMaterialUpdate(parameters, owner, {stencil(), spatial, reconstruction}, source);
             homogeneousPermittivity_m = owner.statistics().homogeneous()
@@ -214,7 +259,7 @@ namespace chdr::solver {
         }
 
         /** @brief Reconstruct the loaded histories without stepping or changing their labels.
-         * @pre Both potential slots have current periodic halos on their shared layout.
+         * @pre Both potential slots have current halos and closed physical ghosts.
          * @details A_n is the current four-component potential slot; A_nm1 is its
          * predecessor, one time step earlier for each component. Component zero is the
          * scalar potential and components 1 through SpatialDim are the vector potential.
@@ -352,7 +397,8 @@ namespace chdr::solver {
                                 "Construct a new shell to rebind fields");
         }
 
-        /// The class static_assert deliberately rejects unknown or absorbing base families.
+        /// The class static_assert restricts PotentialSolverBase to StandardSolverPeriodic
+        /// or NonStandardSolverPeriodic; this function identifies which stencil it uses.
         static constexpr Stencil stencil() {
             return std::is_same_v<PotentialSolverBase, StandardSolverPeriodic>
                        ? Stencil::Standard
@@ -409,14 +455,51 @@ namespace chdr::solver {
         }
 
     private:
+        /** @brief Construct the base with validated face kinds and converted Mur speeds.
+         * description stores the speeds used with the potential-update timestep,
+         * not the unconverted speeds supplied through MurSpeed::physical().
+         * Only the public constructors call this overload. Their argument helpers finish
+         * storage, material and boundary validation before base initialization can
+         * communicate. No derived member is read to select the boundary.
+         */
+        ChdrSolver(AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic,
+                   EBReconstructionConvention reconstruction, SpatialDiscretization spatial,
+                   const ippl::FDTDBoundary& description)
+            : PotentialSolverBase(source, electric, magnetic, description)
+            , contract_m{reconstruction, spatial} {
+            if (spatial == SpatialDiscretization::Staggered
+                && (reconstruction != EBReconstructionConvention::R2
+                    || stencil() != Stencil::Standard))
+                throw IpplException("ChdrSolver",
+                                    "Staggered reading requires R2 and the Standard stencil");
+        }
+
+        /** @brief Validate material metadata, then convert the requested Mur speed.
+         * Read cached metadata only; the owner need not outlive construction.
+         * For Homogeneous, multiply an explicit speed by the refractive index before
+         * passing it to the base solver; otherwise use a conversion factor of one.
+         * MurSpeed::kernel explains how this compensates for timestep rescaling.
+         * No not-yet-initialized ChdrSolver member supplies the conversion factor.
+         */
+        static ippl::FDTDBoundary checkedMaterialBoundary(
+            AJFourFieldsType& source, const EMFieldsType& electric, const EMFieldsType& magnetic,
+            const material::MaterialOwner& owner, const FormulationParameters& parameters,
+            const SolverDiscretizationSelection& selection, MurSpeed speed) {
+            checkedMaterialSource(source, owner, parameters, selection);
+            const double index = parameters.formulation_m == MaterialFormulation::Homogeneous
+                                     ? std::sqrt(owner.homogeneousValue())
+                                     : 1.0;
+            return checkedBoundary(source, electric, magnetic, speed.kernel(index));
+        }
+
         /** @brief Check immutable material metadata before delegating to the base constructor.
          * @details Formulation refusal uses rank-identical cached statistics and
          * performs no collective or allocation. Field identity is a caller invariant.
          * The owner already reduced statistics during construction; this function
          * does not synchronize ranks. Parameters and selection must agree across
          * ranks, and each rank must bind its own matching mesh/layout objects.
-         * Returning the original source permits this check to run while evaluating
-         * the delegated-constructor argument, before its communication begins.
+         * checkedMaterialBoundary calls this before reading homogeneousValue() or
+         * constructing the base, so rejected metadata never selects a boundary speed.
          */
         static AJFourFieldsType& checkedMaterialSource(
             AJFourFieldsType& source, const material::MaterialOwner& owner,
@@ -485,34 +568,62 @@ namespace chdr::solver {
             ChdrSolver& solver_m;
         };
 
-        /// Validate collectively before the base constructor performs halo communication.
+        /// Validate rank-identical metadata before the base can perform halo communication.
         static AJFourFieldsType& checkedSource(AJFourFieldsType& source,
                                                const EMFieldsType& electric,
                                                const EMFieldsType& magnetic) {
-            requirePeriodic(source);
-            requirePeriodic(electric);
-            requirePeriodic(magnetic);
+            requireHalo(source);
+            requireHalo(electric);
+            requireHalo(magnetic);
             if (&source.getLayout() != &electric.getLayout()
                 || &source.getLayout() != &magnetic.getLayout()
                 || &source.get_mesh() != &electric.get_mesh()
                 || &source.get_mesh() != &magnetic.get_mesh())
                 throw IpplException(
                     "ChdrSolver", "ChDRFieldContainer must share the same mesh and layout owners");
-            chdr::vacuum::checkLocalDomain(source.getLayout());
+            requireLocalOwnership(source.getLayout());
+            const auto description = ippl::FDTDBoundary::fromLayout(source.getLayout());
+            if (description.murMask() && stencil() == Stencil::NonStandard)
+                throw IpplException("ChdrSolver", "NonStandard requires periodic faces");
             return source;
         }
+
+        /** @brief Preserve ChdrSolver's partition-refusal exception without MPI communication.
+         * Every rank has the complete partition table, so all ranks reject the
+         * same undersized domain before any solver can exchange a halo.
+         */
+        static void requireLocalOwnership(const ippl::FieldLayout<SpatialDim>& layout) {
+            const auto domains = layout.getHostLocalDomains();
+            for (unsigned rank = 0; rank < domains.extent(0); ++rank)
+                for (unsigned d = 0; d < SpatialDim; ++d)
+                    if (domains(rank)[d].length() < 2)
+                        throw std::runtime_error("ChdrSolver requires two owned cells per axis");
+        }
         void requireMatching(const EMFieldsType& field) {
-            requirePeriodic(field);
+            requireHalo(field);
             if (&field.getLayout() != &sourceField().getLayout()
                 || &field.get_mesh() != &sourceField().get_mesh())
                 throw IpplException("ChdrSolver", "Output must share the source mesh and layout");
         }
         /// Inspect field metadata only; potential, source and E/B storage are all accepted.
         template <class FieldType>
-        static void requirePeriodic(const FieldType& field) {
-            if (!field.getLayout().isAllPeriodic_m || field.getNghost() != 1)
-                throw IpplException("ChdrSolver",
-                                    "Requires an all-periodic layout and one-cell halos");
+        static void requireHalo(const FieldType& field) {
+            if (field.getNghost() != 1)
+                throw IpplException("ChdrSolver", "Requires one-cell halos");
+        }
+        /** @brief Validate storage and the converted Mur speed before base construction.
+         * checkedSource preserves ChdrSolver's storage checks, including the partition
+         * exception type. validateBoundary then checks the speed that Mur will receive,
+         * global domain and face intersections without allocating or communicating.
+         */
+        static ippl::FDTDBoundary checkedBoundary(AJFourFieldsType& source,
+                                                  const EMFieldsType& electric,
+                                                  const EMFieldsType& magnetic, double speed) {
+            checkedSource(source, electric, magnetic);
+            const auto description = ippl::FDTDBoundary::fromLayout(source.getLayout(), speed);
+            ippl::validateBoundary(description, source.getLayout(), source.getNghost(),
+                                   electric.getNghost(), magnetic.getNghost());
+            return description;
         }
         LevelContract contract_m;
         /// Own formulation workspace; a null pointer selects the inherited vacuum step.
