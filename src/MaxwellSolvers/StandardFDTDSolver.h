@@ -27,7 +27,7 @@ namespace ippl {
      *
      * @tparam EMField The type representing the electromagnetic field.
      * @tparam SourceField The type representing the source field.
-     * @tparam boundary_conditions The boundary conditions to be applied (default is periodic).
+     * @tparam boundary_conditions Fixed all-face policy (default periodic), or configured.
      */
     template <typename EMField, typename SourceField, fdtd_bc boundary_conditions = periodic>
     class StandardFDTDSolver : public FDTDSolverBase<EMField, SourceField, boundary_conditions> {
@@ -39,7 +39,20 @@ namespace ippl {
          * @param E The electric field.
          * @param B The magnetic field.
          */
-        StandardFDTDSolver(SourceField& source, EMField& E, EMField& B);
+        StandardFDTDSolver(SourceField& source, EMField& E, EMField& B)
+            requires(boundary_conditions == periodic || boundary_conditions == absorbing);
+
+        /** @brief Construct the configured solver with fixed face kinds and Mur speeds.
+         * @details The description is copied and validated before initialization;
+         * initialize() resets the potentials without changing this selection.
+         * @param source Source field supplying the layout and mesh.
+         * @param E Electric output field.
+         * @param B Magnetic output field.
+         * @param boundary Face description consistent with the layout's periodic axes.
+         */
+        StandardFDTDSolver(SourceField& source, EMField& E, EMField& B,
+                           const FDTDBoundary& boundary)
+            requires(boundary_conditions == configured);
 
         constexpr static unsigned Dim = EMField::dim;  // Dimension of the electromagnetic field.
         using scalar = typename EMField::value_type::value_type;  // Scalar type used in the

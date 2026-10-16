@@ -208,13 +208,20 @@ namespace ippl {
          * meshes and layouts for each level.
          *
          * @param b The input field used to initialize the hierarchy.
+         * @throws IpplException if b has both periodic and open layout axes.
+         * SubFieldLayout accepts only uniform periodicity. Reject a mixed layout
+         * before the first collective rather than silently changing its topology.
          */
         void init_fields(Field& b) override {
+            auto& fine_layout = b.getLayout();
+            if (fine_layout.isAnyPeriodic() && !fine_layout.isAllPeriodic_m) {
+                throw IpplException("multigrid_preconditioner::init_fields",
+                                    "Mixed periodic and open layout axes are not supported.");
+            }
             IpplTimings::TimerRef init_fields = IpplTimings::getTimer("init_fields");
             IpplTimings::startTimer(init_fields);
 
             auto& fine_mesh              = b.get_mesh();
-            auto& fine_layout            = b.getLayout();
             auto fine_domain             = fine_layout.getDomain();
             std::array<bool, Dim> decomp = fine_layout.isParallel();
 

@@ -56,6 +56,14 @@ namespace ippl {
     }
 
     template <unsigned Dim>
+    FieldLayout<Dim>::FieldLayout(mpi::Communicator communicator, const NDIndex<Dim>& domain,
+                                  std::array<bool, Dim> isParallel, std::array<bool, Dim> periodic,
+                                  int nghost)
+        : FieldLayout(communicator) {
+        initialize(domain, isParallel, periodic, nghost);
+    }
+
+    template <unsigned Dim>
     void FieldLayout<Dim>::updateLayout(const std::vector<NDIndex<Dim>>& domains) {
         if (domains.empty()) {
             return;
@@ -75,11 +83,22 @@ namespace ippl {
     template <unsigned Dim>
     void FieldLayout<Dim>::initialize(const NDIndex<Dim>& domain, std::array<bool, Dim> isParallel,
                                       bool isAllPeriodic, int nghost) {
+        std::array<bool, Dim> periodic;
+        periodic.fill(isAllPeriodic);
+        initialize(domain, isParallel, periodic, nghost);
+    }
+
+    template <unsigned Dim>
+    void FieldLayout<Dim>::initialize(const NDIndex<Dim>& domain, std::array<bool, Dim> isParallel,
+                                      std::array<bool, Dim> periodic, int nghost) {
         int nRanks = comm.size();
 
         gDomain_m = domain;
 
-        isAllPeriodic_m = isAllPeriodic;
+        periodic_m      = periodic;
+        isAllPeriodic_m = std::all_of(periodic.begin(), periodic.end(), [](bool p) {
+            return p;
+        });
 
         isParallelDim_m = isParallel;
 
@@ -277,7 +296,7 @@ namespace ippl {
             IpplTimings::stopTimer(findInternalNeighborsTimer);
 
             IpplTimings::startTimer(findPeriodicNeighborsTimer);
-            if (isAllPeriodic_m) {
+            if (isAnyPeriodic()) {
                 std::map<unsigned int, int> offsets;
                 findPeriodicNeighbors(nghost, nd, gnd, ndNeighbor, rank, offsets);
             }
@@ -343,6 +362,9 @@ namespace ippl {
     template <unsigned Dim>
     int FieldLayout<Dim>::getPeriodicOffset(const NDIndex_t& nd, const unsigned int d,
                                             const int k) {
+        if (!isPeriodic(d)) {
+            return 0;
+        }
         const int period = gDomain_m[d].length() * gDomain_m[d].stride();
         switch (k) {
             case 0:
