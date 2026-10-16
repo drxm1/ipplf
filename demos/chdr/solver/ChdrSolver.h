@@ -559,10 +559,7 @@ namespace chdr::solver {
             void baseStep(double step, AJFourFieldsType& source) override {
                 solver_m.baseStep(step, source);
             }
-            void finishStep() override {
-                next().fillHalo();
-                solver_m.applyBCs();
-            }
+            void finishStep() override { solver_m.finishPotentialStep(); }
 
         private:
             ChdrSolver& solver_m;

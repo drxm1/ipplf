@@ -81,7 +81,7 @@ namespace chdr::solver {
         Kokkos::fence();
     }
 
-    /** @brief Load both potential slots and synchronize their halos, without reconstructing E/B.
+    /** @brief Load both potential slots, synchronize halos and close physical ghosts.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * ChdrSolver enforces this choice and supplies the required history and label interface.
      * @tparam AnalyticSampler Device-copyable scalar-valued analytic potential sampler.
@@ -108,8 +108,7 @@ namespace chdr::solver {
         writeSamples(solver.A_n, sample, {phi, a, a, a}, solver.levelContract());
         writeSamples(solver.A_nm1, sample, {phi - dt, a - dt, a - dt, a - dt},
                      solver.levelContract());
-        preparePotentialHalo(solver.A_n);
-        preparePotentialHalo(solver.A_nm1);
+        solver.prepareHistories();
     }
 
     /** @brief Write the source consumed by the next solve; stepping reads owned source cells only.

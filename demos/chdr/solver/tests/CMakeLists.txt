@@ -111,5 +111,22 @@ foreach(variant serial mpi2)
 endforeach()
 include(StaggeredTests.cmake)
 include(MediumTests.cmake)
-target_sources(test-chdr-solver PRIVATE test_open_shell.cpp)
+target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp)
+set(randomPotentialHistoryFixtureDirectory
+    "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")
+add_custom_command(
+  OUTPUT "${randomPotentialHistoryFixtureDirectory}/medium.bin"
+  COMMAND
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/GenerateRandomPotentialHistoryFixtures.py"
+    "${randomPotentialHistoryFixtureDirectory}"
+  DEPENDS GenerateRandomPotentialHistoryFixtures.py
+  VERBATIM)
+add_custom_target(chdr-random-potential-history-fixtures
+                  DEPENDS "${randomPotentialHistoryFixtureDirectory}/medium.bin")
+add_dependencies(test-chdr-solver chdr-random-potential-history-fixtures)
+target_compile_definitions(
+  test-chdr-solver
+  PRIVATE CHDR_RANDOM_POTENTIAL_HISTORY_FIXTURE_DIR="${randomPotentialHistoryFixtureDirectory}")
 chdr_solver_test(open.shell "OpenShell.*")
+target_include_directories(
+  test-chdr-solver PRIVATE "${PROJECT_SOURCE_DIR}/demos/chdr/boundaries/unit_tests/MaxwellSolvers")
