@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 
 namespace {
     using namespace chdr::solver;
@@ -63,7 +63,7 @@ namespace {
     }
 
     void checkSplitAxis(unsigned axis) {
-        auto fields = makePeriodicFieldContainer({12, 14, 16}, {1.0, 1.5, 2.0}, axis);
+        auto fields = makeBoxFieldContainer({12, 14, 16}, {1.0, 1.5, 2.0}, axis);
         checkLocalDomain(fields.getFL());
         initializeFieldStorage(fields);
         StandardSolverPeriodic solver(fields.getJ(), fields.getE(), fields.getB());
@@ -80,14 +80,14 @@ namespace {
         EXPECT_TRUE(fields.getFL().isAllPeriodic_m);
     }
 
-    TEST(PeriodicSetup, CopiesEveryHaloCell) {
+    TEST(BoxSetup, CopiesEveryHaloCell) {
         for (unsigned axis = 0; axis < 3; ++axis)
             checkSplitAxis(axis);
     }
 
-    TEST(PeriodicSetup, RejectsInvalidGeometry) {
-        EXPECT_THROW(makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1}, 3), std::invalid_argument);
-        EXPECT_THROW(makePeriodicFieldContainer({1, 8, 8}, {1, 1, 1}), std::invalid_argument);
-        EXPECT_THROW(makePeriodicFieldContainer({8, 8, 8}, {1, 0, 1}), std::invalid_argument);
+    TEST(BoxSetup, RejectsInvalidGeometry) {
+        EXPECT_THROW(makeBoxFieldContainer({8, 8, 8}, {1, 1, 1}, 3), std::invalid_argument);
+        EXPECT_THROW(makeBoxFieldContainer({1, 8, 8}, {1, 1, 1}), std::invalid_argument);
+        EXPECT_THROW(makeBoxFieldContainer({8, 8, 8}, {1, 0, 1}), std::invalid_argument);
     }
 }  // namespace

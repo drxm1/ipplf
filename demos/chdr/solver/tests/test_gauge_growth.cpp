@@ -15,10 +15,10 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "MonitorTestSupport.h"
 #include "Monitors.h"
-#include "PeriodicSetup.h"
 #include "RankRecords.h"
 #include "SpatialDimension.h"
 #include "Waves.h"
@@ -152,7 +152,7 @@ namespace chdr::solver::test {
     void gaugeGrowth(bool gaugeWave, SpatialDiscretization spatialDiscretization =
                                          SpatialDiscretization::Collocated) {
         constexpr bool NS = std::is_same_v<PotentialSolverBase, NonStandardSolverPeriodic>;
-        auto fields       = makePeriodicFieldContainer({32, 32, NS ? 48 : 32}, {1, 1, 1}, 0);
+        auto fields       = makeBoxFieldContainer({32, 32, NS ? 48 : 32}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                EBReconstructionConvention::R2,

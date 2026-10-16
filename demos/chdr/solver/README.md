@@ -336,7 +336,7 @@ itself. Preserve these directories with the run log.
 | `FourierProbe`, `FourierProbeT8` | Closed-form finite-window transform, labels, positions and ownership |
 | `RankGather`, `RankCases`, `SerialReference`, `StableStatistics` | Owned fields and well-conditioned reductions across rank layouts |
 | `SolverShell`, `chdr.vacuum.*` CTests | Inherited vacuum evolution and output regression |
-| `Operators`, `CompactOperators`, `PeriodicSetup` | Difference symbols, periodic halos and geometry |
+| `Operators`, `CompactOperators`, `BoxSetup` | Difference symbols, periodic halos and geometry |
 | `ChdrMonitors`, `ChdrMonitorRecords`, `ChdrStaggered` | Discrete residual identities, continuity and Gauss formulas in both readings |
 
 The NonStandard source-amplitude record contains two host-side symbol predictions.

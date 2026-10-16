@@ -194,7 +194,7 @@ namespace {
     void oneGaugeCase(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
                       ippl::Vector<double, SpatialDim> waveNumber, int steps, double safety,
                       bool record, EBReconstructionConvention ebReconstructionConvention) {
-        auto fields = makePeriodicFieldContainer(cells, lengths);
+        auto fields = makeBoxFieldContainer(cells, lengths);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                ebReconstructionConvention);

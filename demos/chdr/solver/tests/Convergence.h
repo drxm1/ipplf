@@ -15,10 +15,10 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "CoreTestSupport.h"
 #include "Monitors.h"
-#include "PeriodicSetup.h"
 #include "RankRecords.h"
 #include "SerialReference.h"
 #include "SpatialDimension.h"
@@ -259,7 +259,7 @@ namespace chdr::solver::test {
         const auto cells = eps > 0 && holdout
                                ? std::array<int, 3>{15 * n / 16, 18 * n / 16, 20 * n / 16}
                                : waveCells<PotentialSolverBase>(n, holdout);
-        auto fields      = makePeriodicFieldContainer(cells, {1, 1, 1}, eps > 0 && holdout ? 1 : 0);
+        auto fields      = makeBoxFieldContainer(cells, {1, 1, 1}, eps > 0 && holdout ? 1 : 0);
         initializeFieldStorage(fields);
         auto handle = coreTest::makeTestSolver<PotentialSolverBase>(
             fields.getJ(), fields.getE(), fields.getB(), ebReconstructionConvention,

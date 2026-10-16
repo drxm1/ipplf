@@ -14,11 +14,11 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "CoreTestSupport.h"
 #include "MediumOracles.h"
 #include "MonitorTestSupport.h"
-#include "PeriodicSetup.h"
 #include "RankRecords.h"
 #include "SerialReference.h"
 #include "SpatialDimension.h"
@@ -276,7 +276,7 @@ namespace chdr::solver::test {
                         bool vacuumSet = false, int splitAxis = -1) {
         const DispersionInput input{cells,      mode, lengths,    safety,   name,
                                     rankRecord, eps,  recordOnly, splitAxis};
-        auto fields = makePeriodicFieldContainer(cells, lengths, input.splitAxis());
+        auto fields = makeBoxFieldContainer(cells, lengths, input.splitAxis());
         initializeFieldStorage(fields);
         auto handle = coreTest::makeTestSolver<PotentialSolverBase>(
             fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R1,
@@ -390,7 +390,7 @@ namespace chdr::solver::test {
     TEST(MediumHoldout, DISABLED_Phase) {
         const DispersionInput input{{120, 144, 160}, {-1, 2, 3}, {1, 1, 1}, 0.9, "medium-held",
                                     false,           3.7,        false,     1};
-        auto fields = makePeriodicFieldContainer(input.cells_m, input.lengths_m, input.splitAxis());
+        auto fields = makeBoxFieldContainer(input.cells_m, input.lengths_m, input.splitAxis());
         initializeFieldStorage(fields);
         auto handle = coreTest::makeTestSolver<StandardSolverPeriodic>(
             fields.getJ(), fields.getE(), fields.getB(), EBReconstructionConvention::R2,

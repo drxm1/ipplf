@@ -1,16 +1,16 @@
-/** @file PeriodicSetup.cpp
+/** @file BoxSetup.cpp
  * @brief Construct a periodic mesh/layout owner without allocating its field views.
  */
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 
 #include <cmath>
 #include <stdexcept>
 
 namespace chdr::solver {
 
-    ChDRFieldContainer makePeriodicFieldContainer(std::array<int, SpatialDim> cells,
-                                                  std::array<double, SpatialDim> lengths,
-                                                  unsigned splitAxis) {
+    ChDRFieldContainer makeBoxFieldContainer(std::array<int, SpatialDim> cells,
+                                             std::array<double, SpatialDim> lengths,
+                                             unsigned splitAxis) {
         // The axis along which MPI decomposition happens must be one of x,y,z.
         if (splitAxis >= SpatialDim) {
             throw std::invalid_argument("Split axis must be 0, 1 or 2");

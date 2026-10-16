@@ -9,8 +9,8 @@
 #include <gtest/gtest.h>
 #include <limits>
 
+#include "BoxSetup.h"
 #include "Operators.h"
-#include "PeriodicSetup.h"
 
 namespace {
     using namespace chdr::solver;
@@ -90,7 +90,7 @@ namespace {
 
     template <Stencil Scheme>
     void checkFourierStencil() {
-        auto fields = makePeriodicFieldContainer({12, 16, 24}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({12, 16, 24}, {1, 1, 1});
         initializeFieldStorage(fields);
         StandardSolverPeriodic storage(fields.getJ(), fields.getE(), fields.getB());
         const ippl::Vector<double, 3> waveNumber =

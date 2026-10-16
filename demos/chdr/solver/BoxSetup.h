@@ -1,4 +1,4 @@
-/** @file PeriodicSetup.h
+/** @file BoxSetup.h
  * @brief Runtime periodic boxes with a single selectable decomposition axis.
  */
 #pragma once
@@ -9,7 +9,7 @@
 #include "SpatialDimension.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
-              "PeriodicSetup.h requires three spatial dimensions for its Cartesian implementation");
+              "BoxSetup.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {
     /** @brief Construct mesh/layout ownership; allocate with initializeFieldStorage.
@@ -24,9 +24,9 @@ namespace chdr::solver {
      * operation because the field objects retain pointers to this owner's mesh and layout.
      * Do not return or move an already allocated container through a setup helper.
      */
-    ChDRFieldContainer makePeriodicFieldContainer(std::array<int, SpatialDim> cells,
-                                                  std::array<double, SpatialDim> lengths,
-                                                  unsigned splitAxis = 0);
+    ChDRFieldContainer makeBoxFieldContainer(std::array<int, SpatialDim> cells,
+                                             std::array<double, SpatialDim> lengths,
+                                             unsigned splitAxis = 0);
 
     /// Reusing from the vacuum wave example
     using chdr::vacuum::checkLocalDomain;

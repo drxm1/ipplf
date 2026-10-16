@@ -12,10 +12,10 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
+#include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "CoreTestSupport.h"
 #include "OwnedStatistics.h"
-#include "PeriodicSetup.h"
 #include "RankRecords.h"
 #include "SpatialDimension.h"
 

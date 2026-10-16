@@ -10,7 +10,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 #include "SpatialDimension.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
@@ -98,7 +98,7 @@ namespace {
         static_assert(!std::is_constructible_v<ChdrSolver<StandardSolverPeriodic>,
                                                AJFourFieldsType&, EMFieldsType&, EMFieldsType&>);
         EXPECT_EQ(LevelContract{}.ebReconstructionConvention_m, EBReconstructionConvention::R2);
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2);
@@ -109,8 +109,8 @@ namespace {
     }
 
     TEST(SolverShell, RejectsDistinctLayoutOwners) {
-        auto first  = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
-        auto second = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
+        auto first  = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
+        auto second = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(first);
         initializeFieldStorage(second);
         EXPECT_THROW((ChdrSolver<StandardSolverPeriodic>(first.getJ(), second.getE(), first.getB(),
@@ -119,7 +119,7 @@ namespace {
     }
 
     TEST(SolverShell, InitialFieldsHonorSelectedReconstruction) {
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2);
@@ -137,7 +137,7 @@ namespace {
         const int ranks = ippl::Comm->size();
         if (ranks < 2)
             GTEST_SKIP() << "Requires a split with unequal local extents";
-        auto fields = makePeriodicFieldContainer({2 * ranks - 1, 8, 8}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({2 * ranks - 1, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         EXPECT_THROW(
             (ChdrSolver<StandardSolverPeriodic>(fields.getJ(), fields.getE(), fields.getB(),

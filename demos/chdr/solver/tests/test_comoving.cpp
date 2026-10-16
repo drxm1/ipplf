@@ -255,7 +255,7 @@ namespace {
                                                       ? std::array<int, SpatialDim>{8, 8, 64}
                                                       : std::array<int, SpatialDim>{32, 32, 64};
         ComovingPotentials wave(cells, {hp, hp, hz}, singleMode);
-        auto fields = makePeriodicFieldContainer(cells, wave.lengths(), 2);
+        auto fields = makeBoxFieldContainer(cells, wave.lengths(), 2);
         initializeFieldStorage(fields);
         std::vector<double> r2Values;
         for (auto ebReconstructionConvention :

@@ -43,7 +43,7 @@ namespace chdr::solver::test {
     ///   - Predicted gauge ration must exceed 1e-4, avoiding a trivial zero comparison.
     ///   - Measured/reference relative discrepancy must be <= 1e-12.
     TEST(WaveNorms, NonzeroGaugeMatchesIndependentMode) {
-        auto fields = makePeriodicFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
+        auto fields = makeBoxFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
         for (auto ebReconstructionConvention :
              {EBReconstructionConvention::R1, EBReconstructionConvention::R2,

@@ -5,7 +5,7 @@
  */
 #include <gtest/gtest.h>
 
-#include "PeriodicSetup.h"
+#include "BoxSetup.h"
 #include "RankRecords.h"
 #include "SpatialDimension.h"
 
@@ -43,7 +43,7 @@ namespace chdr::solver::test {
     }
 
     void checkGatherSplit(unsigned split) {
-        auto fields = makePeriodicFieldContainer({8, 10, 12}, {1, 1, 1}, split);
+        auto fields = makeBoxFieldContainer({8, 10, 12}, {1, 1, 1}, split);
         initializeFieldStorage(fields);
         auto& field = fields.getJ();
         fillGatherPattern(field);

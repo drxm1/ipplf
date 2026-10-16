@@ -70,7 +70,7 @@ namespace {
     /// @brief Keep field ownership in this scope while the solver holds mesh/layout references.
     template <class PotentialSolverBase>
     void checkSetters(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths) {
-        auto fields = makePeriodicFieldContainer(cells, lengths);
+        auto fields = makeBoxFieldContainer(cells, lengths);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                EBReconstructionConvention::R1);
@@ -197,7 +197,7 @@ namespace {
     template <class PotentialSolverBase>
     void stability(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
                    bool bounded) {
-        auto fields = makePeriodicFieldContainer(cells, lengths);
+        auto fields = makeBoxFieldContainer(cells, lengths);
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                EBReconstructionConvention::R1);
@@ -214,7 +214,7 @@ namespace {
         checkSetters<NonStandardSolverPeriodic>({16, 16, 24}, {1, 1, 1});
     }
     TEST(TimeStep, LoadedAndReconstructedHistoriesLockStep) {
-        auto fields = makePeriodicFieldContainer({8, 8, 8}, {1, 1, 1});
+        auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   EBReconstructionConvention::R2);
@@ -255,7 +255,7 @@ namespace {
      * The anisotropic case changes spacings as well as cell counts.
      */
     void mediumStability(double eps, bool anisotropic, bool bounded) {
-        auto fields = makePeriodicFieldContainer(
+        auto fields = makeBoxFieldContainer(
             anisotropic ? std::array<int, 3>{20, 24, 16} : std::array<int, 3>{16, 16, 16},
             {1, anisotropic ? 0.96 : 1, 1}, 0);
         initializeFieldStorage(fields);

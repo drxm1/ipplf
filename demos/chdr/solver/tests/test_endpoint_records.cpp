@@ -12,8 +12,8 @@
 #include <iomanip>
 #include <iostream>
 
+#include "BoxSetup.h"
 #include "MonitorTestSupport.h"
-#include "PeriodicSetup.h"
 #include "SpatialDimension.h"
 
 static_assert(
@@ -140,7 +140,7 @@ namespace {
     /// @brief Keep the owning mesh/layout stationary while the endpoint experiment runs.
     template <class PotentialSolverBase>
     void endpoint(std::array<int, SpatialDim> cells) {
-        auto fields = makePeriodicFieldContainer(cells, {1, 1, 1});
+        auto fields = makeBoxFieldContainer(cells, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<PotentialSolverBase> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                EBReconstructionConvention::R1);
