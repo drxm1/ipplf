@@ -62,12 +62,22 @@ namespace chdr::solver {
          * @param prototype Allocated field whose mesh/layout owners outlive this monitor.
          */
         explicit Monitors(const AJFourFieldsType& prototype)
-            : workspace_m(prototype) {
+            : workspace_m(checkedPeriodic(prototype)) {
             for (auto* field : {&oldest_m, &consumedSource_m, &previousSource_m}) {
                 field->initialize(prototype.get_mesh(), prototype.getLayout());
                 *field = 0.0;
             }
             previousElectric_m.initialize(prototype.get_mesh(), prototype.getLayout());
+        }
+
+        /** @brief Reject open layouts before allocating derivative workspaces.
+         * Boundary residuals need separate operators and normalization; the
+         * current reports describe the periodic interior identities only.
+         */
+        static const AJFourFieldsType& checkedPeriodic(const AJFourFieldsType& field) {
+            if (!field.getLayout().isAllPeriodic_m)
+                throw std::invalid_argument("Monitors require an all-periodic layout");
+            return field;
         }
 
         /** @brief Declare the source preceding the next monitored step.

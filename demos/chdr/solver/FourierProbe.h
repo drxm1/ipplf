@@ -306,6 +306,19 @@ namespace chdr::solver {
                 if (box_m.first_m[d] < domain[d].first() || box_m.last_m[d] > domain[d].last()
                     || box_m.last_m[d] < box_m.first_m[d])
                     throw std::invalid_argument("Probe box lies outside the global domain");
+                // The closed outer layer supports reconstruction, but is not an
+                // interior field sample for a radiation measurement. Potential
+                // channels remain valid there for boundary-operator checks.
+                if (!geometry.getLayout().isPeriodic(d)
+                    && (box_m.first_m[d] == domain[d].first()
+                        || box_m.last_m[d] == domain[d].last())) {
+                    for (const auto& channel : record_m.channels_m)
+                        if (channel.channel_m.quantity_m == Quantity::Electric
+                            || channel.channel_m.quantity_m == Quantity::Magnetic
+                            || channel.channel_m.quantity_m == Quantity::RawMagnetic)
+                            throw std::invalid_argument(
+                                "Field probes must exclude the outermost open layer");
+                }
                 const auto extent = std::size_t(box_m.last_m[d] - box_m.first_m[d] + 1);
                 if (extent > std::size_t(std::numeric_limits<int>::max()) / width / count)
                     throw std::invalid_argument("Probe output exceeds one MPI count");

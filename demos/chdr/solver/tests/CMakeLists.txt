@@ -68,6 +68,13 @@ foreach(case StandardBounded AnisotropicBounded NonStandardBounded)
   endif()
 endforeach()
 
+function(chdr_open_record name filter)
+  add_test(NAME chdr.solver.open.record.${name} COMMAND test-chdr-solver --gtest_filter=${filter})
+  set_tests_properties(
+    chdr.solver.open.record.${name} PROPERTIES LABELS "chdr;solver;record" TIMEOUT 1800 ENVIRONMENT
+                                               "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+endfunction()
+chdr_open_record(zero-ghost OpenOuterLayerRecords.ZeroGhostMagnitude)
 target_sources(test-chdr-solver PRIVATE test_gather.cpp)
 chdr_solver_test(gather "RankGather.*")
 target_sources(test-chdr-solver PRIVATE test_manufactured.cpp)
@@ -111,7 +118,8 @@ foreach(variant serial mpi2)
 endforeach()
 include(StaggeredTests.cmake)
 include(MediumTests.cmake)
-target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp)
+target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp
+                                        test_open_probe.cpp)
 set(randomPotentialHistoryFixtureDirectory
     "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")
 add_custom_command(
@@ -130,3 +138,5 @@ target_compile_definitions(
 chdr_solver_test(open.shell "OpenShell.*")
 target_include_directories(
   test-chdr-solver PRIVATE "${PROJECT_SOURCE_DIR}/demos/chdr/boundaries/unit_tests/MaxwellSolvers")
+target_sources(test-chdr-solver PRIVATE test_outer_layer.cpp)
+chdr_solver_test(open.outer-layer "OpenOuterLayer.*")
