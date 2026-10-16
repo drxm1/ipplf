@@ -15,11 +15,13 @@ import numpy as np
 
 
 def main():
-    """Generate the medium comparison fixture."""
+    """Generate the medium comparison and the two long-run box fixtures."""
     destination = Path(sys.argv[1])
     destination.mkdir(parents=True, exist_ok=True)
     for name, seed, shape in (
         ("medium", 271828, (16, 16, 16)),
+        ("stability-open", 81413, (16, 16, 16)),
+        ("stability-mixed", 81413, (16, 8, 16)),
     ):
         values = np.random.default_rng(seed).standard_normal((2, 4, *shape))
         values.astype("<f8").tofile(destination / f"{name}.bin")

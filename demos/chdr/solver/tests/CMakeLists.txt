@@ -77,6 +77,7 @@ function(chdr_open_record name filter)
 endfunction()
 chdr_open_record(gauge OpenGaugeRecords.VacuumRepresentatives)
 chdr_open_record(zero-ghost OpenOuterLayerRecords.ZeroGhostMagnitude)
+chdr_open_record(all-cell-drift OpenStabilityRecords.AllCellDrift)
 target_sources(test-chdr-solver PRIVATE test_gather.cpp)
 chdr_solver_test(gather "RankGather.*")
 target_sources(test-chdr-solver PRIVATE test_manufactured.cpp)
@@ -137,13 +138,18 @@ set(randomPotentialHistoryFixtureDirectory
     "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")
 add_custom_command(
   OUTPUT "${randomPotentialHistoryFixtureDirectory}/medium.bin"
+         "${randomPotentialHistoryFixtureDirectory}/stability-open.bin"
+         "${randomPotentialHistoryFixtureDirectory}/stability-mixed.bin"
   COMMAND
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/GenerateRandomPotentialHistoryFixtures.py"
     "${randomPotentialHistoryFixtureDirectory}"
   DEPENDS GenerateRandomPotentialHistoryFixtures.py
   VERBATIM)
-add_custom_target(chdr-random-potential-history-fixtures
-                  DEPENDS "${randomPotentialHistoryFixtureDirectory}/medium.bin")
+add_custom_target(
+  chdr-random-potential-history-fixtures
+  DEPENDS "${randomPotentialHistoryFixtureDirectory}/medium.bin"
+          "${randomPotentialHistoryFixtureDirectory}/stability-open.bin"
+          "${randomPotentialHistoryFixtureDirectory}/stability-mixed.bin")
 add_dependencies(test-chdr-solver chdr-random-potential-history-fixtures)
 target_compile_definitions(
   test-chdr-solver
@@ -153,3 +159,15 @@ target_include_directories(
   test-chdr-solver PRIVATE "${PROJECT_SOURCE_DIR}/demos/chdr/boundaries/unit_tests/MaxwellSolvers")
 target_sources(test-chdr-solver PRIVATE test_outer_layer.cpp)
 chdr_solver_test(open.outer-layer "OpenOuterLayer.*")
+target_sources(test-chdr-solver PRIVATE test_open_stability.cpp)
+chdr_solver_test(open.stability "OpenStability.InnerDataEnvelope")
+chdr_solver_test(open.stability-control "OpenStability.MismatchedSpeedControl")
+set_tests_properties(chdr.solver.open.stability-control.mpi2 PROPERTIES DISABLED TRUE)
+foreach(suite stability stability-control)
+  foreach(variant serial mpi2)
+    if(TEST chdr.solver.open.${suite}.${variant})
+      set_tests_properties(chdr.solver.open.${suite}.${variant} PROPERTIES TIMEOUT 1800 LABELS
+                                                                           "chdr;solver;long")
+    endif()
+  endforeach()
+endforeach()
