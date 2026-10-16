@@ -73,6 +73,9 @@ namespace ippl {
         Kokkos::fence();
         this->A_np1.fillHalo();
         this->applyBCs();
+        if constexpr (boundary_conditions == absorbing) {
+            fillOpenFaceGhosts(this->A_np1);
+        }
     }
 
     /**
