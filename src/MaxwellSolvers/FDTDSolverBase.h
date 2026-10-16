@@ -9,6 +9,7 @@ using std::size_t;
 #include "FieldLayout/FieldLayout.h"
 #include "MaxwellSolvers/AbsorbingBC.h"
 #include "MaxwellSolvers/Maxwell.h"
+#include "MaxwellSolvers/OpenFaceClosure.h"
 #include "Meshes/UniformCartesian.h"
 #include "Particle/ParticleBase.h"
 
@@ -52,6 +53,13 @@ namespace ippl {
          * @brief Sets periodic boundary conditions.
          */
         void setPeriodicBoundaryConditions();
+
+        /** @brief Complete the ghosts after loading the two stored potential levels.
+         * @details Exchange halos of A_n and A_nm1, then apply their periodic field conditions
+         * or the absorbing-face extension. Owned samples and A_np1 remain unchanged; no Mur
+         * update or time shift is performed. Call before advancing externally loaded histories.
+         */
+        void prepareHistories();
 
         /**
          * @brief Gets the time step size.

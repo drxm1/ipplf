@@ -11,6 +11,9 @@ namespace ippl {
                                                                               EMField& B) {
         Maxwell<EMField, SourceField>::setSources(source);
         Maxwell<EMField, SourceField>::setEMFields(E, B);
+        if constexpr (boundary_conditions == absorbing) {
+            validateOpenFaceClosure(source);
+        }
     }
 
     /**
@@ -48,6 +51,23 @@ namespace ippl {
         A_n.setFieldBC(vector_bcs);
         A_np1.setFieldBC(vector_bcs);
         A_nm1.setFieldBC(vector_bcs);
+    }
+
+    template <typename EMField, typename SourceField, fdtd_bc boundary_conditions>
+    void FDTDSolverBase<EMField, SourceField, boundary_conditions>::prepareHistories() {
+        if constexpr (boundary_conditions == absorbing) {
+            validateOpenFaceClosure(A_n);
+            validateOpenFaceClosure(A_nm1);
+        }
+        for (auto* field : {&A_n, &A_nm1}) {
+            field->fillHalo();
+            if constexpr (boundary_conditions == periodic) {
+                // PeriodicFace BCs also support periodic solvers on nonperiodic layouts
+                field->getFieldBC().apply(*field);
+            } else {
+                fillOpenFaceGhosts(*field);
+            }
+        }
     }
 
     /**

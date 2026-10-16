@@ -72,6 +72,9 @@ namespace ippl {
             });
         Kokkos::fence();
         this->finishPotentialStep();
+        if constexpr (boundary_conditions == absorbing) {
+            fillOpenFaceGhosts(this->A_np1);
+        }
     }
 
     /**
