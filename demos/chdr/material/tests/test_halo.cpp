@@ -40,4 +40,25 @@ namespace chdr::material::test {
     TEST(MaterialHalo, PhysicalSourceCells) {
         checkHalos(false);
     }
+
+    /** @brief Check mixed wrap/copy edges with the independent source-cell oracle.
+     * Every mixed topology and decomposition axis is included. Distinct integer
+     * samples expose an accidental clamp at a periodic face or wrap at an open face.
+     */
+    TEST(MaterialHalo, MixedSourceCells) {
+        for (unsigned mask = 1; mask < 7; ++mask) {
+            const std::array<bool, 3> axes{bool(mask & 1), bool(mask & 2), bool(mask & 4)};
+            const Kokkos::Array<bool, 3> expected{axes[0], axes[1], axes[2]};
+            for (unsigned axis = 0; axis < 3; ++axis) {
+                auto grid = makeGrid(axis, axes);
+                const IndexMap map;
+                const MaterialOwner owner(grid.getMesh(), grid.getFL(), map);
+                EXPECT_EQ(mismatches(owner.epsilon(), grid.getFL(),
+                                     [&](CellIndex global) {
+                                         return extendedValue(map, global, Cells, expected);
+                                     }),
+                          0U);
+            }
+        }
+    }
 }  // namespace chdr::material::test

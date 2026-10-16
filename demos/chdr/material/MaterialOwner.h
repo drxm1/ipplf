@@ -88,7 +88,7 @@ namespace chdr::material {
         struct Coordinates {
             CellIndex first_m, count_m, lower_m;
             Position origin_m, spacing_m;
-            bool periodic_m;
+            Kokkos::Array<bool, 3> periodic_m;
             KOKKOS_INLINE_FUNCTION CellIndex global(int i, int j, int k) const {
                 return CellIndex(i + first_m[0] - 1, j + first_m[1] - 1, k + first_m[2] - 1);
             }
@@ -110,8 +110,8 @@ namespace chdr::material {
                 for (unsigned d = 0; d < 3; ++d) {
                     const int relative = global[d] - lower_m[d];
                     global[d]          = lower_m[d]
-                                + (periodic_m ? (relative + count_m[d]) % count_m[d]
-                                              : Kokkos::clamp(relative, 0, count_m[d] - 1));
+                                + (periodic_m[d] ? (relative + count_m[d]) % count_m[d]
+                                                 : Kokkos::clamp(relative, 0, count_m[d] - 1));
                 }
                 return global;
             }
@@ -127,13 +127,13 @@ namespace chdr::material {
             Coordinates result;
             const auto local = layout.getLocalNDIndex(), domain = layout.getDomain();
             for (unsigned d = 0; d < 3; ++d) {
-                result.first_m[d] = local[d].first();
-                result.count_m[d] = domain[d].length();
-                result.lower_m[d] = domain[d].first();
+                result.first_m[d]    = local[d].first();
+                result.count_m[d]    = domain[d].length();
+                result.lower_m[d]    = domain[d].first();
+                result.periodic_m[d] = layout.isPeriodic(d);
             }
-            result.origin_m   = mesh.getOrigin();
-            result.spacing_m  = mesh.getMeshSpacing();
-            result.periodic_m = layout.isAllPeriodic_m;
+            result.origin_m  = mesh.getOrigin();
+            result.spacing_m = mesh.getMeshSpacing();
             return result;
         }
 
@@ -162,8 +162,8 @@ namespace chdr::material {
          * the outward direction. This fills material ghosts; it does not apply
          * an absorbing boundary condition to the electromagnetic fields.
          *
-         * The layout currently distinguishes fully periodic from fully physical
-         * global boundaries. Internal rank boundaries still use halo exchange.
+         * Each axis wraps periodically or extends its physical boundary independently.
+         * Internal rank boundaries use halo exchange.
          * A local allocation has one ghost layer: along each axis, indices 0
          * and extent - 1 are ghosts; indices 1 through extent - 2 are owned.
          * The global index ranges identify which ranks touch a physical face.
@@ -191,6 +191,8 @@ namespace chdr::material {
             const auto local = layout.getLocalNDIndex(), domain = layout.getDomain();
             const auto view = field.getView();
             for (unsigned axis = 0; axis < 3; ++axis) {
+                if (layout.isPeriodic(axis))
+                    continue;
                 // Identify ranks touching each global boundary
                 const bool low  = local[axis].first() == domain[axis].first();
                 const bool high = local[axis].last() == domain[axis].last();
@@ -462,7 +464,7 @@ namespace chdr::material {
         void fixLowerFace(ScalarField& field, Rule rule) const {
             if constexpr (Rule::ForwardAxis >= 0) {
                 constexpr unsigned Axis = Rule::ForwardAxis;
-                if (layout().isAllPeriodic_m
+                if (layout().isPeriodic(Axis)
                     || layout().getLocalNDIndex()[Axis].first()
                            != layout().getDomain()[Axis].first())
                     return;
