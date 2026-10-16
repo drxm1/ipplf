@@ -68,12 +68,14 @@ foreach(case StandardBounded AnisotropicBounded NonStandardBounded)
   endif()
 endforeach()
 
+target_sources(test-chdr-solver PRIVATE test_open_gauge_records.cpp)
 function(chdr_open_record name filter)
   add_test(NAME chdr.solver.open.record.${name} COMMAND test-chdr-solver --gtest_filter=${filter})
   set_tests_properties(
     chdr.solver.open.record.${name} PROPERTIES LABELS "chdr;solver;record" TIMEOUT 1800 ENVIRONMENT
                                                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 endfunction()
+chdr_open_record(gauge OpenGaugeRecords.VacuumRepresentatives)
 chdr_open_record(zero-ghost OpenOuterLayerRecords.ZeroGhostMagnitude)
 target_sources(test-chdr-solver PRIVATE test_gather.cpp)
 chdr_solver_test(gather "RankGather.*")
@@ -123,6 +125,7 @@ target_sources(test-chdr-solver PRIVATE test_open_reflection.cpp test_open_field
 chdr_solver_test(open.reflection "OpenReflection.ExactTwoWaveRows")
 chdr_solver_test(open.field-reflection "OpenFieldReflection.SignedElectricAndMagnetic")
 chdr_solver_test(open.refinement "OpenReflectionRefinement.CentrePlaneOrder")
+chdr_solver_test(open.records "OpenReflectionRefinement.CodeConfirmedRows")
 foreach(variant serial mpi2)
   if(TEST chdr.solver.open.records.${variant})
     set_tests_properties(chdr.solver.open.records.${variant} PROPERTIES LABELS "chdr;solver;record")
