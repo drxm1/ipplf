@@ -18,15 +18,18 @@ namespace outer_layer_test {
     using Mesh       = ippl::UniformCartesian<double, 3>;
     using Potentials = ippl::Field<ippl::Vector<double, 4>, 3, Mesh, Mesh::DefaultCentering>;
     using Fields     = ippl::Field<ippl::Vector<double, 3>, 3, Mesh, Mesh::DefaultCentering>;
-    using Standard   = ippl::StandardFDTDSolver<Fields, Potentials, ippl::absorbing>;
+    using Standard   = ippl::StandardFDTDSolver<Fields, Potentials, ippl::configured>;
     /// Test-only access to the fixed polynomial fixture's time step.
     struct Solver : Standard {
-        using Standard::Standard;
+        /// The polynomial fixture explicitly selects Mur on its nonperiodic axes.
+        Solver(Potentials& source, Fields& electric, Fields& magnetic)
+            : Standard(source, electric, magnetic,
+                       ippl::FDTDBoundary::fromLayout(source.getLayout())) {}
         void usePolynomialTimeStep() { this->dt = 0.5029188806044014; }
     };
     inline constexpr std::array<double, 3> spacing = {1., .8, 1.25};
 
-    /// Nonperiodic box with a z split by default; self-communicator copies provide rank witnesses.
+    /// Box split along z by default; optional y periodicity also exercises wrap intersections.
     struct Box {
         std::array<int, 3> size;
         ippl::NDIndex<3> domain;
@@ -35,10 +38,12 @@ namespace outer_layer_test {
         Potentials source;
         Fields electric, magnetic;
         explicit Box(std::array<int, 3> n = {8, 6, 10}, std::array<double, 3> h = spacing,
-                     unsigned splitAxis = 2, MPI_Comm communicator = MPI_COMM_WORLD)
+                     bool periodicY = false, unsigned splitAxis = 2,
+                     MPI_Comm communicator = MPI_COMM_WORLD)
             : size(n)
             , domain(ippl::Index(n[0]), ippl::Index(n[1]), ippl::Index(n[2]))
-            , layout(communicator, domain, {splitAxis == 0, splitAxis == 1, splitAxis == 2}, false)
+            , layout(communicator, domain, {splitAxis == 0, splitAxis == 1, splitAxis == 2},
+                     std::array<bool, 3>{false, periodicY, false})
             , mesh(domain, {h[0], h[1], h[2]}, {0., 0., 0.})
             , source(mesh, layout)
             , electric(mesh, layout)
@@ -112,7 +117,8 @@ namespace outer_layer_test {
         field     = 0.;
         auto host = field.getHostMirror();
         Kokkos::deep_copy(host, field.getView());
-        const auto coefficients = open_boundary_oracle::polynomialFixture(false);
+        const auto coefficients =
+            open_boundary_oracle::polynomialFixture(field.getLayout().isPeriodic(1));
         visit(field, false, [&](int i, int j, int k, auto index) {
             const auto x = open_boundary_oracle::fieldPosition(index, spacing, false, false, 0);
             for (unsigned q = 0; q < 4; ++q)
@@ -135,13 +141,16 @@ namespace outer_layer_test {
      * The positive analytic maximum over the full box defines the normalization.
      */
     inline double fieldError(const Fields& field, const Box& box, bool magnetic) {
-        const auto c = open_boundary_oracle::polynomialFixture(false);
+        const auto c = open_boundary_oracle::polynomialFixture(field.getLayout().isPeriodic(1));
         auto host    = field.getHostMirror();
         Kokkos::deep_copy(host, field.getView());
         double error = 0.;
         visit(field, false, [&](int i, int j, int k, auto index) {
-            if (index[0] != 0 && index[0] != box.size[0] - 1 && index[1] != 0
-                && index[1] != box.size[1] - 1 && index[2] != 0 && index[2] != box.size[2] - 1)
+            bool outer = false;
+            for (unsigned d = 0; d < 3; ++d)
+                outer |= !field.getLayout().isPeriodic(d)
+                         && (index[d] == 0 || index[d] == box.size[d] - 1);
+            if (!outer)
                 return;
             const auto x = open_boundary_oracle::fieldPosition(index, spacing, false, magnetic, 0);
             for (unsigned q = 0; q < 3; ++q)
@@ -156,7 +165,7 @@ namespace outer_layer_test {
 
     /// Check all owned and ghost samples against the analytic polynomial, including corners.
     inline double historyError(const Potentials& field, double time) {
-        const auto c = open_boundary_oracle::polynomialFixture(false);
+        const auto c = open_boundary_oracle::polynomialFixture(field.getLayout().isPeriodic(1));
         auto host    = field.getHostMirror();
         Kokkos::deep_copy(host, field.getView());
         double error = 0., scale = 0.;

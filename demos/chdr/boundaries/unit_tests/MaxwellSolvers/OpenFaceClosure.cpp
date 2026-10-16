@@ -8,18 +8,19 @@ using namespace outer_layer_test;
 
 namespace {
     /// Reconstruct the same loaded histories on rank zero's self communicator and compare fields.
-    void checkPolynomialRanks(const Box& box) {
+    void checkPolynomialRanks(const Box& box, bool periodicY) {
         if (box.layout.comm.size() == 1)
             return;
         const auto electric = ownedFieldBits(box.electric), magnetic = ownedFieldBits(box.magnetic);
         if (box.layout.comm.rank() == 0) {
-            Box serialBox(box.size, spacing, 2, MPI_COMM_SELF);
+            Box serialBox(box.size, spacing, periodicY, 2, MPI_COMM_SELF);
             Solver serial(serialBox.source, serialBox.electric, serialBox.magnetic);
             serial.usePolynomialTimeStep();
             load(serial.A_n, 0.);
             load(serial.A_nm1, -serial.getDt());
             serial.prepareHistories();
             serial.evaluate_EB();
+            std::cout << "outer-layer R1 periodic-y=" << periodicY << '\n';
             expectSameField(electric, serialBox.electric, "E");
             expectSameField(magnetic, serialBox.magnetic, "B");
         }
@@ -32,35 +33,39 @@ namespace {
  * histories must agree within 1e-13 of each field's positive analytic global maximum.
  */
 TEST(OpenFaceClosure, PolynomialFieldsAndZeroGhostControl) {
-    Box box;
-    Solver solver(box.source, box.electric, box.magnetic);
-    solver.usePolynomialTimeStep();
-    load(solver.A_n, 0.);
-    load(solver.A_nm1, -solver.getDt());
-    solver.A_n.fillHalo();
-    solver.A_nm1.fillHalo();
-    solver.evaluate_EB();
-    EXPECT_GE(fieldError(box.electric, box, false), .1);
-    EXPECT_GE(fieldError(box.magnetic, box, true), .1);
-    solver.prepareHistories();
-    solver.evaluate_EB();
-    EXPECT_LE(fieldError(box.electric, box, false), 1.e-13);
-    EXPECT_LE(fieldError(box.magnetic, box, true), 1.e-13);
-    checkPolynomialRanks(box);
+    for (bool periodicY : {false, true}) {
+        Box box({8, 6, 10}, spacing, periodicY);
+        Solver solver(box.source, box.electric, box.magnetic);
+        solver.usePolynomialTimeStep();
+        load(solver.A_n, 0.);
+        load(solver.A_nm1, -solver.getDt());
+        solver.A_n.fillHalo();
+        solver.A_nm1.fillHalo();
+        solver.evaluate_EB();
+        EXPECT_GE(fieldError(box.electric, box, false), .1);
+        EXPECT_GE(fieldError(box.magnetic, box, true), .1);
+        solver.prepareHistories();
+        solver.evaluate_EB();
+        EXPECT_LE(fieldError(box.electric, box, false), 1.e-13);
+        EXPECT_LE(fieldError(box.magnetic, box, true), 1.e-13);
+        checkPolynomialRanks(box, periodicY);
+    }
 }
 
 /** With two ranks, the third normal sample lies in an MPI halo. The tensor polynomial also
  * checks seam/face intersections and full ghost corners, at both loaded time levels.
  */
 TEST(OpenFaceClosure, TwoOwnedNormalSamplesAndCorners) {
-    Box box({4, 6, 10}, spacing, 0);
-    Solver solver(box.source, box.electric, box.magnetic);
-    solver.usePolynomialTimeStep();
-    load(solver.A_n, 0.);
-    load(solver.A_nm1, -solver.getDt());
-    solver.prepareHistories();
-    EXPECT_LE(historyError(solver.A_n, 0.), 1.e-13);
-    EXPECT_LE(historyError(solver.A_nm1, -solver.getDt()), 1.e-13);
+    for (bool periodicY : {false, true}) {
+        Box box({4, 6, 10}, spacing, periodicY, 0);
+        Solver solver(box.source, box.electric, box.magnetic);
+        solver.usePolynomialTimeStep();
+        load(solver.A_n, 0.);
+        load(solver.A_nm1, -solver.getDt());
+        solver.prepareHistories();
+        EXPECT_LE(historyError(solver.A_n, 0.), 1.e-13);
+        EXPECT_LE(historyError(solver.A_nm1, -solver.getDt()), 1.e-13);
+    }
 }
 
 /** Both production step tails must close the newly computed level. A constant polynomial
@@ -68,7 +73,8 @@ TEST(OpenFaceClosure, TwoOwnedNormalSamplesAndCorners) {
  */
 TEST(OpenFaceClosure, BothStepsCloseTheNewLevel) {
     Box box({8, 6, 10}, {1., .8, .5});
-    Solver standard(box.source, box.electric, box.magnetic);
+    ippl::StandardFDTDSolver<Fields, Potentials, ippl::absorbing> standard(box.source, box.electric,
+                                                                           box.magnetic);
     ippl::NonStandardFDTDSolver<Fields, Potentials, ippl::absorbing> nonstandard(
         box.source, box.electric, box.magnetic);
     using Base = ippl::FDTDSolverBase<Fields, Potentials, ippl::absorbing>;

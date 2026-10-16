@@ -64,6 +64,22 @@ namespace ippl {
             return result;
         }
 
+        /** @brief Copy the stored kernel speeds into the Mur dispatcher's vector type.
+         * @tparam Scalar Solver scalar type to which each stored double is converted.
+         * @return Six speeds in paired face order: lower x, upper x, lower y,
+         * upper y, lower z, upper z. Periodic-face entries are copied but ignored
+         * by the dispatcher. This changes the representation, not the speed units;
+         * validation remains the caller's responsibility.
+         */
+        template <typename Scalar>
+        Vector<Scalar, 6> kernelSpeeds() const {
+            Vector<Scalar, 6> speeds;
+            for (unsigned face = 0; face < 6; ++face) {
+                speeds[face] = speed[face];
+            }
+            return speeds;
+        }
+
         /** @brief Return the face bits used to distinguish open faces from periodic wraps.
          *
          * Which faces the boundary kernels should treat as absorbing.

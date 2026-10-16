@@ -418,17 +418,32 @@ struct second_order_abc_corner {
  */
 struct second_order_mur_boundary_conditions {
     /*!
-     * @brief Applies second-order Mur ABC to the boundaries of the field.
+     * @brief Apply second-order Mur ABCs on the selected nonperiodic domain faces.
+     * @details An open face here is a global domain face selected for Mur absorption,
+     * not a periodic wrap or an internal MPI partition face. Mur updates its outermost
+     * owned cells; this routine does not fill the exterior ghost plane.
      * @param FA_n Field at the current time step.
      * @param FA_nm1 Field at the previous time step.
      * @param FA_np1 Field at the next time step.
      * @param dt Time step size.
      * @param true_nr True number of grid points in each dimension.
      * @param lDom Local domain index for parallel processing.
+     * @param openFaces Mask selecting Mur faces: bit 2*d is the lower face and
+     * bit 2*d+1 the upper face of axis d. Unset faces receive no Mur update.
+     * @param speeds Mur wave speeds in kernel units, indexed in the same paired order.
+     * Entries for unselected faces are ignored. With Mur faces on only one axis,
+     * the two opposing faces may have different validated speeds; they do not intersect.
+     * With Mur faces on two or three axes, validateBoundary requires every selected
+     * speed to be exactly one: this dispatcher retains unit-speed edge/corner updates.
+     * One denotes the normalized interior wave speed, not one metre per second.
+     * @pre The caller has checked the face pairs, speeds and storage with validateBoundary.
+     * The intersecting-face restriction follows the matched-speed contract documented
+     * there [Bamberger, Joly and Roberts (1987), section II, Eqs. (2.10)-(2.11)].
      */
     template <typename field_type, typename dt_type>
     void apply(field_type& FA_n, field_type& FA_nm1, field_type& FA_np1, dt_type dt,
-               ippl::Vector<uint32_t, 3> true_nr, ippl::NDIndex<3> lDom) {
+               ippl::Vector<uint32_t, 3> true_nr, ippl::NDIndex<3> lDom, unsigned openFaces = 63,
+               ippl::Vector<dt_type, 6> speeds = ippl::Vector<dt_type, 6>(1)) {
         using scalar = decltype(dt);
 
         // Get the mesh spacing
@@ -442,6 +457,8 @@ struct second_order_mur_boundary_conditions {
         // Get the local number of grid points in each dimension
         ippl::Vector<uint32_t, 3> local_nr{uint32_t(A_n.extent(0)), uint32_t(A_n.extent(1)),
                                            uint32_t(A_n.extent(2))};
+
+        const unsigned activeMask = toDispatchMask(openFaces);
 
         constexpr uint32_t min_abc_boundary     = 1;
         constexpr uint32_t max_abc_boundary_sub = min_abc_boundary + 1;
@@ -471,31 +488,38 @@ struct second_order_mur_boundary_conditions {
                                + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
                                + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
                                + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
+                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
-                // If the point is on a global face, apply the second-order ABC
+                // Exactly one incident Mur face selects a face update, even at a periodic wrap.
                 if (Kokkos::popcount(val) == 1) {
-                    if (ig == min_abc_boundary) {
-                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, 1);
+                    const bool onLowerX = (val & 1u) != 0;
+                    const bool onLowerY = (val & 2u) != 0;
+                    const bool onLowerZ = (val & 4u) != 0;
+                    const bool onUpperX = (val & 8u) != 0;
+                    const bool onUpperY = (val & 16u) != 0;
+                    const bool onUpperZ = (val & 32u) != 0;
+                    if (onLowerX) {
+                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, 1, speeds[0]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
-                    if (jg == min_abc_boundary) {
-                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, 1);
+                    if (onLowerY) {
+                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, 1, speeds[2]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
-                    if (kg == min_abc_boundary) {
-                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, 1);
+                    if (onLowerZ) {
+                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, 1, speeds[4]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
-                    if (ig == true_nr[0] - max_abc_boundary_sub) {
-                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, -1);
+                    if (onUpperX) {
+                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, -1, speeds[1]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
-                    if (jg == true_nr[1] - max_abc_boundary_sub) {
-                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, -1);
+                    if (onUpperY) {
+                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, -1, speeds[3]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
-                    if (kg == true_nr[2] - max_abc_boundary_sub) {
-                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, -1);
+                    if (onUpperZ) {
+                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, -1, speeds[5]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                 }
@@ -527,46 +551,50 @@ struct second_order_mur_boundary_conditions {
                                + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
                                + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
                                + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
+                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
-                // If the point is on a global edge, apply the second-order ABC
+                // An edge update requires two incident Mur faces, not merely two domain faces.
                 if (Kokkos::popcount(val) == 2) {
-                    if (ig == min_abc_boundary && kg == min_abc_boundary) {
+                    const bool onLowerX = (val & 1u) != 0;
+                    const bool onLowerY = (val & 2u) != 0;
+                    const bool onLowerZ = (val & 4u) != 0;
+                    const bool onUpperX = (val & 8u) != 0;
+                    const bool onUpperY = (val & 16u) != 0;
+                    const bool onUpperZ = (val & 32u) != 0;
+                    if (onLowerX && onLowerZ) {
                         second_order_abc_edge<scalar, 1, 2, 0, true, true> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == min_abc_boundary && jg == min_abc_boundary) {
+                    } else if (onLowerX && onLowerY) {
                         second_order_abc_edge<scalar, 2, 0, 1, true, true> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (jg == min_abc_boundary && kg == min_abc_boundary) {
+                    } else if (onLowerY && onLowerZ) {
                         second_order_abc_edge<scalar, 0, 1, 2, true, true> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == min_abc_boundary && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onLowerX && onUpperZ) {
                         second_order_abc_edge<scalar, 1, 2, 0, false, true> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == min_abc_boundary && jg == true_nr[1] - max_abc_boundary_sub) {
+                    } else if (onLowerX && onUpperY) {
                         second_order_abc_edge<scalar, 2, 0, 1, true, false> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (jg == min_abc_boundary && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onLowerY && onUpperZ) {
                         second_order_abc_edge<scalar, 0, 1, 2, true, false> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub && kg == min_abc_boundary) {
+                    } else if (onUpperX && onLowerZ) {
                         second_order_abc_edge<scalar, 1, 2, 0, true, false> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub && jg == min_abc_boundary) {
+                    } else if (onUpperX && onLowerY) {
                         second_order_abc_edge<scalar, 2, 0, 1, false, true> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (jg == true_nr[1] - max_abc_boundary_sub && kg == min_abc_boundary) {
+                    } else if (onUpperY && onLowerZ) {
                         second_order_abc_edge<scalar, 0, 1, 2, false, true> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub
-                               && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onUpperX && onUpperZ) {
                         second_order_abc_edge<scalar, 1, 2, 0, false, false> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub
-                               && jg == true_nr[1] - max_abc_boundary_sub) {
+                    } else if (onUpperX && onUpperY) {
                         second_order_abc_edge<scalar, 2, 0, 1, false, false> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (jg == true_nr[1] - max_abc_boundary_sub
-                               && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onUpperY && onUpperZ) {
                         second_order_abc_edge<scalar, 0, 1, 2, false, false> soa(hr, dt);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else {
@@ -591,41 +619,38 @@ struct second_order_mur_boundary_conditions {
                                + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
                                + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
                                + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
+                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
-                // If the point is on a global corner, apply the second-order ABC
+                // A corner update requires three incident Mur faces.
                 if (Kokkos::popcount(val) == 3) {
-                    if (ig == min_abc_boundary && jg == min_abc_boundary
-                        && kg == min_abc_boundary) {
+                    const bool onLowerX = (val & 1u) != 0;
+                    const bool onLowerY = (val & 2u) != 0;
+                    const bool onLowerZ = (val & 4u) != 0;
+                    const bool onUpperX = (val & 8u) != 0;
+                    const bool onUpperY = (val & 16u) != 0;
+                    const bool onUpperZ = (val & 32u) != 0;
+                    if (onLowerX && onLowerY && onLowerZ) {
                         second_order_abc_corner<scalar, 1, 1, 1> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub && jg == min_abc_boundary
-                               && kg == min_abc_boundary) {
+                    } else if (onUpperX && onLowerY && onLowerZ) {
                         second_order_abc_corner<scalar, 0, 1, 1> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == min_abc_boundary && jg == true_nr[1] - max_abc_boundary_sub
-                               && kg == min_abc_boundary) {
+                    } else if (onLowerX && onUpperY && onLowerZ) {
                         second_order_abc_corner<scalar, 1, 0, 1> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub
-                               && jg == true_nr[1] - max_abc_boundary_sub
-                               && kg == min_abc_boundary) {
+                    } else if (onUpperX && onUpperY && onLowerZ) {
                         second_order_abc_corner<scalar, 0, 0, 1> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == min_abc_boundary && jg == min_abc_boundary
-                               && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onLowerX && onLowerY && onUpperZ) {
                         second_order_abc_corner<scalar, 1, 1, 0> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub && jg == min_abc_boundary
-                               && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onUpperX && onLowerY && onUpperZ) {
                         second_order_abc_corner<scalar, 0, 1, 0> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == min_abc_boundary && jg == true_nr[1] - max_abc_boundary_sub
-                               && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onLowerX && onUpperY && onUpperZ) {
                         second_order_abc_corner<scalar, 1, 0, 0> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
-                    } else if (ig == true_nr[0] - max_abc_boundary_sub
-                               && jg == true_nr[1] - max_abc_boundary_sub
-                               && kg == true_nr[2] - max_abc_boundary_sub) {
+                    } else if (onUpperX && onUpperY && onUpperZ) {
                         second_order_abc_corner<scalar, 0, 0, 0> coa(hr, dt);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else {
@@ -634,6 +659,20 @@ struct second_order_mur_boundary_conditions {
                 }
             });
         Kokkos::fence();
+    }
+
+private:
+    /** @brief Convert paired face bits to the Mur dispatcher's internal ordering.
+     * @param openFaces Bits ordered lower x, upper x, lower y, upper y, lower z, upper z.
+     * @return The same selected faces ordered lower x, lower y, lower z, upper x,
+     * upper y, upper z. Only the six face bits are used; unset bits remain unset.
+     */
+    static constexpr unsigned toDispatchMask(unsigned openFaces) {
+        unsigned activeMask = 0;
+        for (unsigned d = 0; d < 3; ++d)
+            for (unsigned side = 0; side < 2; ++side)
+                activeMask |= ((openFaces >> (2 * d + side)) & 1u) << (d + 3 * side);
+        return activeMask;
     }
 };
 #endif

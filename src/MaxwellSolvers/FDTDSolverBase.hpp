@@ -164,7 +164,8 @@ namespace ippl {
             Vector<uint32_t, Dim> true_nr = nr_m;
             true_nr += (A_n.getNghost() * 2);
             second_order_mur_boundary_conditions bcs{};
-            bcs.apply(A_n, A_nm1, A_np1, this->dt, true_nr, layout_mp->getLocalNDIndex());
+            bcs.apply(A_n, A_nm1, A_np1, this->dt, true_nr, layout_mp->getLocalNDIndex(),
+                      boundary_m.murMask(), boundary_m.kernelSpeeds<scalar>());
         }
     }
 
