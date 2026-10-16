@@ -109,5 +109,68 @@ namespace ippl {
         }
     };
 
+    /**
+     * @brief Reject incompatible face descriptions before any MPI communication.
+     *
+     * Inputs must be identical on all ranks. Every rank checks the stored domains
+     * of all ranks, so an undersized partition cannot leave peers in a halo exchange.
+     * Exactly one ghost layer is required. At least two owned cells per local axis keep
+     * the inward A_np1 samples read by Mur on the same rank. Three global cells on an
+     * open axis support the quadratic ghost extension.
+     * The speed bound follows Trefethen and Halpern, "Well-posedness of one-way wave
+     * equations and absorbing boundary conditions", Math. Comp. 47 (1986), 421-435,
+     * Theorem 2, p. 424; it is not a discrete stability guarantee.
+     * Intersecting open faces require the matched speed because the compatibility
+     * equations eliminate normal derivatives with the interior wave equation
+     * [bamberger1987SecondOrderCorner, section II, equations (2.10)-(2.11)].
+     *
+     * Ghost widths count layers of cells on each side of the local owned domain, not
+     * field components or the total number of ghost cells. This function receives only
+     * the widths, not the field objects. The three width checks are identical and may
+     * also be used to validate the three stored potential levels.
+     *
+     * @param boundary Kind and Mur speed of each of the six physical faces. Face kinds
+     * must match the layout's periodic axes; speed entries on periodic faces are ignored.
+     * @param layout Global domain, periodic exchange topology and stored rank-local domains
+     * to check. Every rank inspects all partitions without communicating.
+     * @param sourceGhosts Source field's ghost-layer width, obtained from getNghost();
+     * must be exactly one.
+     * @param electricGhosts Electric field E's ghost-layer width, obtained from getNghost();
+     * must be exactly one, independently of the source field's width.
+     * @param magneticGhosts Magnetic field B's ghost-layer width, obtained from getNghost();
+     * must be exactly one, independently of the source and electric fields' widths.
+     * @throws IpplException If any storage, domain, face-kind or Mur-speed check fails.
+     */
+    inline void validateBoundary(const FDTDBoundary& boundary, const FieldLayout<3>& layout,
+                                 int sourceGhosts, int electricGhosts, int magneticGhosts) {
+        auto require = [](bool valid, const char* message) {
+            if (!valid)
+                throw IpplException("validateBoundary", message);
+        };
+        require(sourceGhosts == 1 && electricGhosts == 1 && magneticGhosts == 1,
+                "FDTD fields require exactly one ghost cell");
+        unsigned openAxes = 0;
+        for (unsigned d = 0; d < 3; ++d)
+            openAxes += boundary.kind[2 * d] == FaceKind::mur;
+        for (unsigned d = 0; d < 3; ++d) {
+            require(layout.getDomain()[d].first() == 0, "FDTD global indices must start at zero");
+            const auto expected = layout.isPeriodic(d) ? FaceKind::periodic : FaceKind::mur;
+            require(boundary.kind[2 * d] == expected && boundary.kind[2 * d + 1] == expected,
+                    "FDTD face kinds must agree with layout periodicity");
+            if (expected == FaceKind::mur) {
+                require(layout.getDomain()[d].length() >= 3, "An open axis needs three cells");
+                for (unsigned face = 2 * d; face < 2 * d + 2; ++face) {
+                    const double speed = boundary.speed[face];
+                    require(std::isfinite(speed) && speed > 0 && speed < std::sqrt(2.0),
+                            "Mur speed must be finite, positive and below sqrt(2)");
+                    require(openAxes < 2 || speed == 1,
+                            "Intersecting Mur faces need matched speed");
+                }
+            }
+            const auto domains = layout.getHostLocalDomains();
+            for (unsigned rank = 0; rank < domains.extent(0); ++rank)
+                require(domains(rank)[d].length() >= 2, "Every local axis needs two owned cells");
+        }
+    }
 }  // namespace ippl
 #endif
