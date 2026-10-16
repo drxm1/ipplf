@@ -5,6 +5,13 @@ NonStandard solvers. Its serial witness uses `MPI_COMM_SELF`; the world
 communicator uses two ranks split along z. `ShippedOrderSolver` restores
 the old exchange-before-Mur sequence as the negative control.
 
+The pulse checks use 16x16x48 all-absorbing boxes for both stencils, with
+spacing (1,1,1) for Standard and (1,1,0.5) for NonStandard. Both use a
+time step of 0.5. A Gaussian
+of width 2.5 cells, centered at x=4,z=24 and constant in y, intersects the
+side face near the z seam. It compares every owned sample over 256 steps
+against a serial witness and reports exact agreement of the binary64 bits.
+
 `OpenBoundaryRegression` checks both stencils for 256 steps. Standard uses
 24x24x24 cells with spacing (1,1,1); NonStandard uses 16x16x48 cells with
 spacing (1,1,0.5). Both use a time step of 0.5. Periodic cases use the world
