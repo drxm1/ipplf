@@ -118,6 +118,13 @@ foreach(variant serial mpi2)
 endforeach()
 include(StaggeredTests.cmake)
 include(MediumTests.cmake)
+target_sources(test-chdr-solver PRIVATE test_open_reflection.cpp)
+chdr_solver_test(open.reflection "OpenReflection.ExactTwoWaveRows")
+foreach(variant serial mpi2)
+  if(TEST chdr.solver.open.records.${variant})
+    set_tests_properties(chdr.solver.open.records.${variant} PROPERTIES LABELS "chdr;solver;record")
+  endif()
+endforeach()
 target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp
                                         test_open_probe.cpp)
 set(randomPotentialHistoryFixtureDirectory
