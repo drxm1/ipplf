@@ -112,7 +112,7 @@ namespace chdr::solver::test::reflection {
     }
 
     TEST(OpenReflection, ExactTwoWaveRows) {
-        for (const auto& row : {cases[0], cases[1], cases[6], cases[7], cases[8], cases[11]})
+        for (const auto& row : cases)
             for (auto reading :
                  {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
                 checkPotentialCase(row, reading, true);
