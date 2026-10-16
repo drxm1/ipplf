@@ -17,7 +17,7 @@ using std::size_t;
 namespace ippl {
     /** @brief Construction-time boundary policy for the potential solvers.
      * periodic and absorbing select one kind on all faces. configured requires
-     * an explicit FDTDBoundary constructor argument;
+     * an explicit FDTDBoundary constructor argument.
      */
     enum fdtd_bc {
         periodic,
@@ -54,8 +54,11 @@ namespace ippl {
         /** @brief Construct with an explicit, immutable face description.
          * @details Available only for configured. All ranks must supply the same
          * description. Validate it against the source layout and source/E/B ghost
-         * widths before potential allocation or communication. Nonperiodic axes
-         * are not implicitly Mur: callers can select that mapping with FDTDBoundary::fromLayout().
+         * widths before potential allocation or communication. The constructor
+         * does not derive face kinds. The description must mark both faces of each
+         * periodic layout axis periodic and both faces of each nonperiodic axis Mur;
+         * otherwise construction throws. Only the Mur speeds are a free choice.
+         * FDTDBoundary::fromLayout() builds such a description with one Mur speed.
          * @param source Source field supplying the layout and mesh.
          * @param E Electric field whose storage is validated.
          * @param B Magnetic field whose storage is validated.
