@@ -1,5 +1,5 @@
-/** @file VacuumOutput.h
- * @brief Synchronous owned-cell VTI/PVTI output for the vacuum demonstration.
+/** @file FieldOutput.h
+ * @brief Synchronous owned-cell VTI/PVTI field and material output for ChDR demonstrations.
  * @details Format sources (consulted 2026-10-02): VTK XML File Formats,
  * https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html ;
  * VTK Field Data as Time Meta-Data,
@@ -12,13 +12,15 @@
  * Caller-supplied timestamps are serialized unchanged; this writer derives no
  * physical array times from potential time or dt. No GPU validation is claimed.
  */
-#ifndef CHDR_VACUUM_OUTPUT_H
-#define CHDR_VACUUM_OUTPUT_H
+#ifndef CHDR_FIELD_OUTPUT_H
+#define CHDR_FIELD_OUTPUT_H
 
 #include <Kokkos_Core.hpp>
 
 #include <array>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -26,13 +28,14 @@
 #include <limits>
 #include <locale>
 #include <mpi.h>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-namespace chdr::vacuum {
+namespace chdr::output {
 
     /** @brief Zero-based global cell counts and global lower-point coordinates. */
     struct OutputGeometry {
@@ -91,7 +94,8 @@ namespace chdr::vacuum {
 
         /** @brief Explicit array times; normalization code 1 means dimensionless c=1, no SI scales.
          */
-        inline void metadata(std::ostream& out, const FrameRecord& frame) {
+        inline void metadata(std::ostream& out, const FrameRecord& frame,
+                             const std::optional<std::array<double, 18>>& offsets = std::nullopt) {
             out << "<FieldData>\n";
             scalar(out, "TimeValue", "Float64", frame.potentialTime_m);
             scalar(out, "potential_time", "Float64", frame.potentialTime_m);
@@ -100,6 +104,11 @@ namespace chdr::vacuum {
             scalar(out, "dt", "Float64", frame.dt_m);
             scalar(out, "step", "Int64", frame.step_m);
             scalar(out, "normalization", "Int32", 1);
+            if (offsets)
+                out << "<DataArray type=\"Float64\" Name=\"component_offsets\" "
+                       "NumberOfComponents=\"3\" "
+                       "NumberOfTuples=\"6\" format=\"ascii\">"
+                    << arrayText(*offsets) << "</DataArray>\n";
             out << "</FieldData>\n";
         }
 
@@ -182,7 +191,7 @@ namespace chdr::vacuum {
                 std::ofstream out;
                 out.exceptions(std::ios::failbit | std::ios::badbit);
                 configureStream(out);
-                out.open(temporary, std::ios::out | std::ios::trunc);
+                out.open(temporary, std::ios::out | std::ios::trunc | std::ios::binary);
                 write(out);
                 out.flush();
                 out.close();
@@ -192,32 +201,72 @@ namespace chdr::vacuum {
             }
         }
 
+        /** @brief Append one Float64 vector block with its UInt64 byte count (VTK XML format).
+         * Logical x-fastest traversal excludes halos and preserves the ASCII tuple order.
+         */
+        template <class View>
+        void binaryVectors(std::ostream& out, const View& view, const Extent& e, int ghost) {
+            std::vector<double> values;
+            values.reserve(3ULL * (e[1] - e[0]) * (e[3] - e[2]) * (e[5] - e[4]));
+            for (int k = 0; k < e[5] - e[4]; ++k)
+                for (int j = 0; j < e[3] - e[2]; ++j)
+                    for (int i = 0; i < e[1] - e[0]; ++i)
+                        for (int c = 0; c < 3; ++c) {
+                            const double value = view(i + ghost, j + ghost, k + ghost)[c];
+                            if (!std::isfinite(value))
+                                throw std::runtime_error("Nonfinite output field");
+                            values.push_back(value);
+                        }
+            const std::uint64_t bytes = values.size() * sizeof(double);
+            out.write(reinterpret_cast<const char*>(&bytes), sizeof(bytes));
+            out.write(reinterpret_cast<const char*>(values.data()), bytes);
+        }
+
         /** @brief Serialize one rank with global origin and its global-index point extent. */
         template <class EView, class BView>
         void piece(std::ostream& out, const OutputGeometry& geometry, const Extent& e,
                    const EView& electric, const BView& magnetic, int ghost,
-                   const FrameRecord& frame) {
+                   const FrameRecord& frame,
+                   const std::optional<std::array<double, 18>>& offsets = std::nullopt,
+                   bool binary                                          = false) {
             out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"ImageData\" version=\"1.0\" "
-                   "byte_order=\"LittleEndian\">\n"
+                   "byte_order=\"LittleEndian\" header_type=\"UInt64\">\n"
                 << "<ImageData WholeExtent=\"" << arrayText(e) << "\" Origin=\""
                 << arrayText(geometry.origin_m) << "\" Spacing=\"" << arrayText(geometry.spacing_m)
                 << "\">\n";
-            metadata(out, frame);
+            metadata(out, frame, offsets);
             out << "<Piece Extent=\"" << arrayText(e) << "\"><CellData Vectors=\"E_raw\">\n";
-            vectors(out, "E_raw", electric, e, ghost);
-            vectors(out, "B_raw", magnetic, e, ghost);
-            out << "</CellData><PointData/></Piece>\n</ImageData>\n</VTKFile>\n";
+            if (binary) {
+                const std::uint64_t stride =
+                    8 + 3ULL * (e[1] - e[0]) * (e[3] - e[2]) * (e[5] - e[4]) * sizeof(double);
+                for (int c = 0; c < 2; ++c)
+                    out << "<DataArray type=\"Float64\" Name=\"" << (c ? "B_raw" : "E_raw")
+                        << "\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << c * stride
+                        << "\"/>\n";
+            } else {
+                vectors(out, "E_raw", electric, e, ghost);
+                vectors(out, "B_raw", magnetic, e, ghost);
+            }
+            out << "</CellData><PointData/></Piece>\n</ImageData>\n";
+            if (binary) {
+                out << "<AppendedData encoding=\"raw\">_";
+                binaryVectors(out, electric, e, ghost);
+                binaryVectors(out, magnetic, e, ghost);
+                out << "</AppendedData>\n";
+            }
+            out << "</VTKFile>\n";
         }
 
         /** @brief Publish a parallel wrapper, including the serial one-piece case. */
         inline void wrapper(std::ostream& out, const OutputGeometry& geometry,
-                            const std::vector<Extent>& extents, const FrameRecord& frame) {
+                            const std::vector<Extent>& extents, const FrameRecord& frame,
+                            const std::optional<std::array<double, 18>>& offsets = std::nullopt) {
             out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"PImageData\" version=\"1.0\" "
                    "byte_order=\"LittleEndian\">\n"
                 << "<PImageData WholeExtent=\"" << arrayText(wholeExtent(geometry))
                 << "\" GhostLevel=\"0\" Origin=\"" << arrayText(geometry.origin_m)
                 << "\" Spacing=\"" << arrayText(geometry.spacing_m) << "\">\n";
-            metadata(out, frame);
+            metadata(out, frame, offsets);
             out << "<PPointData/><PCellData Vectors=\"E_raw\">\n"
                 << "<PDataArray type=\"Float64\" Name=\"E_raw\" NumberOfComponents=\"3\"/>\n"
                 << "<PDataArray type=\"Float64\" Name=\"B_raw\" "
@@ -252,18 +301,21 @@ namespace chdr::vacuum {
      * Only successful PVTI frames enter writeSeries(); temporary/orphan pieces
      * after a failed frame are never advertised. No filesystem cleanup is hidden.
      */
-    class VacuumOutput {
+    class FieldOutput {
     public:
         /** @brief Collectively prepare a fresh output directory; borrow the communicator. */
-        VacuumOutput(std::filesystem::path directory, OutputGeometry geometry,
-                     MPI_Comm communicator)
+        FieldOutput(std::filesystem::path directory, OutputGeometry geometry, MPI_Comm communicator,
+                    bool binary = false)
             : directory_m(std::move(directory))
             , geometry_m(geometry)
-            , communicator_m(communicator) {
+            , communicator_m(communicator)
+            , binary_m(binary) {
             MPI_Comm_rank(communicator_m, &rank_m);
             MPI_Comm_size(communicator_m, &size_m);
             collectively([&] {
                 output_detail::validateGeometry(geometry_m);
+                if (binary_m && std::endian::native != std::endian::little)
+                    throw std::runtime_error("Binary VTK output requires a little-endian host");
                 extents_m.resize(size_m);
                 if (rank_m == 0)
                     prepareDirectory();
@@ -297,6 +349,68 @@ namespace chdr::vacuum {
                                                   output_detail::series(out, frames_m);
                                               });
             });
+        }
+
+        /** @brief Write immutable cell permittivity once and record component locations.
+         * @details geometry supplies ownership and halo width; epsilon is its scalar view.
+         * Offsets are E_x,E_y,E_z,B_x,B_y,B_z in units of mesh spacing. Values are stored
+         * at their original staggered locations, without interpolation. All ranks call once,
+         * before the first frame. VTK XML cell arrays follow the file format cited above.
+         */
+        template <class Field, class View>
+        void writeMaterial(const Field& geometry, View epsilon, std::array<double, 18> offsets) {
+            const auto local = output_detail::fieldExtent(geometry);
+            collectively([&] {
+                if (materialWritten_m || !frames_m.empty())
+                    throw std::logic_error("Write the material once before the first frame");
+                output_detail::validateField(geometry, geometry_m, local);
+                offsets_m       = offsets;
+                const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), epsilon);
+                output_detail::atomicFile(
+                    directory_m / ("material-" + std::to_string(rank_m) + ".vti"),
+                    [&](std::ostream& out) {
+                        out << "<VTKFile type=\"ImageData\" version=\"1.0\" "
+                               "byte_order=\"LittleEndian\"><ImageData WholeExtent=\""
+                            << output_detail::arrayText(local) << "\" Origin=\""
+                            << output_detail::arrayText(geometry_m.origin_m) << "\" Spacing=\""
+                            << output_detail::arrayText(geometry_m.spacing_m)
+                            << "\"><Piece Extent=\"" << output_detail::arrayText(local)
+                            << "\"><CellData><DataArray type=\"Float64\" Name=\"epsilon_r\" "
+                               "format=\"ascii\">\n";
+                        const int g = geometry.getNghost();
+                        for (int k = 0; k < local[5] - local[4]; ++k)
+                            for (int j = 0; j < local[3] - local[2]; ++j)
+                                for (int i = 0; i < local[1] - local[0]; ++i) {
+                                    const double value = host(i + g, j + g, k + g);
+                                    if (!std::isfinite(value))
+                                        throw std::runtime_error("Nonfinite material output");
+                                    out << value << '\n';
+                                }
+                        out << "</DataArray></CellData><PointData/></Piece></ImageData></"
+                               "VTKFile>\n";
+                    });
+            });
+            MPI_Allgather(local.data(), 6, MPI_INT, extents_m.data(), 6, MPI_INT, communicator_m);
+            collectively([&] {
+                if (rank_m == 0)
+                    output_detail::atomicFile(
+                        directory_m / "material.pvti", [&](std::ostream& out) {
+                            out << "<VTKFile type=\"PImageData\" version=\"1.0\" "
+                                   "byte_order=\"LittleEndian\"><PImageData WholeExtent=\""
+                                << output_detail::arrayText(output_detail::wholeExtent(geometry_m))
+                                << "\" GhostLevel=\"0\" Origin=\""
+                                << output_detail::arrayText(geometry_m.origin_m) << "\" Spacing=\""
+                                << output_detail::arrayText(geometry_m.spacing_m)
+                                << "\"><PPointData/><PCellData><PDataArray type=\"Float64\" "
+                                   "Name=\"epsilon_r\"/></PCellData>\n";
+                            for (int rank = 0; rank < size_m; ++rank)
+                                out << "<Piece Extent=\""
+                                    << output_detail::arrayText(extents_m[rank])
+                                    << "\" Source=\"material-" << rank << ".vti\"/>\n";
+                            out << "</PImageData></VTKFile>\n";
+                        });
+            });
+            materialWritten_m = true;
         }
 
     private:
@@ -351,17 +465,18 @@ namespace chdr::vacuum {
             output_detail::atomicFile(directory_m / output_detail::frameName(frame.step_m, rank_m),
                                       [&](std::ostream& out) {
                                           output_detail::piece(out, geometry_m, local, e, b,
-                                                               electric.getNghost(), frame);
+                                                               electric.getNghost(), frame,
+                                                               offsets_m, binary_m);
                                       });
             return local;
         }
 
         /** @brief Rank-zero wrapper publication follows collective piece success. */
         void publishWrapper(const FrameRecord& frame) const {
-            output_detail::atomicFile(directory_m / output_detail::frameName(frame.step_m),
-                                      [&](std::ostream& out) {
-                                          output_detail::wrapper(out, geometry_m, extents_m, frame);
-                                      });
+            output_detail::atomicFile(
+                directory_m / output_detail::frameName(frame.step_m), [&](std::ostream& out) {
+                    output_detail::wrapper(out, geometry_m, extents_m, frame, offsets_m);
+                });
         }
 
         std::filesystem::path directory_m;
@@ -371,6 +486,9 @@ namespace chdr::vacuum {
         int size_m = 1;
         std::vector<output_detail::Extent> extents_m;
         std::vector<FrameRecord> frames_m;
+        std::optional<std::array<double, 18>> offsets_m;
+        bool materialWritten_m = false;
+        bool binary_m          = false;
     };
-}  // namespace chdr::vacuum
+}  // namespace chdr::output
 #endif

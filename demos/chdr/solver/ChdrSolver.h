@@ -180,6 +180,8 @@ namespace chdr::solver {
          * Base construction receives that description; workspace allocation follows.
          * HomogeneousUpdate copies the uniform permittivity, so it does not retain
          * the owner or a reference to its field. Source and E/B storage remain borrowed.
+         * O1VSUpdate retains reference-counted coefficient views and uses the vacuum
+         * timestep bound documented in O1VSUpdate::maxStableTimeStep.
          * @param murSpeed Speed assumed by the Mur formulas. The default passes exactly
          * one to agree with the reused potential-update equations. For Homogeneous,
          * physical(v) passes v times the refractive index to compensate for the shorter
@@ -505,7 +507,7 @@ namespace chdr::solver {
             AJFourFieldsType& source, const material::MaterialOwner& owner,
             const FormulationParameters& parameters,
             const SolverDiscretizationSelection& selection) {
-            validateMaterialUpdate(parameters, owner.statistics(), selection);
+            validateMaterialUpdate(parameters, owner.statistics(), selection, owner.layout());
             if (&source.get_mesh() != &owner.mesh() || &source.getLayout() != &owner.layout())
                 throw IpplException("ChdrSolver", "Material must share the source mesh and layout");
             return source;

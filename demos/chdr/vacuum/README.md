@@ -192,7 +192,15 @@ set `CHDR_VACUUM_TEST_OUTPUT_DIR` to relocate them. The wrapper scripts use
 Start with [the driver](vacuum-wave.cpp) and [shared setup](VacuumSetup.cpp).
 [VacuumDiagnostics.h](VacuumDiagnostics.h) defines measurement and phase state;
 [VacuumChecks.h](VacuumChecks.h) applies the fixed policy.
-[VacuumOutput.h](VacuumOutput.h) handles synchronous collective file output. The
+[FieldOutput.h](../output/FieldOutput.h) handles synchronous collective file output. The
 [field container](../../fel/FELFieldContainer.hpp) owns mesh/layout and E/B/J
 and must outlive the solver. Tests and source comments document the independent
 references and numerical assumptions.
+
+## Writer extensions
+
+`FieldOutput` retains ASCII output by default; its optional `binary` constructor
+argument selects appended Float64 vectors with UInt64 byte counts. When the caller
+supplies component offsets, `component_offsets` records E then B locations in cell
+units; absent metadata makes no claim about staggering. `writeMaterial` also writes
+the immutable cell array `epsilon_r` once as `material.pvti`.

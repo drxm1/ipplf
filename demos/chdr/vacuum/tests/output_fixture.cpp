@@ -6,7 +6,7 @@
 #include <Kokkos_MathematicalConstants.hpp>
 #include <algorithm>
 
-#include "VacuumOutput.h"
+#include "../../output/FieldOutput.h"
 
 using Vector = Kokkos::Array<double, 3>;
 using View   = Kokkos::View<Vector***, Kokkos::LayoutLeft>;
@@ -68,7 +68,7 @@ Vector fixtureValue(int i, int j, int k, double time, bool electric) {
 }
 
 /** @brief Explicit synthetic array times deliberately do not equal a writer-derived offset. */
-chdr::vacuum::FrameRecord fixtureFrame(int step) {
+chdr::output::FrameRecord fixtureFrame(int step) {
     const double time     = step * 0.125;
     const double infinity = std::numeric_limits<double>::infinity();
     return {step, time, std::nextafter(time - 0.0625, -infinity),
@@ -91,7 +91,7 @@ void fillFixture(FixtureField& field, double time, bool electric) {
 }
 
 /** @brief Three unequal actual times and steps, always writing the same writer path. */
-void writeFixtureFrame(chdr::vacuum::VacuumOutput& writer, FixtureField& e, FixtureField& b,
+void writeFixtureFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b,
                        int step) {
     fillFixture(e, step * 0.125, true);
     fillFixture(b, step * 0.125, false);
@@ -100,7 +100,7 @@ void writeFixtureFrame(chdr::vacuum::VacuumOutput& writer, FixtureField& e, Fixt
 }
 
 /** @brief Three unequal actual times and steps, using the same writer path. */
-void successfulFrames(chdr::vacuum::VacuumOutput& writer, FixtureField& e, FixtureField& b) {
+void successfulFrames(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b) {
     for (const int step : {0, 1, 3})
         writeFixtureFrame(writer, e, b, step);
 }
@@ -124,7 +124,7 @@ void injectFailure(const std::string& mode, const std::filesystem::path& directo
 }
 
 /** @brief Establish one good frame, then require coordinated publication failure. */
-int rejectedFrame(chdr::vacuum::VacuumOutput& writer, FixtureField& e, FixtureField& b) {
+int rejectedFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b) {
     try {
         writer.writeFrame(e, b, fixtureFrame(1));
         writer.writeSeries();
@@ -135,7 +135,7 @@ int rejectedFrame(chdr::vacuum::VacuumOutput& writer, FixtureField& e, FixtureFi
 }
 
 /** @brief Establish one good frame, then require every rank to receive the injected failure. */
-void failureFrame(chdr::vacuum::VacuumOutput& writer, FixtureField& e, FixtureField& b,
+void failureFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b,
                   const std::filesystem::path& directory, const std::string& mode, int rank,
                   int ranks) {
     writeFixtureFrame(writer, e, b, 0);
@@ -161,8 +161,8 @@ void runFixture(int argc, char** argv) {
     useCommaLocale();
     if (rank == 0)
         std::cout << "PASS custom comma-decimal global locale\n";
-    const chdr::vacuum::OutputGeometry geometry{{4, 3, 6}, {-2, 3, 5}, {0.5, 1.25, 2}};
-    chdr::vacuum::VacuumOutput writer(argv[1], geometry, MPI_COMM_WORLD);
+    const chdr::output::OutputGeometry geometry{{4, 3, 6}, {-2, 3, 5}, {0.5, 1.25, 2}};
+    chdr::output::FieldOutput writer(argv[1], geometry, MPI_COMM_WORLD);
     FixtureField e("fixture_E", rank, ranks), b("fixture_B", rank, ranks);
     if (argc == 2)
         successfulFrames(writer, e, b);

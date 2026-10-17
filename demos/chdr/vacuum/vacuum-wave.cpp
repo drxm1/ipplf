@@ -8,10 +8,10 @@
 #include <stdexcept>
 #include <string>
 
+#include "../output/FieldOutput.h"
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
 #include "VacuumFailure.h"
-#include "VacuumOutput.h"
 #include "VacuumSetup.h"
 
 namespace {
@@ -83,8 +83,8 @@ namespace {
     }
 
     /// @brief Copy the actual field geometry into the writer's unit-neutral metadata.
-    chdr::vacuum::OutputGeometry outputGeometry(Fields& fields) {
-        chdr::vacuum::OutputGeometry geometry;
+    chdr::output::OutputGeometry outputGeometry(Fields& fields) {
+        chdr::output::OutputGeometry geometry;
         for (unsigned d = 0; d < Dim; ++d) {
             geometry.cells_m[d]   = fields.getFL().getDomain()[d].length();
             geometry.origin_m[d]  = fields.getMesh().getOrigin()[d];
@@ -94,11 +94,11 @@ namespace {
     }
 
     /// @brief Create optional collective output after all simulation storage exists.
-    std::unique_ptr<chdr::vacuum::VacuumOutput> makeOutput(Fields& fields, const Options& options) {
+    std::unique_ptr<chdr::output::FieldOutput> makeOutput(Fields& fields, const Options& options) {
         if (options.output_m.empty())
             return nullptr;
-        return std::make_unique<chdr::vacuum::VacuumOutput>(
-            options.output_m, outputGeometry(fields), fields.getFL().comm.getCommunicator());
+        return std::make_unique<chdr::output::FieldOutput>(options.output_m, outputGeometry(fields),
+                                                           fields.getFL().comm.getCommunicator());
     }
 
     /// @brief Bound a requested partial run by the one-period benchmark duration.
@@ -137,9 +137,9 @@ namespace {
     }
 
     /// @brief Publish measured array times and update the series after a complete frame.
-    void writeCheckpoint(chdr::vacuum::VacuumOutput& output, Fields& fields,
+    void writeCheckpoint(chdr::output::FieldOutput& output, Fields& fields,
                          const chdr::vacuum::Diagnostics& d) {
-        const chdr::vacuum::FrameRecord frame{d.step_m, d.timeA_m, d.timeE_m, d.timeB_m, d.dt_m};
+        const chdr::output::FrameRecord frame{d.step_m, d.timeA_m, d.timeE_m, d.timeB_m, d.dt_m};
         output.writeFrame(fields.getE(), fields.getB(), frame);
         output.writeSeries();
     }

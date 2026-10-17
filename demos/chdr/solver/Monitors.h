@@ -100,12 +100,12 @@ namespace chdr::solver {
          * @param solver Shell whose next solve is to be monitored.
          * @pre The caller has written the current source and initialized potential halos.
          * @throws std::logic_error If another beforeSolve is still awaiting afterSolve,
-         * or if the solver has non-unit material permittivity.
+         * or if the solver has non-unit material permittivity or gauge parameter.
          * @details These gauge/Gauss identities assume vacuum. The homogeneous medium has
          * \f$\nabla\cdot\mathbf A+\varepsilon\partial_t\phi=0\f$
          * and \f$\nabla\cdot(\varepsilon\mathbf E)=\rho\f$
          * [chew2014generalizedgauge, section 2, Eqs. (4), (11)]. A material solver at
-         * unit permittivity is accepted because these reduce to the vacuum forms.
+         * unit permittivity and unit alpha is accepted because these reduce to the vacuum forms.
          * Refusal happens before capturing inputs or marking this monitor prepared;
          * it rejects this diagnostic, not the solver's ability to advance a medium.
          * Continuity is evaluated here, using this and the preceding consumed
@@ -113,8 +113,10 @@ namespace chdr::solver {
          */
         template <class SolverType>
         void beforeSolve(SolverType& solver) {
-            if (solver.hasMaterial() && solver.homogeneousPermittivity() != 1.0)
-                throw std::logic_error("Monitors require vacuum or unit material permittivity");
+            if (solver.hasMaterial()
+                && (solver.homogeneousPermittivity() != 1.0
+                    || solver.formulationParameters().alpha_m != 1.0))
+                throw std::logic_error("Monitors require unit permittivity and unit gauge");
             if (prepared_m)
                 throw std::logic_error("Monitors::beforeSolve called twice without afterSolve");
             captureInputs(solver);

@@ -50,7 +50,7 @@ def execute(command, directory, environment, label):
 def source_hashes():
     """Identify the local fixture, reader, orchestration and writer source revision."""
     files = (HERE / "output_fixture.cpp", HERE / "read_output_fixture.py",
-             HERE / "run_output_fixture.py", HERE.parent / "VacuumOutput.h")
+             HERE / "run_output_fixture.py", HERE.parent.parent / "output" / "FieldOutput.h")
     return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
 
 
