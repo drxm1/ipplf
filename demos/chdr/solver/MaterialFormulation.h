@@ -14,12 +14,14 @@
 #include "LevelContract.h"
 #include "MaterialOwner.h"
 #include "MaterialStepContext.h"
+#include "O1VSUpdate.h"
 #include "Operators.h"
 
 namespace chdr::solver {
     /// Available material equations; each formulation owns its validity rule.
     enum class MaterialFormulation {
-        Homogeneous
+        Homogeneous,
+        O1VS
     };
 
     /// Stable host label written alongside formulation parameters in run records.
@@ -27,6 +29,8 @@ namespace chdr::solver {
         switch (formulation) {
             case MaterialFormulation::Homogeneous:
                 return "Homogeneous";
+            case MaterialFormulation::O1VS:
+                return "O1VS";
         }
         return "Unknown";
     }
@@ -34,7 +38,8 @@ namespace chdr::solver {
     /** @brief Select the material equations and their generalized-gauge coefficient.
      * @details alpha_m is the dimensionless gauge parameter of
      * [chew2014generalizedgauge, Eqs. (15) and (18), p. 3]. The implemented
-     * homogeneous Lorenz update accepts unity only; it is not a time-step factor.
+     * homogeneous Lorenz update accepts unity only; O1-VS accepts finite alpha
+     * at least one with representable chi. It is not a time-step factor.
      */
     struct FormulationParameters {
         MaterialFormulation formulation_m = MaterialFormulation::Homogeneous;
@@ -78,6 +83,32 @@ namespace chdr::solver {
                 "Homogeneous requires Standard, finite constant permittivity >= 1 and alpha = 1");
     }
 
+    /** @brief Validate layout-dependent equations without communicating.
+     * @details O1-VS supports periodic staggered R2 with Standard differences,
+     * finite epsilon and alpha at least one, and representable \f$\chi=\alpha\varepsilon^2\f$
+     * [chew2014generalizedgauge, Eq. (18)]. Cached extrema make refusals
+     * identical on all ranks. The three-argument entry remains homogeneous-only.
+     */
+    inline void validateMaterialUpdate(const FormulationParameters& parameters,
+                                       const material::MapStatistics& statistics,
+                                       const SolverDiscretizationSelection& selection,
+                                       const material::Layout& layout) {
+        if (parameters.formulation_m != MaterialFormulation::O1VS) {
+            validateMaterialUpdate(parameters, statistics, selection);
+            return;
+        }
+        if (selection.stencil_m != Stencil::Standard
+            || selection.spatialDiscretization_m != SpatialDiscretization::Staggered
+            || selection.ebReconstructionConvention_m != EBReconstructionConvention::R2
+            || !statistics.allFinite_m || statistics.minimum_m < 1
+            || !std::isfinite(parameters.alpha_m) || parameters.alpha_m < 1
+            || !std::isfinite(parameters.alpha_m * statistics.maximum_m * statistics.maximum_m)
+            || !layout.isPeriodic(0) || !layout.isPeriodic(1) || !layout.isPeriodic(2))
+            throw IpplException("validateMaterialUpdate",
+                                "O1VS requires periodic Standard staggered R2, finite epsilon >= "
+                                "1, alpha >= 1 and chi");
+    }
+
     /** @brief Validate and allocate formulation workspace on the prototype's mesh/layout.
      * @details The returned object owns its scratch storage. The prototype supplies
      * the allocation geometry; it is not a destination for this factory. Its mesh
@@ -88,7 +119,9 @@ namespace chdr::solver {
     inline std::unique_ptr<MaterialUpdate> makeMaterialUpdate(
         const FormulationParameters& parameters, const material::MaterialOwner& owner,
         const SolverDiscretizationSelection& selection, AJFourFieldsType& prototype) {
-        validateMaterialUpdate(parameters, owner.statistics(), selection);
+        validateMaterialUpdate(parameters, owner.statistics(), selection, owner.layout());
+        if (parameters.formulation_m == MaterialFormulation::O1VS)
+            return std::make_unique<O1VSUpdate>(owner, parameters.alpha_m, prototype);
         return std::make_unique<HomogeneousUpdate>(owner.homogeneousValue(), prototype);
     }
 }  // namespace chdr::solver
