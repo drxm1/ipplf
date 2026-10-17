@@ -1,11 +1,11 @@
 /** @file interface-demo.cpp
  * @brief Periodic dielectric packet demonstrations and a plane-wave reflection measurement.
  */
-#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 
+#include "../output/FieldOutput.h"
 #include "InterfaceRun.h"
 #include "PacketStart.h"
 
@@ -49,10 +49,23 @@ namespace chdr::interface {
             packet.directionY_m = std::sqrt(2.13 / 3.13);
         }
         run.load(packet);
+        std::unique_ptr<chdr::output::FieldOutput> output;
         std::ofstream energy;
+        solver::EMFieldsType raw;
         if (!directory.empty()) {
+            output = std::make_unique<chdr::output::FieldOutput>(
+                directory, chdr::output::OutputGeometry{{n, n, 4}, {0, 0, 0}, {1, 1, 1}},
+                MPI_COMM_WORLD, true);
+            raw.initialize(run.solver().A_n.get_mesh(), run.solver().A_n.getLayout());
+            std::array<double, 18> offsets{};
+            for (unsigned c = 0; c < 6; ++c) {
+                const auto offset = run.solver().levelContract().positionOffset(
+                    c < 3 ? solver::Quantity::Electric : solver::Quantity::RawMagnetic, c % 3);
+                for (unsigned d = 0; d < 3; ++d)
+                    offsets[3 * c + d] = offset[d];
+            }
+            output->writeMaterial(run.solver().A_n, run.material().epsilon(), offsets);
             if (ippl::Comm->rank() == 0) {
-                std::filesystem::create_directories(directory);
                 energy.open(directory + "/energy.csv");
                 energy << std::setprecision(17) << "# case=" << name << " cells=" << n << ',' << n
                        << ",4 steps=" << steps << " h=" << box.spacing_m[0] << ','
@@ -78,7 +91,15 @@ namespace chdr::interface {
                            << ',' << record.scalar_m.total() << ',' << record.vector_m.absolute_m
                            << '\n';
             }
+            if (output && (k % 10 == 0 || k == steps)) {
+                state.computeRawMagneticField(raw);
+                output->writeFrame(state.electricField(), raw,
+                                   {k, k * state.getDt(), (k - 0.5) * state.getDt(),
+                                    k * state.getDt(), state.getDt()});
+            }
         });
+        if (output)
+            output->writeSeries();
         return 0;
     }
 }  // namespace chdr::interface

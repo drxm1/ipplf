@@ -2,7 +2,7 @@
 
 Expected physical coordinates/data come from the declared fixture, not the writer.
 See ../ViewingGuide.org, output-check section; VTK XML and ParaView
-temporal-file-series official specifications are cited in ../VacuumOutput.h.
+temporal-file-series official specifications are cited in ../../output/FieldOutput.h.
 This verifies reader interoperability, not a GUI viewing walkthrough.
 """
 import json
