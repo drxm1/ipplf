@@ -8,6 +8,7 @@
 #include "../output/FieldOutput.h"
 #include "InterfaceRun.h"
 #include "PacketStart.h"
+#include "PlanePulse.h"
 
 namespace chdr::interface {
     /** @brief Run one named, reproducible input; --smoke selects a small four-step box. */
@@ -26,6 +27,25 @@ namespace chdr::interface {
                 directory = argv[++i];
             else
                 throw std::invalid_argument("Use CASE [--smoke] [--output NEW_DIRECTORY]");
+        }
+        if (name == "plane") {
+            if (smoke || !directory.empty())
+                throw std::invalid_argument("plane accepts no --smoke or --output option");
+            const NormalPlane p;
+            const auto result = measurePlane(p, false);
+            if (ippl::Comm->rank() == 0) {
+                const double n = std::sqrt(p.epsilon_m), r = (1 - n) / (1 + n);
+                const double kt = 2 * std::asin(n * std::sin(p.omega0_m * p.dt_m / 2) / p.dt_m);
+                // Sine matching at the two adjacent cell centres gives the exact TE lattice
+                // coefficients [yee1966MaxwellIsotropicMedia, Eqs. (5)-(6); deduction].
+                std::cout << std::setprecision(17) << "r=" << result.r_m[0]
+                          << " t=" << result.t_m[0] << " Fresnel=" << r << "," << 1 + r
+                          << " lattice="
+                          << std::sin((p.kx0_m - kt) / 2) / std::sin((p.kx0_m + kt) / 2) << ","
+                          << std::sin(p.kx0_m) / std::sin((p.kx0_m + kt) / 2)
+                          << " energy drift=" << result.drift_m << '\n';
+            }
+            return 0;
         }
         if (name != "half-space" && name != "slab" && name != "brewster-te"
             && name != "brewster-tm")
