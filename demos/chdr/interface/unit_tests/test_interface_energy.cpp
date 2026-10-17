@@ -7,11 +7,13 @@
  * [kreiss2002SecondOrderWave, section 2, before Eq. (2.10)], specialized to the
  * potential equations [chew2014generalizedgauge, Eqs. (16)--(18)].
  */
+#include <bit>
 #include <gtest/gtest.h>
 
 #include "FieldEnergy.h"
 #include "PlanarSlab.h"
 #include "RandomFields.h"
+#include "SerialReference.h"
 
 namespace {
     using namespace chdr;
@@ -19,6 +21,7 @@ namespace {
     using Solver = ChdrSolver<StandardSolverPeriodic>;
     struct State {
         std::vector<EnergyRecord> energy_m;
+        std::vector<double> current_m, previous_m;
     };
     /// Identical global-index samples preserve bits across decompositions without a mean reduction.
     State evolve(AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic) {
@@ -38,6 +41,8 @@ namespace {
             solver.solve();
             result.energy_m.push_back(potentialEnergy(solver, owner));
         }
+        result.current_m  = solver::test::gatherOwned(solver.A_n);
+        result.previous_m = solver::test::gatherOwned(solver.A_nm1);
         return result;
     }
     /** @brief Bound each potential invariant's relative drift by 1e-12 over the run.
@@ -61,9 +66,50 @@ namespace {
             EXPECT_LE(drift, 1e-12);
         }
     }
-    TEST(InterfaceEnergy, Serial) {
-        auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8});
+    /// Check both retained histories and every energy record against communicator-self evolution.
+    void compare(const State& distributed, const State& serial) {
+        for (auto member : {&State::current_m, &State::previous_m}) {
+            const auto& a = distributed.*member;
+            const auto& b = serial.*member;
+            ASSERT_EQ(a.size(), b.size());
+            std::size_t differences = 0;
+            for (std::size_t i = 0; i < a.size(); ++i)
+                differences +=
+                    std::bit_cast<std::uint64_t>(a[i]) != std::bit_cast<std::uint64_t>(b[i]);
+            EXPECT_EQ(differences, 0);
+        }
+        for (auto member : {&EnergyRecord::vector_m, &EnergyRecord::scalar_m}) {
+            const double scale = (serial.energy_m.front().*member).total();
+            double error       = 0;
+            for (std::size_t k = 0; k < serial.energy_m.size(); ++k) {
+                const auto a = distributed.energy_m[k].*member, b = serial.energy_m[k].*member;
+                error = std::max({error, std::abs(a.total() - b.total()),
+                                  std::abs(a.vacuum_m - b.vacuum_m),
+                                  std::abs(a.dielectric_m - b.dielectric_m),
+                                  std::abs(a.absolute_m - b.absolute_m)});
+            }
+            std::cout << "rank_energy_relative=" << error / scale << '\n';
+            EXPECT_LE(error / scale, 1e-14);
+        }
+    }
+    /// x splits place the seam at x=4; y splits cross the same half-space tangentially.
+    void checkSplit(unsigned axis) {
+        auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8}, axis);
         initializeFieldStorage(fields);
-        checkEnergy(evolve(fields.getJ(), fields.getE(), fields.getB()));
+        const auto distributed = evolve(fields.getJ(), fields.getE(), fields.getB());
+        checkEnergy(distributed);
+        if (ippl::Comm->rank() == 0) {
+            solver::test::SerialFields fieldsSerial(fields.getJ());
+            const auto serial =
+                evolve(fieldsSerial.source_m, fieldsSerial.electric_m, fieldsSerial.magnetic_m);
+            checkEnergy(serial);
+            compare(distributed, serial);
+        }
+    }
+    TEST(InterfaceEnergy, NormalSplit) {
+        checkSplit(0);
+    }
+    TEST(InterfaceEnergy, TangentialSplit) {
+        checkSplit(1);
     }
 }  // namespace

@@ -13,7 +13,7 @@ target_compile_options(test-chdr-interface-unit PRIVATE -UNDEBUG)
 foreach(suite O1VS InterfaceEnergy)
   set(serialFilter "${suite}.*")
   if(suite STREQUAL "InterfaceEnergy")
-    set(serialFilter "InterfaceEnergy.Serial")
+    set(serialFilter "InterfaceEnergy.NormalSplit")
   endif()
   add_test(NAME chdr.interface.unit.${suite}.serial COMMAND test-chdr-interface-unit
                                                             --gtest_filter=${serialFilter})
@@ -21,4 +21,21 @@ foreach(suite O1VS InterfaceEnergy)
     chdr.interface.unit.${suite}.serial
     PROPERTIES TIMEOUT 60 LABELS "chdr;interface;unit" ENVIRONMENT
                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+  if(MPIEXEC_EXECUTABLE)
+    add_test(
+      NAME chdr.interface.unit.${suite}.mpi2
+      COMMAND
+        "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
+        $<TARGET_FILE:test-chdr-interface-unit> ${MPIEXEC_POSTFLAGS} --gtest_filter=${suite}.*)
+    set_tests_properties(
+      chdr.interface.unit.${suite}.mpi2
+      PROPERTIES TIMEOUT
+                 60
+                 PROCESSORS
+                 2
+                 LABELS
+                 "chdr;interface;unit;mpi"
+                 ENVIRONMENT
+                 "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+  endif()
 endforeach()
