@@ -119,4 +119,7 @@ namespace chdr::interface {
         const auto p = normalIncidenceRun();
         checkPlane(p, 1, 5e-3, p.dielectricCells);
     }
+    TEST(PlaneInterface, Brewster) {
+        checkPlane(brewsterIncidenceRun(), 10, 1e-2);
+    }
 }  // namespace chdr::interface

@@ -4,9 +4,13 @@ add_ippl_test(test-plane-interface COMPILE_ONLY SOURCES ../../vacuum/tests/TestM
 target_link_libraries(test-plane-interface PRIVATE chdr-solver)
 add_test(NAME chdr.interface.normal COMMAND test-plane-interface
                                             --gtest_filter=PlaneInterface.Normal)
+add_test(NAME chdr.interface.long.brewster COMMAND test-plane-interface
+                                                   --gtest_filter=PlaneInterface.Brewster)
 set_tests_properties(
-  chdr.interface.normal PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800
-                                   LABELS "chdr;interface")
+  chdr.interface.normal chdr.interface.long.brewster
+  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800 LABELS
+             "chdr;interface")
+set_tests_properties(chdr.interface.long.brewster PROPERTIES LABELS "chdr;interface;long")
 add_test(
   NAME chdr.interface.unit.smoke
   COMMAND
