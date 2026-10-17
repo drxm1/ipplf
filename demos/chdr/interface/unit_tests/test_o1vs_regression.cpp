@@ -85,4 +85,73 @@ namespace {
         equivalent(1, false);
         equivalent(1, true);
     }
+    TEST(O1VS, UniformMedium) {
+        equivalent(2.13, false);
+    }
+
+    /// Exercise each refusal independently using cached metadata before any solver construction.
+    TEST(O1VS, Refusals) {
+        auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8});
+        auto open   = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8}, 0, {false, true, true});
+        material::MapStatistics stats;
+        stats.minimum_m = 1;
+        stats.maximum_m = 2.13;
+        const SolverDiscretizationSelection selected{Stencil::Standard, Staggered, R2};
+        for (double alpha : {0.5, std::numeric_limits<double>::quiet_NaN()})
+            EXPECT_THROW(validateMaterialUpdate({MaterialFormulation::O1VS, alpha}, stats, selected,
+                                                fields.getFL()),
+                         IpplException);
+        EXPECT_THROW(
+            validateMaterialUpdate({MaterialFormulation::O1VS, 1}, stats, selected, open.getFL()),
+            IpplException);
+        for (auto invalid : {SolverDiscretizationSelection{Stencil::NonStandard, Staggered, R2},
+                             SolverDiscretizationSelection{Stencil::Standard,
+                                                           SpatialDiscretization::Collocated, R2},
+                             SolverDiscretizationSelection{Stencil::Standard, Staggered,
+                                                           EBReconstructionConvention::R1}})
+            EXPECT_THROW(validateMaterialUpdate({MaterialFormulation::O1VS, 1}, stats, invalid,
+                                                fields.getFL()),
+                         IpplException);
+        for (double bad : {0.5, 1e155}) {
+            stats.minimum_m = stats.maximum_m = bad;
+            EXPECT_THROW(validateMaterialUpdate({MaterialFormulation::O1VS, 1}, stats, selected,
+                                                fields.getFL()),
+                         IpplException);
+        }
+        stats.allFinite_m = false;
+        EXPECT_THROW(
+            validateMaterialUpdate({MaterialFormulation::O1VS, 1}, stats, selected, fields.getFL()),
+            IpplException);
+        initializeFieldStorage(fields);
+        for (double epsilon : {1.0, 2.13}) {
+            material::MaterialOwner owner(
+                fields.getMesh(), fields.getFL(),
+                KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
+                    marked = false;
+                    return epsilon;
+                });
+            Solver solver(fields.getJ(), fields.getE(), fields.getB(), R2, Staggered, owner,
+                          {MaterialFormulation::O1VS, 2});
+            Monitors monitor(solver.A_n);
+            EXPECT_THROW(monitor.beforeSolve(solver), std::logic_error);
+        }
+    }
+    TEST(O1VS, FiniteHarmonicFace) {
+        auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 6, 10});
+        initializeFieldStorage(fields);
+        material::MaterialOwner owner(
+            fields.getMesh(), fields.getFL(),
+            KOKKOS_LAMBDA(material::CellIndex cell, material::Position, bool& marked) {
+                marked = cell[0] < 4;
+                return marked ? 9e153 : 1e154;
+            });
+        const auto face = owner.derive(material::HarmonicFace<0>{});
+        EXPECT_EQ(coreTest::globalMaximum(
+                      fields.getJ(), coreTest::localMaximum(
+                                         fields.getJ(),
+                                         KOKKOS_LAMBDA(int i, int j, int k) {
+                                             return Kokkos::isfinite(face(i, j, k)) ? 0.0 : 1.0;
+                                         })),
+                  0);
+    }
 }  // namespace

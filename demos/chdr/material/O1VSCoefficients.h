@@ -45,7 +45,11 @@ namespace chdr::material {
             CellIndex upper(i, j, k);
             ++upper[d];
             const double a = eps(i, j, k), b = eps(upper[0], upper[1], upper[2]);
-            return a == b ? a : 2 * a * b / (a + b);
+            if (a == b)
+                return a;
+            const double product = 2 * a * b;
+            // Reciprocal form avoids the overflowing product for admitted large inputs.
+            return Kokkos::isfinite(product) ? product / (a + b) : 2 / (1 / a + 1 / b);
         }
     };
 }  // namespace chdr::material
