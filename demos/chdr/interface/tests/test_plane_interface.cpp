@@ -122,4 +122,10 @@ namespace chdr::interface {
     TEST(PlaneInterface, Brewster) {
         checkPlane(brewsterIncidenceRun(), 10, 1e-2);
     }
+    // Registered disabled: reserve this complete configuration until final acceptance.
+    TEST(PlaneInterface, DISABLED_Reserved) {
+        const auto p = obliqueDielectricRun();
+        ASSERT_EQ(ippl::Comm->size(), 2);
+        checkPlane(p, 10, 1e-2, p.dielectricCells);
+    }
 }  // namespace chdr::interface

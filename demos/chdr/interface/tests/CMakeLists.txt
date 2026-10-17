@@ -25,14 +25,11 @@ if(MPIEXEC_EXECUTABLE)
                     $<TARGET_FILE:test-plane-interface> ${MPIEXEC_POSTFLAGS})
   add_test(NAME chdr.interface.normal.mpi2 COMMAND ${interface_mpi}
                                                    --gtest_filter=PlaneInterface.NormalSeam)
-  set_tests_properties(
-    chdr.interface.normal.mpi2
-    PROPERTIES PROCESSORS
-               2
-               TIMEOUT
-               60
-               LABELS
-               "chdr;interface;mpi"
-               ENVIRONMENT
-               "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+  add_test(NAME chdr.interface.reserved COMMAND ${interface_mpi} --gtest_also_run_disabled_tests
+                                                --gtest_filter=PlaneInterface.DISABLED_Reserved)
+  set_tests_properties(chdr.interface.normal.mpi2 chdr.interface.reserved
+                       PROPERTIES PROCESSORS 2 ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+  set_tests_properties(chdr.interface.normal.mpi2 PROPERTIES TIMEOUT 60 LABELS "chdr;interface;mpi")
+  set_tests_properties(chdr.interface.reserved PROPERTIES DISABLED TRUE TIMEOUT 1800 LABELS
+                                                          "chdr;interface;reserved;long")
 endif()
