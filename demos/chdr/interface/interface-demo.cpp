@@ -1,0 +1,96 @@
+/** @file interface-demo.cpp
+ * @brief Periodic dielectric packet demonstrations and a plane-wave reflection measurement.
+ */
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+
+#include "InterfaceRun.h"
+#include "PacketStart.h"
+
+namespace chdr::interface {
+    /** @brief Run one named, reproducible input; --smoke selects a small four-step box. */
+    int demonstration(int argc, char** argv) {
+        if (argc < 2)
+            throw std::invalid_argument(
+                "A case name is required: plane, half-space, slab, brewster-te, brewster-tm");
+        const std::string name = argv[1];
+        bool smoke             = false;
+        std::string directory;
+        for (int i = 2; i < argc; ++i) {
+            const std::string arg = argv[i];
+            if (arg == "--smoke")
+                smoke = true;
+            else if (arg == "--output" && i + 1 < argc)
+                directory = argv[++i];
+            else
+                throw std::invalid_argument("Use CASE [--smoke] [--output NEW_DIRECTORY]");
+        }
+        if (name != "half-space" && name != "slab" && name != "brewster-te"
+            && name != "brewster-tm")
+            throw std::invalid_argument("Cases: plane, half-space, slab, brewster-te, brewster-tm");
+        const bool brewster = name.starts_with("brewster");
+        const int n = smoke ? 32 : 512, steps = smoke ? 4 : brewster ? 1000 : 560;
+        const double scale = n / 512.0;
+        const material::PlanarSlab slab{0, name == "slab" ? 156 * scale : 0, 230 * scale};
+        const RunBox box{{n, n, 4}, {1, 1, 1}};
+        InterfaceRun run(box, material::TwoMaterialMap{slab, 2.13, 1.0});
+        PacketStart packet;
+        packet.slab_m            = slab;
+        packet.centreX_m         = 371 * scale;
+        packet.centreY_m         = n / (brewster ? 4.0 : 2.0);
+        packet.length_m          = n;
+        packet.width_m           = 29 * scale;
+        packet.transverseWidth_m = 45 * scale;
+        packet.tm_m              = name == "brewster-tm";
+        if (brewster) {
+            packet.directionX_m = -1 / std::sqrt(3.13);
+            packet.directionY_m = std::sqrt(2.13 / 3.13);
+        }
+        run.load(packet);
+        std::ofstream energy;
+        if (!directory.empty()) {
+            if (ippl::Comm->rank() == 0) {
+                std::filesystem::create_directories(directory);
+                energy.open(directory + "/energy.csv");
+                energy << std::setprecision(17) << "# case=" << name << " cells=" << n << ',' << n
+                       << ",4 steps=" << steps << " h=" << box.spacing_m[0] << ','
+                       << box.spacing_m[1] << ',' << box.spacing_m[2] << " S=" << box.courant_m
+                       << " epsilon=2.13 slab=" << slab.lower_m << ',' << slab.upper_m
+                       << " centre=" << packet.centreX_m << ',' << packet.centreY_m
+                       << " widths=" << packet.width_m << ',' << packet.transverseWidth_m
+                       << " k=" << packet.waveNumber_m << " direction=" << packet.directionX_m
+                       << ',' << packet.directionY_m << " TM=" << packet.tm_m << '\n';
+                energy << "step,time,vacuum,dielectric,total,scalar,absolute\n";
+            }
+            int failed = ippl::Comm->rank() == 0 && !energy;
+            MPI_Allreduce(MPI_IN_PLACE, &failed, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+            if (failed)
+                throw std::runtime_error("Cannot open the energy CSV");
+        }
+        run.advance(steps, [&](int k, auto& state, const auto& owner) {
+            if (k % 10 == 0 || k == steps) {
+                const auto record = solver::potentialEnergy(state, owner);
+                if (energy)
+                    energy << k << ',' << record.vectorTime_m << ',' << record.vector_m.vacuum_m
+                           << ',' << record.vector_m.dielectric_m << ',' << record.vector_m.total()
+                           << ',' << record.scalar_m.total() << ',' << record.vector_m.absolute_m
+                           << '\n';
+            }
+        });
+        return 0;
+    }
+}  // namespace chdr::interface
+int main(int argc, char** argv) {
+    ippl::initialize(argc, argv);
+    int result = 0;
+    try {
+        result = chdr::interface::demonstration(argc, argv);
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        result = 1;
+    }
+    ippl::finalize();
+    return result;
+}

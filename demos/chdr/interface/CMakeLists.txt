@@ -1,3 +1,6 @@
+add_executable(interface-demo interface-demo.cpp)
+target_link_libraries(interface-demo PRIVATE chdr-solver)
 if(BUILD_TESTING AND IPPL_ENABLE_UNIT_TESTS)
   add_subdirectory(unit_tests)
+  add_subdirectory(tests)
 endif()
