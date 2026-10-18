@@ -4,10 +4,13 @@
 #pragma once
 #include "BoxSetup.h"
 #include "FieldEnergy.h"
+#include "Manager/BaseManager.h"
 #include "PlanarSlab.h"
 
 namespace chdr::interface {
+
     using InterfaceSolver = solver::ChdrSolver<solver::StandardSolverPeriodic>;
+
     /** @brief Mesh and clock parameters in normalized units, with an optional two-rank seam.
      * The seam is a global x cell boundary. Zero selects the normal balanced partition.
      */
@@ -21,18 +24,22 @@ namespace chdr::interface {
                     cells_m[2] * spacing_m[2]};
         }
     };
+
     /** @brief Keep mesh, immutable material, source and solver addresses stable for a whole run.
      * @details All ranks supply identical inputs. Samplers are device-copyable and use
      * the positions and time levels supplied by loadHistory. Each callback sees the initial
      * state and every completed solve; it chooses its own diagnostic/output cadence.
      */
-    class InterfaceRun {
+    class InterfaceRun : public ippl::BaseManager {
     public:
         template <class Map>
         InterfaceRun(RunBox box, Map map)
             : fields_m(solver::makeBoxFieldContainer(box.cells_m, box.lengths())) {
+            // TODO: What does this do?
             int size = 1;
             MPI_Comm_size(fields_m.getFL().comm, &size);
+
+            // TODO: Some MPI checks it seems
             if (box.seam_m && (size != 2 || box.seam_m < 1 || box.seam_m >= box.cells_m[0]))
                 throw std::invalid_argument("A seam requires two ranks and an interior x boundary");
             if (box.seam_m) {
@@ -41,27 +48,47 @@ namespace chdr::interface {
                 right[0] = ippl::Index(box.seam_m, box.cells_m[0] - 1);
                 fields_m.getFL().updateLayout({left, right});
             }
+
+            // Initialize fields A, J, E, B by initializing a FELFieldContainer.
             solver::initializeFieldStorage(fields_m);
-            owner_m  = std::make_unique<material::MaterialOwner>(fields_m.getMesh(),
-                                                                 fields_m.getFL(), map);
+
+            // Create a Material with mesh and layout taken from the field container, and a Map
+            // providing geometry.
+            owner_m = std::make_unique<material::MaterialOwner>(fields_m.getMesh(),
+                                                                fields_m.getFL(), map);
+
+            // Create a ChDRSolver and choose its parameters:
+            //  - EBReconstructionConvention
+            //  - SpatialDiscretization
+            //  - MaterialFormulationParameters
             solver_m = std::make_unique<InterfaceSolver>(
                 fields_m.getJ(), fields_m.getE(), fields_m.getB(),
                 solver::EBReconstructionConvention::R2, solver::SpatialDiscretization::Staggered,
                 *owner_m, solver::FormulationParameters{solver::MaterialFormulation::O1VS, 1});
+
+            // Initialize the solver (TODO: Why do we need a separate initialize step that is
+            // separate from the solvers constructor?)
             solver_m->initialize();
+
+            // Explicitly choose a safety factor (TODO: Why is that not covered by solver
+            // initialization?)
             solver_m->setSafetyFactor(box.courant_m);
         }
+
         template <class Sampler>
         void load(Sampler sample) {
             solver::loadHistory(*solver_m, sample);
             solver_m->evaluateInitialFields();
         }
+
+        void advance() override { this->solver_m->solve(); }
+
         template <class Callback>
         void advance(int steps, Callback sample) {
             for (int k = 0; k <= steps; ++k) {
                 sample(k, *solver_m, *owner_m);
                 if (k < steps)
-                    solver_m->solve();
+                    this->advance();
             }
         }
         InterfaceSolver& solver() { return *solver_m; }
