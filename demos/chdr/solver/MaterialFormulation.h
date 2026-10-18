@@ -83,16 +83,17 @@ namespace chdr::solver {
                 "Homogeneous requires Standard, finite constant permittivity >= 1 and alpha = 1");
     }
 
-    /** @brief Validate layout-dependent equations without communicating.
-     * @details O1-VS supports periodic staggered R2 with Standard differences,
+    /** @brief Validate O1-VS or delegate to the homogeneous validity rule.
+     * @details O1-VS supports staggered R2 with Standard differences,
      * finite epsilon and alpha at least one, and representable \f$\chi=\alpha\varepsilon^2\f$
      * [chew2014generalizedgauge, Eq. (18)]. Cached extrema make refusals
      * identical on all ranks. The three-argument entry remains homogeneous-only.
+     * The solver checks boundary compatibility separately.
      */
     inline void validateMaterialUpdate(const FormulationParameters& parameters,
                                        const material::MapStatistics& statistics,
                                        const SolverDiscretizationSelection& selection,
-                                       const material::Layout& layout) {
+                                       [[maybe_unused]] const material::Layout& layout) {
         if (parameters.formulation_m != MaterialFormulation::O1VS) {
             validateMaterialUpdate(parameters, statistics, selection);
             return;
@@ -102,10 +103,9 @@ namespace chdr::solver {
             || selection.ebReconstructionConvention_m != EBReconstructionConvention::R2
             || !statistics.allFinite_m || statistics.minimum_m < 1
             || !std::isfinite(parameters.alpha_m) || parameters.alpha_m < 1
-            || !std::isfinite(parameters.alpha_m * statistics.maximum_m * statistics.maximum_m)
-            || !layout.isPeriodic(0) || !layout.isPeriodic(1) || !layout.isPeriodic(2))
+            || !std::isfinite(parameters.alpha_m * statistics.maximum_m * statistics.maximum_m))
             throw IpplException("validateMaterialUpdate",
-                                "O1VS requires periodic Standard staggered R2, finite epsilon >= "
+                                "O1VS requires Standard staggered R2, finite epsilon >= "
                                 "1, alpha >= 1 and chi");
     }
 

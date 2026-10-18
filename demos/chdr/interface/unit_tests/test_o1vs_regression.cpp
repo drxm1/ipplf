@@ -1,6 +1,7 @@
 /** @file test_o1vs_regression.cpp
  * @brief Vacuum bit patterns, uniform-medium source scaling and admissibility.
  */
+#include <array>
 #include <gtest/gtest.h>
 
 #include "Monitors.h"
@@ -41,8 +42,9 @@ namespace {
         return scale == 0 ? error : error / scale;
     }
     /// Fresh sources share their physical values; both methods receive the same physical dt.
-    void equivalent(double epsilon, bool signedZero) {
-        auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8});
+    void equivalent(double epsilon, bool signedZero,
+                    std::array<bool, 3> periodic = {true, true, true}) {
+        auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8}, 0, periodic);
         initializeFieldStorage(fields);
         material::MaterialOwner owner(
             fields.getMesh(), fields.getFL(),
@@ -85,6 +87,10 @@ namespace {
         equivalent(1, false);
         equivalent(1, true);
     }
+    TEST(O1VS, OpenVacuumBits) {
+        equivalent(1, false, {false, true, false});
+        equivalent(1, true, {false, true, false});
+    }
     TEST(O1VS, UniformMedium) {
         equivalent(2.13, false);
     }
@@ -92,7 +98,6 @@ namespace {
     /// Exercise each refusal independently using cached metadata before any solver construction.
     TEST(O1VS, Refusals) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8});
-        auto open   = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8}, 0, {false, true, true});
         material::MapStatistics stats;
         stats.minimum_m = 1;
         stats.maximum_m = 2.13;
@@ -101,9 +106,6 @@ namespace {
             EXPECT_THROW(validateMaterialUpdate({MaterialFormulation::O1VS, alpha}, stats, selected,
                                                 fields.getFL()),
                          IpplException);
-        EXPECT_THROW(
-            validateMaterialUpdate({MaterialFormulation::O1VS, 1}, stats, selected, open.getFL()),
-            IpplException);
         for (auto invalid : {SolverDiscretizationSelection{Stencil::NonStandard, Staggered, R2},
                              SolverDiscretizationSelection{Stencil::Standard,
                                                            SpatialDiscretization::Collocated, R2},
