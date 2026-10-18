@@ -55,7 +55,8 @@ namespace chdr::interface {
         const double scale = n / 512.0;
         const material::PlanarSlab slab{0, name == "slab" ? 156 * scale : 0, 230 * scale};
         const RunBox box{{n, n, 4}, {1, 1, 1}};
-        InterfaceRun run(box, material::TwoMaterialMap{slab, 2.13, 1.0});
+        const SolverSettings settings;
+        InterfaceRun run(box, material::TwoMaterialMap{slab, 2.13, 1.0}, settings);
         PacketStart packet;
         packet.slab_m            = slab;
         packet.centreX_m         = 371 * scale;
@@ -89,12 +90,13 @@ namespace chdr::interface {
                 energy.open(directory + "/energy.csv");
                 energy << std::setprecision(17) << "# case=" << name << " cells=" << n << ',' << n
                        << ",4 steps=" << steps << " h=" << box.spacing_m[0] << ','
-                       << box.spacing_m[1] << ',' << box.spacing_m[2] << " S=" << box.courant_m
-                       << " epsilon=2.13 slab=" << slab.lower_m << ',' << slab.upper_m
-                       << " centre=" << packet.centreX_m << ',' << packet.centreY_m
-                       << " widths=" << packet.width_m << ',' << packet.transverseWidth_m
-                       << " k=" << packet.waveNumber_m << " direction=" << packet.directionX_m
-                       << ',' << packet.directionY_m << " TM=" << packet.tm_m << '\n';
+                       << box.spacing_m[1] << ',' << box.spacing_m[2]
+                       << " S=" << settings.safetyFactor_m << " epsilon=2.13 slab=" << slab.lower_m
+                       << ',' << slab.upper_m << " centre=" << packet.centreX_m << ','
+                       << packet.centreY_m << " widths=" << packet.width_m << ','
+                       << packet.transverseWidth_m << " k=" << packet.waveNumber_m
+                       << " direction=" << packet.directionX_m << ',' << packet.directionY_m
+                       << " TM=" << packet.tm_m << '\n';
                 energy << "step,time,vacuum,dielectric,total,scalar,absolute\n";
             }
             int failed = ippl::Comm->rank() == 0 && !energy;

@@ -149,9 +149,10 @@ namespace chdr::interface {
         const Parameters& p, bool tm, int cadence = 1, int seam = 0,
         std::function<void(InterfaceSolver&, const material::MaterialOwner&)> initialCheck = {}) {
         InterfaceRun run(
-            {{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m, p.courant_m, seam},
+            {{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m, seam},
             material::TwoMaterialMap{material::PlanarSlab{0, 0, p.dielectricCells_m * p.h_m[0]},
-                                     p.epsilon_m, 1.0});
+                                     p.epsilon_m, 1.0},
+            {.safetyFactor_m = p.courant_m});
         PlanePulse pulse(p, tm);
         run.load(pulse);
         auto& s = run.solver();
