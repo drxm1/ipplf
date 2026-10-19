@@ -1,0 +1,16 @@
+# Each output directory belongs exclusively to this four-step smoke check.
+file(REMOVE_RECURSE "${OUTPUT}")
+foreach(movie half-space brick slab diagonal)
+  set(directory "${OUTPUT}/${movie}")
+  execute_process(COMMAND "${PROGRAM}" "${movie}" --smoke --output "${directory}"
+                          COMMAND_ERROR_IS_FATAL ANY)
+  file(READ "${directory}/wave.pvti.series" series)
+  string(JSON count LENGTH "${series}" files)
+  if(NOT count EQUAL 2)
+    message(FATAL_ERROR "${movie}: expected initial and final field frames")
+  endif()
+  file(STRINGS "${directory}/energy.csv" final_record REGEX "^4,")
+  if(NOT final_record)
+    message(FATAL_ERROR "${movie}: final energy record is missing")
+  endif()
+endforeach()

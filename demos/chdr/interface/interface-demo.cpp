@@ -1,16 +1,33 @@
 /** @file interface-demo.cpp
  * @brief Periodic dielectric packet demonstrations and a plane-wave reflection measurement.
  */
-#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
+#include <sstream>
 
-#include "../output/FieldOutput.h"
+#include "../output/FieldRunOutput.h"
 #include "InterfaceRun.h"
 #include "PacketStart.h"
 #include "PlanePulse.h"
 
 namespace chdr::interface {
+    /// Record the existing packet case in code axis order, with the x-z display plane explicit.
+    std::string packetMetadata(const std::string& name, const RunBox& box,
+                               const SolverSettings& settings, const material::PlanarSlab& slab,
+                               const PacketStart& packet, int steps) {
+        std::ostringstream text;
+        text << std::setprecision(17) << "case=" << name << " plane=zx cells=" << box.cells_m[0]
+             << ',' << box.cells_m[1] << ',' << box.cells_m[2] << " steps=" << steps
+             << " h=" << box.spacing_m[0] << ',' << box.spacing_m[1] << ',' << box.spacing_m[2]
+             << " S=" << settings.safetyFactor_m << " epsilon=2.13 slab=" << slab.lower_m << ','
+             << slab.upper_m << " centre=" << packet.centreX_m << ',' << packet.centreZ_m
+             << " widths=" << packet.width_m << ',' << packet.transverseWidth_m
+             << " k=" << packet.waveNumber_m << " direction=" << packet.directionX_m << ','
+             << packet.directionZ_m << " TM=" << packet.tm_m;
+        return text.str();
+    }
+
     /** @brief Run one named, reproducible input; --smoke selects a small four-step box. */
     int demonstration(int argc, char** argv) {
         if (argc < 2)
@@ -54,74 +71,33 @@ namespace chdr::interface {
         const int n = smoke ? 32 : 512, steps = smoke ? 4 : brewster ? 1000 : 560;
         const double scale = n / 512.0;
         const material::PlanarSlab slab{0, name == "slab" ? 156 * scale : 0, 230 * scale};
-        const RunBox box{{n, n, 4}, {1, 1, 1}};
+        const RunBox box{{n, 2, n}, {1, 1, 1}};
         const SolverSettings settings;
         InterfaceRun run(box, material::TwoMaterialMap{slab, 2.13, 1.0}, settings);
         PacketStart packet;
         packet.slab_m            = slab;
         packet.centreX_m         = 371 * scale;
-        packet.centreY_m         = n / (brewster ? 4.0 : 2.0);
+        packet.centreZ_m         = n / (brewster ? 4.0 : 2.0);
         packet.length_m          = n;
         packet.width_m           = 29 * scale;
         packet.transverseWidth_m = 45 * scale;
         packet.tm_m              = name == "brewster-tm";
         if (brewster) {
             packet.directionX_m = -1 / std::sqrt(3.13);
-            packet.directionY_m = std::sqrt(2.13 / 3.13);
+            packet.directionZ_m = std::sqrt(2.13 / 3.13);
         }
         run.load(packet);
-        std::unique_ptr<chdr::output::FieldOutput> output;
-        std::ofstream energy;
-        solver::EMFieldsType raw;
-        if (!directory.empty()) {
-            output = std::make_unique<chdr::output::FieldOutput>(
-                directory, chdr::output::OutputGeometry{{n, n, 4}, {0, 0, 0}, {1, 1, 1}},
-                MPI_COMM_WORLD, true);
-            raw.initialize(run.solver().A_n.get_mesh(), run.solver().A_n.getLayout());
-            std::array<double, 18> offsets{};
-            for (unsigned c = 0; c < 6; ++c) {
-                const auto offset = run.solver().levelContract().positionOffset(
-                    c < 3 ? solver::Quantity::Electric : solver::Quantity::RawMagnetic, c % 3);
-                for (unsigned d = 0; d < 3; ++d)
-                    offsets[3 * c + d] = offset[d];
-            }
-            output->writeMaterial(run.solver().A_n, run.material().epsilon(), offsets);
-            if (ippl::Comm->rank() == 0) {
-                energy.open(directory + "/energy.csv");
-                energy << std::setprecision(17) << "# case=" << name << " cells=" << n << ',' << n
-                       << ",4 steps=" << steps << " h=" << box.spacing_m[0] << ','
-                       << box.spacing_m[1] << ',' << box.spacing_m[2]
-                       << " S=" << settings.safetyFactor_m << " epsilon=2.13 slab=" << slab.lower_m
-                       << ',' << slab.upper_m << " centre=" << packet.centreX_m << ','
-                       << packet.centreY_m << " widths=" << packet.width_m << ','
-                       << packet.transverseWidth_m << " k=" << packet.waveNumber_m
-                       << " direction=" << packet.directionX_m << ',' << packet.directionY_m
-                       << " TM=" << packet.tm_m << '\n';
-                energy << "step,time,vacuum,dielectric,total,scalar,absolute\n";
-            }
-            int failed = ippl::Comm->rank() == 0 && !energy;
-            MPI_Allreduce(MPI_IN_PLACE, &failed, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-            if (failed)
-                throw std::runtime_error("Cannot open the energy CSV");
-        }
-        run.advance(steps, [&](int k, auto& state, const auto& owner) {
-            if (k % 10 == 0 || k == steps) {
-                const auto record = solver::potentialEnergy(state, owner);
-                if (energy)
-                    energy << k << ',' << record.vectorTime_m << ',' << record.vector_m.vacuum_m
-                           << ',' << record.vector_m.dielectric_m << ',' << record.vector_m.total()
-                           << ',' << record.scalar_m.total() << ',' << record.vector_m.absolute_m
-                           << '\n';
-            }
-            if (output && (k % 10 == 0 || k == steps)) {
-                state.computeRawMagneticField(raw);
-                output->writeFrame(state.electricField(), raw,
-                                   {k, k * state.getDt(), (k - 0.5) * state.getDt(),
-                                    k * state.getDt(), state.getDt()});
-            }
+        std::unique_ptr<chdr::output::FieldRunOutput> output;
+        if (!directory.empty())
+            output = std::make_unique<chdr::output::FieldRunOutput>(
+                directory, box, run.solver(), run.material(),
+                packetMetadata(name, box, settings, slab, packet, steps));
+        run.advance(steps, [&](long long k, auto& state, const auto& owner) {
+            if (output && (k % 10 == 0 || k == steps))
+                output->write(k, state, owner);
         });
         if (output)
-            output->writeSeries();
+            output->finish();
         return 0;
     }
 }  // namespace chdr::interface

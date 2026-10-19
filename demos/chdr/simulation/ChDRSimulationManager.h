@@ -14,7 +14,7 @@
 
 namespace chdr::simulation {
     /** @brief Construct and advance a configured field problem and invoke experiment observers.
-     * @tparam PotentialSolverBase Select the Standard or NonStandard IPPL potential stencil.
+     * @tparam FieldSolver ChDR solver type, including any experiment-specific boundary hook.
      * @details The experiment supplies box and solver settings, a material map, initial
      * potential samples and observations. This manager owns their mesh, fields, material
      * and solver. Construction prepares storage; load() supplies initial histories.
@@ -23,10 +23,10 @@ namespace chdr::simulation {
      * All ranks supply identical settings and enter collective observations together.
      * The object cannot move because its fields and solver refer to its mesh and layout.
      */
-    template <class PotentialSolverBase = solver::StandardSolverPeriodic>
+    template <class FieldSolver = solver::ChdrSolver<solver::StandardSolverPeriodic>>
     class ChDRSimulationManager : public ippl::BaseManager {
     public:
-        using Solver = solver::ChdrSolver<PotentialSolverBase>;
+        using Solver = FieldSolver;
         /// Host callback; captured resources must remain alive whenever it is invoked.
         using Observer = std::function<void(long long, Solver&, const material::MaterialOwner&)>;
 
