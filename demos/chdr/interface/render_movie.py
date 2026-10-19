@@ -132,8 +132,14 @@ class MovieRenderer:
         self.directory, self.field = args.directory, args.field
         metadata = read_metadata(args.directory)
         self.plane = args.plane or metadata.get("plane", "xy")
-        self.caveat = ("Preliminary: diagonal interface and\nboundary treatment not validated"
-                       if metadata.get("case") == "diagonal" else "Preliminary")
+        if metadata.get("polarization") == "TM":
+            self.caveat = "Preliminary: nonzero Gauss residual under Mur"
+            if metadata.get("case", "").startswith("diagonal"):
+                self.caveat += "\nDiagonal interface and boundary treatment not validated"
+        elif metadata.get("case") == "diagonal":
+            self.caveat = "Preliminary: diagonal interface and\nboundary treatment not validated"
+        else:
+            self.caveat = "Preliminary"
         self.frames = json.loads((args.directory / "wave.pvti.series").read_text())["files"]
         if not self.frames:
             raise ValueError("The series contains no frames")
@@ -158,7 +164,9 @@ class MovieRenderer:
                                  self.field, self.plane, self.limit)
         self.fig.colorbar(self.artist, ax=self.field_ax, label=f"{self.label} (normalized units)")
         draw_energy(energy_ax, self.energy, self.contact)
-        self.marker = energy_ax.axvline(self.energy["time"][0], color="gray", linestyle=":")
+        self.marker = energy_ax.axvline(self.energy["time"][0], color="black", linestyle="-",
+                                        linewidth=1, label="current frame")
+        energy_ax.legend(loc="best", ncols=2, fontsize=7)
         self.fig.suptitle(self.caveat)
         self.fig.tight_layout(rect=(0, 0, 1, 0.94))
 

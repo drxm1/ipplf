@@ -1,5 +1,5 @@
 /** @file FieldRunOutput.h
- * @brief Shared VTK frames and energy CSV output for staggered R2 material runs.
+ * @brief Shared VTK frames and energy CSV output for staggered R2 O1-VS runs.
  */
 #pragma once
 #include <array>
@@ -31,9 +31,11 @@ namespace chdr::output {
     /** @brief Write one material map, field frames and two energy diagnostics for a run.
      * @details The experiment chooses frame times by calling write(). E and raw B retain
      * their separate sample times in VTK. The CSV records the existing discrete quantities
-     * and the squared-field energy from alignedFieldEnergy, at the electric-field time.
+     * and the squared-field energy from alignedFieldEnergy. The vector and aligned-field
+     * energies share the electric-field time; the scalar diagnostic has the integer time.
      * Every rank participates in construction, write() and finish(). Mesh/layout owners
      * must outlive this object; captured observers must not outlive the output object.
+     * @pre The solver uses O1-VS with staggered R2 reconstruction.
      */
     class FieldRunOutput {
     public:

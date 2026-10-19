@@ -39,7 +39,8 @@ namespace chdr::solver {
      * @details alpha_m is the dimensionless gauge parameter of
      * [chew2014generalizedgauge, Eqs. (15) and (18), p. 3]. The implemented
      * homogeneous Lorenz update accepts unity only; O1-VS accepts finite alpha
-     * at least one with representable chi. It is not a time-step factor.
+     * at least one with representable chi on periodic layouts; open axes require
+     * unity. It is not a time-step factor.
      */
     struct FormulationParameters {
         MaterialFormulation formulation_m = MaterialFormulation::Homogeneous;
@@ -88,16 +89,23 @@ namespace chdr::solver {
      * finite epsilon and alpha at least one, and representable \f$\chi=\alpha\varepsilon^2\f$
      * [chew2014generalizedgauge, Eq. (18)]. Cached extrema make refusals
      * identical on all ranks. The three-argument entry remains homogeneous-only.
-     * The solver checks boundary compatibility separately.
+     * Open axes require alpha = 1: otherwise transverse and longitudinal waves have
+     * different speeds [chew2014generalizedgauge, section 2, text after Eq. (22)].
+     * The standard O1-VS Mur path assumes vacuum permittivity in the outer layers;
+     * face permittivity is not checked. Experimental boundary overrides must document
+     * their own speed matching and intersection limitations.
      */
     inline void validateMaterialUpdate(const FormulationParameters& parameters,
                                        const material::MapStatistics& statistics,
                                        const SolverDiscretizationSelection& selection,
-                                       [[maybe_unused]] const material::Layout& layout) {
+                                       const material::Layout& layout) {
         if (parameters.formulation_m != MaterialFormulation::O1VS) {
             validateMaterialUpdate(parameters, statistics, selection);
             return;
         }
+        for (unsigned d = 0; d < 3; ++d)
+            if (!layout.isPeriodic(d) && parameters.alpha_m != 1.0)
+                throw IpplException("validateMaterialUpdate", "Open O1VS requires alpha = 1");
         if (selection.stencil_m != Stencil::Standard
             || selection.spatialDiscretization_m != SpatialDiscretization::Staggered
             || selection.ebReconstructionConvention_m != EBReconstructionConvention::R2

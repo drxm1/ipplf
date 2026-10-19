@@ -13,7 +13,14 @@ namespace chdr::interface {
      * It is not a validated heterogeneous absorbing boundary. The stored boundary()
      * descriptor still describes the unit-speed setup; movie metadata records the actual
      * face speeds separately. The physical timestep and interior update are unchanged.
-     * See Mur (1981), section IV, Eq. (16), for the face approximation.
+     * Speeds multiply the physical timestep: use only O1-VS or the vacuum update,
+     * not the Homogeneous update's rescaled step. This experiment deliberately bypasses
+     * the dispatcher's validateBoundary precondition requiring unit speeds when Mur
+     * faces meet on multiple axes. Its unchanged intersection update therefore has no
+     * compatibility guarantee [bamberger1987SecondOrderCorner, section II,
+     * Eqs. (2.10)-(2.11)]. The face formula is
+     * [mur1981AbsorbingBoundaryFdtd, section IV, Eq. (16)].
+     * @pre O1-VS or the vacuum update is selected.
      */
     class MovieFaceSolver : public solver::ChdrSolver<solver::StandardSolverPeriodic> {
         using Base = solver::ChdrSolver<solver::StandardSolverPeriodic>;

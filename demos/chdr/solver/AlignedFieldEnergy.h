@@ -23,7 +23,7 @@ namespace chdr::solver {
 
     /** @brief Estimate total electromagnetic energy from the reconstructed staggered fields.
      * @details In normalized units with unit permeability, this approximates the continuum
-     * energy [ellingson2020ElectromagneticsVol2, section 3.1, Eq. (3.16)] by
+     * energy [ellingson2020ElectromagneticsVol2, section 3.1, Eqs. (3.20), (3.22)] by
      * \f[W_h=\frac{\Delta V}{2}\sum_{\mathrm{owned},d}\varepsilon_d E_d^2
      *       +\frac{\Delta V}{2}\sum_{\mathrm{owned},d}\overline B_d^{\,2},
      *       \qquad\Delta V=h_xh_yh_z.\f]

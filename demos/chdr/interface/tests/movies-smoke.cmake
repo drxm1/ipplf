@@ -1,6 +1,15 @@
 # Each output directory belongs exclusively to this four-step smoke check.
 file(REMOVE_RECURSE "${OUTPUT}")
-foreach(movie half-space brick slab diagonal)
+foreach(
+  movie
+  half-space
+  brick
+  slab
+  diagonal
+  half-space-tm
+  brick-tm
+  slab-tm
+  diagonal-tm)
   set(directory "${OUTPUT}/${movie}")
   execute_process(COMMAND "${PROGRAM}" "${movie}" --smoke --output "${directory}"
                           COMMAND_ERROR_IS_FATAL ANY)

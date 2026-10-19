@@ -12,7 +12,13 @@ OMP_NUM_THREADS=1 interface-movies half-space --output open-half-space
 OMP_NUM_THREADS=1 interface-movies brick --output open-brick
 OMP_NUM_THREADS=1 interface-movies slab --output open-slab
 OMP_NUM_THREADS=1 interface-movies diagonal --output open-diagonal
+OMP_NUM_THREADS=1 interface-movies half-space-tm --output open-half-space-tm
+OMP_NUM_THREADS=1 interface-movies brick-tm --output open-brick-tm
+OMP_NUM_THREADS=1 interface-movies slab-tm --output open-slab-tm
+OMP_NUM_THREADS=1 interface-movies diagonal-tm --output open-diagonal-tm
 python3 render_movie.py open-half-space
+python3 render_movie.py open-half-space-tm --field B_raw
+python3 measure_tm_constraints.py open-half-space-tm
 ```
 
 The output directory must be new or empty. Add `--smoke` for a 64 by 2 by
@@ -47,6 +53,27 @@ the upper x and lower z Mur face speeds to 1/sqrt(2.13); other face speeds
 are one. Existing unit-speed edge and corner updates are retained. This is
 an exploratory boundary treatment, not a validated heterogeneous absorber.
 The diagonal movie and overview carry this limitation as a visible caption.
+The standard O1-VS Mur path requires alpha = 1 and assumes vacuum permittivity
+in the outer layers; the solver rejects other alpha values on open axes but
+does not inspect the face permittivity. The diagonal demo overrides the boundary
+speeds under the limitations stated above.
+
+Appending `-tm` selects TM initial data for any of the four geometries, retaining
+that geometry's duration. Unqualified case names retain the TE initial data.
+`TMAnnulusStart` forms the in-plane vector potential from the discrete curl of
+the radial profile, with zero scalar potential. Both histories start in vacuum;
+their weighted divergence cancels initially, following the same commuting-difference
+construction as the periodic TM packet [Ryu et al., 2016, Appendix A]. The
+initial field has out-of-plane B and in-plane E. This does not establish Gauss
+constraint preservation by the later Mur update. `measure_tm_constraints.py`
+records the weighted electric divergence at every saved time, separately in
+the interior and boundary band, in `constraints.csv`. It excludes the lowest
+x/z cell layers because their backward stencils need exterior E samples that
+are not stored. Its dimensionless residual uses the initial displacement-field
+peak and the smaller x/z spacing as a fixed normalization.
+The TM movie carries a visible warning about its nonzero Gauss residual under
+Mur; the recorded residual is a limitation of this demonstration, not evidence
+of a constraint-preserving open boundary.
 
 ## Existing periodic packet examples
 
@@ -83,7 +110,9 @@ ParaView can open `wave.pvti.series` and `material.pvti`. Field metadata records
 component offsets, timestep and separate sample times: E is at the half step
 and raw B at the integer step. The renderer uses those times and offsets.
 
-The first line of `energy.csv` records the case parameters. Its columns contain:
+The first line of `energy.csv` records the case parameters. The `time` column
+is the electric-field time, `(k - 1/2) dt`, shared by the discrete vector and
+aligned field energies. The scalar diagnostic is at `k dt`. Its columns contain:
 
 - `vacuum`, `dielectric`, `total`, `scalar`, `absolute`: the existing discrete
   potential-energy diagnostics; `total` is the vector quantity.
@@ -96,11 +125,14 @@ section 4.1]. The field-energy column uses squared, time-aligned fields
 [Ellingson, *Electromagnetics*, volume 2, section 3.1]. These quantities are
 distinct; neither column includes the flux through the open faces.
 
-The renderer needs VTK, NumPy, Matplotlib and FFmpeg. It writes `movie.mp4`,
+The renderer needs VTK, NumPy, Matplotlib and FFmpeg; GIF output also needs Pillow.
+It writes `movie.mp4`,
 a representative `movie.png`, four snapshots in `movie-overview.png`, and
 `movie-energy.png`. `--output name.gif` selects GIF instead. One colour scale
 is computed over all frames. The energy plot marks the first saved frame
 whose outermost field samples reach 1% of that global peak.
+For periodic packets this marks a signal at the periodic wrap, not an open face.
+The moving time cursor is solid black; the boundary-signal marker is dotted grey.
 
 New data declares `plane=zx` in its metadata. Older saved outputs without that
 declaration retain the legacy x-y interpretation; `--plane zx` or `--plane xy`
@@ -108,4 +140,4 @@ can select it explicitly. Use `--field B_raw` for TM packet movies.
 
 Small regressions and plane checks run with
 `ctest -R chdr.interface -LE 'long|reserved'`. The reserved configuration remains
-disabled. The new movie smoke check runs all four open-box cases for four steps.
+disabled. The movie smoke check runs all eight TE/TM cases for four steps.

@@ -11,6 +11,7 @@
 #include "../simulation/ChDRSimulationManager.h"
 #include "MovieCases.h"
 #include "MovieFaceSolver.h"
+#include "TMAnnulusStart.h"
 
 namespace chdr::interface {
     /// Movie selection and output location; the optional step count permits extending a run.
@@ -51,25 +52,48 @@ namespace chdr::interface {
         return result;
     }
 
+    /// Use the same face speeds for solver configuration and the recorded experiment input.
+    ippl::Vector<double, 6> movieFaceSpeeds(const MovieCase& input) {
+        const double speed = input.diagonal_m ? 1 / std::sqrt(input.epsilon_m) : 1;
+        return {1, speed, 1, 1, speed, 1};
+    }
+
+    /// Record mesh and boundary values from the case rather than assuming the default box.
+    std::string movieBoxMetadata(const MovieCase& input) {
+        std::ostringstream text;
+        text << std::setprecision(17) << " plane=zx cells=";
+        for (unsigned d = 0; d < 3; ++d)
+            text << (d ? "," : "") << input.box_m.cells_m[d];
+        text << " h=";
+        for (unsigned d = 0; d < 3; ++d)
+            text << (d ? "," : "") << input.box_m.spacing_m[d];
+        text << " periodic=";
+        for (unsigned d = 0; d < 3; ++d)
+            text << (d ? "," : "") << input.box_m.periodic_m[d];
+        text << " split_axis=" << input.box_m.splitAxis_m << " face_speeds=";
+        const auto speeds = movieFaceSpeeds(input);
+        for (unsigned f = 0; f < 6; ++f)
+            text << (f ? "," : "") << speeds[f];
+        return text.str() + " edge_speed=1";
+    }
+
     /// Preserve the case geometry, pulse scales and sampling cadence with the output data.
     std::string movieMetadata(const MovieCase& input, const simulation::SolverSettings& settings) {
         const auto& p = input.start_m;
         const auto& r = input.region_m;
         std::ostringstream text;
-        text << std::setprecision(17) << "case=" << input.name_m
-             << " plane=zx cells=" << input.box_m.cells_m[0] << ",2," << input.box_m.cells_m[2]
+        text << std::setprecision(17) << "case=" << input.name_m << movieBoxMetadata(input)
              << " steps=" << input.steps_m << " every=" << input.frameEvery_m
-             << " S=" << settings.safetyFactor_m << " epsilon=" << input.epsilon_m
-             << " centre=" << p.centreX_m << ',' << p.centreZ_m << " radius=" << p.radius_m
-             << " wavelength=" << p.wavelength_m << " support_half_width=" << 1.5 * p.wavelength_m
-             << " centre_guard=" << p.guard_m << " amplitude=" << p.amplitude_m
-             << " h=1,1,1 periodic=0,1,0 split_axis=" << input.box_m.splitAxis_m;
+             << " polarization=" << (input.tm_m ? "TM" : "TE") << " S=" << settings.safetyFactor_m
+             << " epsilon=" << input.epsilon_m << " centre=" << p.centreX_m << ',' << p.centreZ_m
+             << " radius=" << p.radius_m << " wavelength=" << p.wavelength_m
+             << " support_half_width=" << 1.5 * p.wavelength_m << " centre_guard=" << p.guard_m
+             << " amplitude=" << p.amplitude_m;
         if (input.diagonal_m)
-            text << " material=x>=z face_speeds=1," << 1 / std::sqrt(input.epsilon_m) << ",1,1,"
-                 << 1 / std::sqrt(input.epsilon_m) << ",1 edge_speed=1";
+            text << " material=x>=z";
         else
             text << " rectangle=" << r.lowerX_m << ',' << r.upperX_m << ',' << r.lowerZ_m << ','
-                 << r.upperZ_m << " face_speeds=1,1,1,1,1,1 edge_speed=1";
+                 << r.upperZ_m;
         return text.str();
     }
 
@@ -79,12 +103,14 @@ namespace chdr::interface {
         const simulation::SolverSettings settings;
         simulation::ChDRSimulationManager<Solver> run(
             input.box_m, material::TwoMaterialMap{region, input.epsilon_m, 1.0}, settings);
-        if constexpr (std::is_same_v<Solver, MovieFaceSolver>) {
-            const double speed = 1 / std::sqrt(input.epsilon_m);
-            run.solver().setMovieFaceSpeeds({1, speed, 1, 1, speed, 1});
-        }
+        if constexpr (std::is_same_v<Solver, MovieFaceSolver>)
+            run.solver().setMovieFaceSpeeds(movieFaceSpeeds(input));
         checkMovieStart(input, run.solver().labelTime(solver::Quantity::VectorPotential, 0));
-        run.load(input.start_m);
+        if (input.tm_m)
+            run.load(
+                TMAnnulusStart{input.start_m, input.box_m.spacing_m[0], input.box_m.spacing_m[2]});
+        else
+            run.load(input.start_m);
         chdr::output::FieldRunOutput output(options.directory_m, input.box_m, run.solver(),
                                             run.material(), movieMetadata(input, settings));
         run.advance(input.steps_m, [&](long long k, auto& state, const auto& owner) {

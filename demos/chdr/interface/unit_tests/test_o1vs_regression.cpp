@@ -102,6 +102,10 @@ namespace {
         stats.minimum_m = 1;
         stats.maximum_m = 2.13;
         const SolverDiscretizationSelection selected{Stencil::Standard, Staggered, R2};
+        auto open = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8}, 0, {false, true, false});
+        EXPECT_THROW(
+            validateMaterialUpdate({MaterialFormulation::O1VS, 2}, stats, selected, open.getFL()),
+            IpplException);
         for (double alpha : {0.5, std::numeric_limits<double>::quiet_NaN()})
             EXPECT_THROW(validateMaterialUpdate({MaterialFormulation::O1VS, alpha}, stats, selected,
                                                 fields.getFL()),

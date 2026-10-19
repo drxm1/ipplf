@@ -6,6 +6,7 @@
 #include "../../simulation/ChDRSimulationManager.h"
 #include "../MovieCases.h"
 #include "../MovieFaceSolver.h"
+#include "../TMAnnulusStart.h"
 #include "AlignedFieldEnergy.h"
 #include "CoreTestSupport.h"
 #include "FieldEnergy.h"
@@ -29,7 +30,8 @@ namespace {
     }
 
     TEST(Movies, StartPlacement) {
-        for (const auto name : {"half-space", "brick", "slab", "diagonal"}) {
+        for (const auto name : {"half-space", "brick", "slab", "diagonal", "half-space-tm",
+                                "brick-tm", "slab-tm", "diagonal-tm"}) {
             for (bool smoke : {false, true}) {
                 auto input = interface::movieCase(name, smoke);
                 EXPECT_NO_THROW(interface::checkMovieStart(input, 0));
@@ -42,19 +44,10 @@ namespace {
         }
     }
 
-    /// Unit face speeds must reproduce the existing boundary path exactly, including edges.
-    TEST(Movies, UnitFaceSpeeds) {
-        const auto input = interface::halfSpaceMovie(true);
-        const auto map   = material::TwoMaterialMap{input.region_m, input.epsilon_m, 1.0};
-        simulation::ChDRSimulationManager<> reference(input.box_m, map);
-        simulation::ChDRSimulationManager<interface::MovieFaceSolver> candidate(input.box_m, map);
-        reference.load(input.start_m);
-        candidate.load(input.start_m);
-        reference.run(48);
-        candidate.run(48);
-        const auto a            = reference.solver().A_n.getView();
-        const auto b            = candidate.solver().A_n.getView();
-        const auto& field       = reference.solver().A_n;
+    /// Compare owned potential components across all participating ranks.
+    double potentialDifference(const solver::AJFourFieldsType& field,
+                               const solver::AJFourFieldsType& other) {
+        const auto a = field.getView(), b = other.getView();
         const double difference = solver::coreTest::localMaximum(
             field, KOKKOS_LAMBDA(int i, int j, int k) {
                 double error = 0;
@@ -62,7 +55,25 @@ namespace {
                     error = Kokkos::max(error, Kokkos::abs(a(i, j, k)[q] - b(i, j, k)[q]));
                 return error;
             });
-        EXPECT_EQ(solver::coreTest::globalMaximum(field, difference), 0);
+        return solver::coreTest::globalMaximum(field, difference);
+    }
+
+    /// Unit speeds reproduce the library path; non-unit speeds prove the override is reached.
+    TEST(Movies, UnitFaceSpeeds) {
+        const auto input = interface::halfSpaceMovie(true);
+        const auto map   = material::TwoMaterialMap{input.region_m, input.epsilon_m, 1.0};
+        simulation::ChDRSimulationManager<> reference(input.box_m, map);
+        simulation::ChDRSimulationManager<interface::MovieFaceSolver> candidate(input.box_m, map),
+            control(input.box_m, map);
+        control.solver().setMovieFaceSpeeds({0.7, 0.7, 1, 1, 0.7, 0.7});
+        reference.load(input.start_m);
+        candidate.load(input.start_m);
+        control.load(input.start_m);
+        reference.run(48);
+        candidate.run(48);
+        control.run(48);
+        EXPECT_EQ(potentialDifference(reference.solver().A_n, candidate.solver().A_n), 0);
+        EXPECT_GT(potentialDifference(reference.solver().A_n, control.solver().A_n), 1e-12);
     }
 
     /** @brief Load both histories and compare the two energy definitions for this TE state.
@@ -84,4 +95,20 @@ namespace {
         EXPECT_GT(discrete, 0);
         EXPECT_GE(aligned, discrete * (1 - 1e-12));
     }
+
+    /// Both TM histories satisfy the weighted divergence constraint before boundary interaction.
+    TEST(Movies, TMInitialConstraint) {
+        const auto input = interface::movieCase("half-space-tm", true);
+        simulation::ChDRSimulationManager<> run(
+            input.box_m, material::TwoMaterialMap{input.region_m, input.epsilon_m, 1.0});
+        run.load(interface::TMAnnulusStart{input.start_m, 1, 1});
+        for (const auto* field : {&run.solver().A_n, &run.solver().A_nm1}) {
+            const solver::O1VSOperator op(*field, run.material(), 1);
+            const double residual = solver::coreTest::localMaximum(
+                *field, KOKKOS_LAMBDA(int i, int j, int k) { return Kokkos::abs(op.g(i, j, k)); });
+            EXPECT_LT(solver::coreTest::globalMaximum(*field, residual), 1e-13);
+        }
+        EXPECT_GT(solver::alignedFieldEnergy(run.solver(), run.material()), 0);
+    }
+
 }  // namespace

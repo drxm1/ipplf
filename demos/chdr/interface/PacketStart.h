@@ -18,7 +18,7 @@ namespace chdr::interface {
      * @pre slab_m.axis_m is zero: the material varies only along x. slab_m and
      * epsilon_m must match the solver's two-material map, with permittivity one
      * outside the slab. The sampler's material lookup wraps x periodically.
-     * @pre directionX_m and directionY_m form a unit direction vector; packet
+     * @pre directionX_m and directionZ_m form a unit direction vector; packet
      * widths and length_m are positive. The translating start assumes vacuum
      * propagation speed, so the incident packet should be localized in vacuum.
      * @details These conditions are supplied by the demonstration driver; this
