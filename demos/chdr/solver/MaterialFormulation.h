@@ -39,7 +39,8 @@ namespace chdr::solver {
      * @details alpha_m is the dimensionless gauge parameter of
      * [chew2014generalizedgauge, Eqs. (15) and (18), p. 3]. The implemented
      * homogeneous Lorenz update accepts unity only; O1-VS accepts finite alpha
-     * at least one with representable chi. It is not a time-step factor.
+     * at least one with representable chi on periodic layouts; open axes require
+     * unity. It is not a time-step factor.
      */
     struct FormulationParameters {
         MaterialFormulation formulation_m = MaterialFormulation::Homogeneous;
@@ -83,11 +84,16 @@ namespace chdr::solver {
                 "Homogeneous requires Standard, finite constant permittivity >= 1 and alpha = 1");
     }
 
-    /** @brief Validate layout-dependent equations without communicating.
-     * @details O1-VS supports periodic staggered R2 with Standard differences,
+    /** @brief Validate O1-VS or delegate to the homogeneous validity rule.
+     * @details O1-VS supports staggered R2 with Standard differences,
      * finite epsilon and alpha at least one, and representable \f$\chi=\alpha\varepsilon^2\f$
      * [chew2014generalizedgauge, Eq. (18)]. Cached extrema make refusals
      * identical on all ranks. The three-argument entry remains homogeneous-only.
+     * Open axes require alpha = 1: otherwise transverse and longitudinal waves have
+     * different speeds [chew2014generalizedgauge, section 2, text after Eq. (22)].
+     * The standard O1-VS Mur path assumes vacuum permittivity in the outer layers;
+     * face permittivity is not checked. Experimental boundary overrides must document
+     * their own speed matching and intersection limitations.
      */
     inline void validateMaterialUpdate(const FormulationParameters& parameters,
                                        const material::MapStatistics& statistics,
@@ -97,15 +103,17 @@ namespace chdr::solver {
             validateMaterialUpdate(parameters, statistics, selection);
             return;
         }
+        for (unsigned d = 0; d < 3; ++d)
+            if (!layout.isPeriodic(d) && parameters.alpha_m != 1.0)
+                throw IpplException("validateMaterialUpdate", "Open O1VS requires alpha = 1");
         if (selection.stencil_m != Stencil::Standard
             || selection.spatialDiscretization_m != SpatialDiscretization::Staggered
             || selection.ebReconstructionConvention_m != EBReconstructionConvention::R2
             || !statistics.allFinite_m || statistics.minimum_m < 1
             || !std::isfinite(parameters.alpha_m) || parameters.alpha_m < 1
-            || !std::isfinite(parameters.alpha_m * statistics.maximum_m * statistics.maximum_m)
-            || !layout.isPeriodic(0) || !layout.isPeriodic(1) || !layout.isPeriodic(2))
+            || !std::isfinite(parameters.alpha_m * statistics.maximum_m * statistics.maximum_m))
             throw IpplException("validateMaterialUpdate",
-                                "O1VS requires periodic Standard staggered R2, finite epsilon >= "
+                                "O1VS requires Standard staggered R2, finite epsilon >= "
                                 "1, alpha >= 1 and chi");
     }
 

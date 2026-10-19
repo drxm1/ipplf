@@ -1,5 +1,5 @@
 /** @file FieldEnergy.h
- * @brief Compensated, owned-cell invariants of periodic O1-VS leapfrog.
+ * @brief Compensated O1-VS energy sums: periodic invariants or open-box diagnostics.
  */
 #pragma once
 #include <stdexcept>
@@ -66,6 +66,8 @@ namespace chdr::solver {
          * section 2, before Eq. (2.10)], specialized to Chew's masses and stiffness
          * [chew2014generalizedgauge, Eqs. (16)--(18)]. Both are conserved without
          * sources on a periodic grid; no initial gauge constraint is assumed.
+         * With open faces these same sums are diagnostics, not conserved quantities;
+         * they include boundary samples but no boundary-flux term.
          */
         struct Reduction {
             using value_type = Sums;

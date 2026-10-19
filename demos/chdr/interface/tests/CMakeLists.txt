@@ -20,6 +20,15 @@ add_test(
 set_tests_properties(
   chdr.interface.unit.smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT
                                        60 LABELS "chdr;interface;unit")
+add_test(
+  NAME chdr.interface.movies.smoke
+  COMMAND
+    "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:interface-movies>"
+    "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/movie-smoke-frames" -P
+    "${CMAKE_CURRENT_SOURCE_DIR}/movies-smoke.cmake")
+set_tests_properties(
+  chdr.interface.movies.smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false"
+                                         TIMEOUT 60 LABELS "chdr;interface;unit")
 if(MPIEXEC_EXECUTABLE)
   set(interface_mpi "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
                     $<TARGET_FILE:test-plane-interface> ${MPIEXEC_POSTFLAGS})

@@ -21,9 +21,11 @@ namespace chdr::solver {
             : operator_m(prototype, owner, alpha) {
             effective_m.initialize(prototype.get_mesh(), prototype.getLayout());
         }
+
         /** @brief Write effective sources on the inherited kernel's interior mask.
-         * @details All axes are periodic in the admitted formulation. Capturing views
-         * by value keeps coefficients alive on the field execution space. Copying J
+         * @details Mur owns the selected outermost layers; this pass uses the same
+         * interior mask as the inherited Standard step. Capturing views by value
+         * keeps coefficients alive on the field execution space. Copying J
          * directly when \f$m=1\f$ and its correction is zero preserves signed-zero bits;
          * no arithmetic is added to the inherited vacuum expression.
          */
@@ -54,6 +56,7 @@ namespace chdr::solver {
                 });
             context.baseStep(context.dt(), effective_m);
         }
+
         /** @brief Return the vacuum Standard bound for alpha and epsilon at least one.
          * The generalized-gauge stiffness is bounded by the vacuum symbol under
          * these restrictions (deduction from [kreiss2002SecondOrderWave, section 2,

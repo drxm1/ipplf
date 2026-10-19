@@ -182,6 +182,10 @@ namespace chdr::solver {
          * the owner or a reference to its field. Source and E/B storage remain borrowed.
          * O1VSUpdate retains reference-counted coefficient views and uses the vacuum
          * timestep bound documented in O1VSUpdate::maxStableTimeStep.
+         * @pre O1-VS with Mur faces requires alpha = 1 and assumes vacuum permittivity
+         * in the outer layers for the standard boundary path. Face permittivity is not
+         * checked; an experimental boundary override must supply its own documented
+         * assumptions and speed treatment.
          * @param murSpeed Speed assumed by the Mur formulas. The default passes exactly
          * one to agree with the reused potential-update equations. For Homogeneous,
          * physical(v) passes v times the refractive index to compensate for the shorter
