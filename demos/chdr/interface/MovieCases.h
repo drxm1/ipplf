@@ -10,6 +10,7 @@
 #include "../material/RectangleXZ.h"
 #include "../simulation/SimulationConfig.h"
 #include "AnnulusStart.h"
+#include "TMAnnulusStart.h"
 
 namespace chdr::interface {
     /// Cell-centred upper-left half-plane; ties on the diagonal belong to the dielectric.
@@ -25,10 +26,15 @@ namespace chdr::interface {
         AnnulusStart start_m;
         double epsilon_m = 2.13;
         int steps_m = 1424, frameEvery_m = 8;
-        bool diagonal_m =
-            false;          ///< Select the half-plane and demo face solver; region_m is unused.
-        bool tm_m = false;  ///< Initialize a discrete-curl TM annulus instead of TE A_y.
+        /// Select the half-plane and demo face solver; region_m is unused.
+        bool diagonal_m = false;
+        bool tm_m       = false;  ///< Initialize a discrete-curl TM annulus instead of TE A_y.
     };
+
+    /// Use the actual box spacings when constructing either a driver or a test's TM sampler.
+    inline TMAnnulusStart movieTMStart(const MovieCase& input) {
+        return {input.start_m, input.box_m.spacing_m[0], input.box_m.spacing_m[2]};
+    }
 
     /// Common mesh and pulse scales; the small configuration is a four-step smoke run only.
     inline MovieCase movieDefaults(const std::string& name, bool smoke) {
@@ -111,7 +117,9 @@ namespace chdr::interface {
      * @details The previous potential time is earlier, so its enclosing radius is smaller.
      * TE uses a one-cell face margin. TM leaves three layers zero so quadratic open-ghost
      * extrapolation cannot introduce an initial divergence (OpenFaceClosure). The distance
-     * to the rectangle is computed from its nearest point; this is a placement check.
+     * to the rectangle is computed from its nearest point. For diagonal TM, subtract
+     * the cell half-width projected on the normal: the resulting half-plane contains
+     * every sampled dielectric cell, giving a conservative staircase-clearance bound.
      */
     inline void checkMovieStart(const MovieCase& input, double currentTime) {
         const auto& p      = input.start_m;
@@ -122,9 +130,12 @@ namespace chdr::interface {
             + (input.tm_m ? 0.5 * std::max(input.box_m.spacing_m[0], input.box_m.spacing_m[2]) : 0);
         const double dx = p.centreX_m - std::clamp(p.centreX_m, r.lowerX_m, r.upperX_m);
         const double dz = p.centreZ_m - std::clamp(p.centreZ_m, r.lowerZ_m, r.upperZ_m);
-        const double distance =
-            input.diagonal_m ? (p.centreZ_m - p.centreX_m) / std::sqrt(2.0) : std::hypot(dx, dz);
-        const double layers = input.tm_m ? 3 : 1;
+        const double cellReach =
+            input.tm_m ? 0.5 * (input.box_m.spacing_m[0] + input.box_m.spacing_m[2]) : 0;
+        const double distance = input.diagonal_m
+                                    ? (p.centreZ_m - p.centreX_m - cellReach) / std::sqrt(2.0)
+                                    : std::hypot(dx, dz);
+        const double layers   = input.tm_m ? 3 : 1;
         if (p.centreX_m - radius <= layers * input.box_m.spacing_m[0]
             || p.centreX_m + radius >= lengths[0] - layers * input.box_m.spacing_m[0]
             || p.centreZ_m - radius <= layers * input.box_m.spacing_m[2]

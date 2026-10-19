@@ -42,6 +42,10 @@ namespace {
                 EXPECT_THROW(interface::checkMovieStart(input, 0), std::invalid_argument);
             }
         }
+        auto nearStaircase              = interface::movieCase("diagonal-tm", true);
+        nearStaircase.start_m.centreX_m = 22.1;
+        nearStaircase.start_m.centreZ_m = 41.9;
+        EXPECT_THROW(interface::checkMovieStart(nearStaircase, 0), std::invalid_argument);
     }
 
     /// Compare owned potential components across all participating ranks.
@@ -101,7 +105,7 @@ namespace {
         const auto input = interface::movieCase("half-space-tm", true);
         simulation::ChDRSimulationManager<> run(
             input.box_m, material::TwoMaterialMap{input.region_m, input.epsilon_m, 1.0});
-        run.load(interface::TMAnnulusStart{input.start_m, 1, 1});
+        run.load(interface::movieTMStart(input));
         for (const auto* field : {&run.solver().A_n, &run.solver().A_nm1}) {
             const solver::O1VSOperator op(*field, run.material(), 1);
             const double residual = solver::coreTest::localMaximum(

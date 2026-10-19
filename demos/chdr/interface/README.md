@@ -60,6 +60,10 @@ speeds under the limitations stated above.
 
 Appending `-tm` selects TM initial data for any of the four geometries, retaining
 that geometry's duration. Unqualified case names retain the TE initial data.
+The shared profile parameter 36 gives a TE field peak wavelength of about 36 cells,
+but the extra TM spatial derivative shifts the TM field peak to about 29.5 cells
+(large-radius prediction: `36/sqrt(1.5)`, about 29.4). The TM pulse is one derivative
+higher, so a TE/TM comparison also compares different incident pulse shapes and spectra.
 `TMAnnulusStart` forms the in-plane vector potential from the discrete curl of
 the radial profile, with zero scalar potential. Both histories start in vacuum;
 their weighted divergence cancels initially, following the same commuting-difference
@@ -136,7 +140,9 @@ The moving time cursor is solid black; the boundary-signal marker is dotted grey
 
 New data declares `plane=zx` in its metadata. Older saved outputs without that
 declaration retain the legacy x-y interpretation; `--plane zx` or `--plane xy`
-can select it explicitly. Use `--field B_raw` for TM packet movies.
+can select it explicitly. The renderer selects `B_raw` when metadata declares
+`polarization=TM`, otherwise `E_raw`; `--field` overrides this choice. Use
+`--field B_raw` for legacy TM packet outputs without polarization metadata.
 
 Small regressions and plane checks run with
 `ctest -R chdr.interface -LE 'long|reserved'`. The reserved configuration remains

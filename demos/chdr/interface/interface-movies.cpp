@@ -107,8 +107,7 @@ namespace chdr::interface {
             run.solver().setMovieFaceSpeeds(movieFaceSpeeds(input));
         checkMovieStart(input, run.solver().labelTime(solver::Quantity::VectorPotential, 0));
         if (input.tm_m)
-            run.load(
-                TMAnnulusStart{input.start_m, input.box_m.spacing_m[0], input.box_m.spacing_m[2]});
+            run.load(movieTMStart(input));
         else
             run.load(input.start_m);
         chdr::output::FieldRunOutput output(options.directory_m, input.box_m, run.solver(),

@@ -131,6 +131,8 @@ class MovieRenderer:
     def __init__(self, args):
         self.directory, self.field = args.directory, args.field
         metadata = read_metadata(args.directory)
+        if self.field is None:
+            self.field = "B_raw" if metadata.get("polarization") == "TM" else "E_raw"
         self.plane = args.plane or metadata.get("plane", "xy")
         if metadata.get("polarization") == "TM":
             self.caveat = "Preliminary: nonzero Gauss residual under Mur"
@@ -214,7 +216,8 @@ def main():
     """Select a saved run and render it; plane metadata preserves older x-y datasets."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
-    parser.add_argument("--field", choices=("E_raw", "B_raw"), default="E_raw")
+    parser.add_argument("--field", choices=("E_raw", "B_raw"), default=None,
+                        help="Override the field selected from polarization metadata")
     parser.add_argument("--plane", choices=("zx", "xy"), default=None)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()

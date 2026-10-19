@@ -14,6 +14,12 @@ namespace chdr::interface {
      * Both histories use this construction, with scalar potential zero. The profile
      * remains an approximate outgoing start (AnnulusStart). This initial cancellation
      * does not assert constraint preservation by later componentwise Mur updates.
+     * The extra spatial difference gives TM fields one higher radial derivative than
+     * TE. At large radius their peak wavelength is approximately
+     * \f$\lambda/\sqrt{3/2}\f$, where \f$\lambda\f$ is the profile wavelength parameter.
+     * This is a deduction from the extra wavenumber factor multiplying the Ricker spectrum
+     * [schneider2010UnderstandingFdtd, section 5.2.3, Eq. (5.20)]. The field waveform
+     * therefore differs from TE even when the same profile parameters are supplied.
      * @pre Positive spacings; the profile support enlarged by half the larger spacing
      * lies in vacuum and outside the first three owned layers at each open face,
      * at both history times. This keeps quadratic open-ghost extrapolation zero initially.

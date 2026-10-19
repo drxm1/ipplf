@@ -2,7 +2,7 @@
 """Record the charge-free TM constraint from saved x-z movie frames.
 
 Compute the backward divergence of harmonic-face epsilon times E, using the
-solver's staggered positions [chew2014generalizedgauge, section 2, Eqs. (4), (11);
+solver's staggered positions [chew2014generalizedgauge, section 2, Eqs. (4), (6);
 ryu2016potentialfdtd, Appendix A]. This is a diagnostic of div(epsilon E), not
 a correction or an assertion that componentwise Mur preserves Gauss's law.
 The input must be y-independent with periodic y and open x/z faces.
