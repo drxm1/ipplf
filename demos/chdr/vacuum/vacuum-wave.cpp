@@ -11,6 +11,7 @@
 #include "../output/FieldOutput.h"
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
+#include "VacuumEnergy.h"
 #include "VacuumFailure.h"
 #include "VacuumSetup.h"
 
@@ -115,15 +116,22 @@ namespace {
         return step % quarterSteps == 0 || step == lastStep;
     }
 
+    /// @brief Append the energy columns and end the row; W_E and W_B have different times.
+    void printEnergy(const chdr::vacuum::EnergySample& energy) {
+        std::cout << ',' << energy.electric_m << ',' << energy.magnetic_m << ',' << energy.total_m
+                  << ',' << energy.invariant_m << std::endl;
+    }
+
     /// @brief Emit owned-cell diagnostics; field times and undefined initial speed are explicit.
     void printDiagnostics(const chdr::vacuum::Diagnostics& d,
-                          const chdr::vacuum::PhaseSample& phase) {
+                          const chdr::vacuum::PhaseSample& phase,
+                          const chdr::vacuum::EnergySample& energy) {
         if (ippl::Comm->rank() != 0)
             return;
         if (d.step_m == 0)
             std::cout << "step,dt,timeA,timeE,timeB,relativeE,relativeB,discreteError,zeroError,"
                          "sourceError,phaseReal,phaseImag,phaseAmplitude,phaseIncrement,phaseSpeed,"
-                         "count\n";
+                         "count,energyE,energyB,energy,energyInvariant\n";
         std::cout << std::setprecision(17) << d.step_m << ',' << d.dt_m << ',' << d.timeA_m << ','
                   << d.timeE_m << ',' << d.timeB_m << ',' << d.relativeE_m << ',' << d.relativeB_m
                   << ',' << d.discreteError_m << ',' << d.zeroError_m << ',' << d.sourceError_m
@@ -131,7 +139,8 @@ namespace {
                   << phase.increment_m << ',';
         if (phase.hasSpeed_m)
             std::cout << phase.speed_m;
-        std::cout << ',' << d.count_m << std::endl;
+        std::cout << ',' << d.count_m;
+        printEnergy(energy);
         if (!std::cout)
             throw std::runtime_error("Failed to write diagnostics");
     }
@@ -152,9 +161,10 @@ namespace {
         // Observe states 0 through lastStep; perform exactly lastStep advances.
         for (int step = 0; step <= lastStep; ++step) {
             const auto diagnostic = chdr::vacuum::measure(solver, fields, step);
+            const auto energy     = chdr::vacuum::measureEnergy(solver, fields);
             const auto phase      = phaseTracker.update(diagnostic);
             const bool checkpoint = isCheckpoint(step, lastStep, solver.getDt());
-            printDiagnostics(diagnostic, phase);
+            printDiagnostics(diagnostic, phase, energy);
             validateStep(diagnostic, phase, checkpoint, options.cellsZ_m == 128);
             if (output && checkpoint)
                 writeCheckpoint(*output, fields, diagnostic);
