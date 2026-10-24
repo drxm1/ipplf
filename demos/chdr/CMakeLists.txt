@@ -7,6 +7,10 @@ add_library(chdr-testing INTERFACE)
 target_sources(chdr-testing INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/testing/TestMain.cpp")
 target_include_directories(chdr-testing INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# The field container and field types come from the FEL demo; one target names that dependency.
+add_library(chdr-fel-headers INTERFACE)
+target_include_directories(chdr-fel-headers INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../fel")
+
 add_subdirectory(material)
 add_subdirectory(mesh)
 add_subdirectory(vacuum)

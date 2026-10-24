@@ -23,8 +23,7 @@ add_ippl_test(
   test_policy.cpp
   ../VacuumSetup.cpp
   INCLUDE_DIRS
-  "${CMAKE_CURRENT_SOURCE_DIR}/.."
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
+  "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(test-chdr-vacuum PRIVATE chdr-solver chdr-testing)
 
 # Keep the debug checks of the test utilities active in this test target. This does not change the

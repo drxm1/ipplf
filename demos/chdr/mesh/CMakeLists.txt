@@ -1,7 +1,6 @@
 # Distributed IPPL mesh with a cell-centred dielectric prism or brick.
 add_executable(mesh-1 mesh-1.cpp)
-target_link_libraries(mesh-1 PRIVATE IPPL::ippl catalyst::catalyst chdr-material)
-target_include_directories(mesh-1 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../fel")
+target_link_libraries(mesh-1 PRIVATE IPPL::ippl catalyst::catalyst chdr-material chdr-fel-headers)
 
 foreach(_config IN ITEMS config.yaml config-scale.yaml config-brick.yaml)
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${_config}" "${CMAKE_CURRENT_BINARY_DIR}/${_config}"
@@ -25,8 +24,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(test-chdr-geometry test_geometry.cpp)
-  target_link_libraries(test-chdr-geometry PRIVATE IPPL::ippl catalyst::catalyst)
-  target_include_directories(test-chdr-geometry PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../fel")
+  target_link_libraries(test-chdr-geometry PRIVATE IPPL::ippl catalyst::catalyst chdr-fel-headers)
 
   add_test(NAME chdr.mesh.geometry COMMAND test-chdr-geometry)
   set_tests_properties(chdr.mesh.geometry PROPERTIES WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")

@@ -9,11 +9,11 @@
 #include <string>
 
 #include "../output/FieldOutput.h"
-#include "Util.h"
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
 #include "VacuumEnergy.h"
 #include "VacuumSetup.h"
+#include "solver/Util.h"
 
 namespace {
     int runVacuumWave(int argc, char* argv[]);

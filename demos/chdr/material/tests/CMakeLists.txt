@@ -9,9 +9,8 @@ add_ippl_test(
   test_derived.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../solver"
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
-target_link_libraries(test-chdr-material PRIVATE chdr-material chdr-testing)
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../solver")
+target_link_libraries(test-chdr-material PRIVATE chdr-material chdr-testing chdr-fel-headers)
 target_compile_options(test-chdr-material PRIVATE -UNDEBUG)
 foreach(suite Owner Halo Derived)
   add_test(NAME chdr.material.${suite}.serial COMMAND test-chdr-material
