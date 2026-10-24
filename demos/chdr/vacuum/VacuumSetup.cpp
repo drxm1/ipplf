@@ -72,8 +72,7 @@ namespace chdr::vacuum {
                 current(i, j, k)  = chdr::vacuum::referencePotential(z, 0.0);
                 previous(i, j, k) = chdr::vacuum::referencePotential(z, -dt);
             });
-        preparePotentialHalo(solver.A_n);
-        preparePotentialHalo(solver.A_nm1);
+        solver.prepareHistories();
     }
 
 }  // namespace chdr::vacuum
