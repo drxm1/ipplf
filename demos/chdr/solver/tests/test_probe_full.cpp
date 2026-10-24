@@ -125,8 +125,8 @@ namespace {
     class SignalWriter {
         using SpaceView     = Kokkos::View<double****>;
         using TimeView      = Kokkos::View<double***>;
-        using VectorView    = FourierProbe::VectorField::view_type;
-        using PotentialView = FourierProbe::PotentialField::view_type;
+        using VectorView    = EMFieldsType::view_type;
+        using PotentialView = AJFourFieldsType::view_type;
 
         /** @brief One device work item poisons a ghost or writes one selected owned cell.
          * @details Ghost poisoning occurs on every step, including when the plane gate
@@ -184,8 +184,7 @@ namespace {
         };
 
     public:
-        SignalWriter(chdr::vacuum::Fields& fields, FourierProbe::VectorField& raw,
-                     LevelContract levels)
+        SignalWriter(chdr::vacuum::Fields& fields, EMFieldsType& raw, LevelContract levels)
             : fields_m(fields)
             , raw_m(raw)
             , levels_m(levels) {
@@ -264,7 +263,7 @@ namespace {
             Kokkos::deep_copy(temporal_m, temporalHost_m);
         }
         chdr::vacuum::Fields& fields_m;
-        FourierProbe::VectorField& raw_m;
+        EMFieldsType& raw_m;
         LevelContract levels_m;
         std::size_t total_m = 0;
         SpaceView spatial_m;
@@ -363,8 +362,8 @@ namespace {
         return probes;
     }
 
-    void sampleFrozenGates(chdr::vacuum::Fields& fields, FourierProbe::VectorField& raw,
-                           SignalWriter& signal, ProbeList& probes) {
+    void sampleFrozenGates(chdr::vacuum::Fields& fields, EMFieldsType& raw, SignalWriter& signal,
+                           ProbeList& probes) {
         for (int step = 0; step < 100000; ++step) {
             signal.write(step, step >= 101 && step < 4197);
             for (auto& probe : probes)
@@ -521,7 +520,7 @@ namespace {
     TEST(FourierProbeT8, FrozenGatesAndNaNGhosts) {
         auto fields = makeFields();
         chdr::vacuum::initializeFieldStorage(fields);
-        FourierProbe::VectorField raw;
+        EMFieldsType raw;
         raw.initialize(fields.getMesh(), fields.getFL());
         const LevelContract levels{EBReconstructionConvention::R2};
         auto probes = frozenProbes(fields, levels);
@@ -618,7 +617,7 @@ namespace {
     TEST(FourierProbeT8, StaggeredPlaneClosedForm) {
         auto fields = makeFields();
         chdr::vacuum::initializeFieldStorage(fields);
-        FourierProbe::VectorField raw;
+        EMFieldsType raw;
         raw.initialize(fields.getMesh(), fields.getFL());
         const LevelContract levels{EBReconstructionConvention::R2,
                                    SpatialDiscretization::Staggered};

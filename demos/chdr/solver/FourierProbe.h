@@ -117,11 +117,6 @@ namespace chdr::solver {
      */
     class FourierProbe {
     public:
-        /// E/B storage with Cartesian components indexed from zero through SpatialDim-1.
-        using VectorField = EMFieldsType;
-        /// Potential storage: scalar component zero, Cartesian vector components 1 through
-        /// SpatialDim.
-        using PotentialField                         = AJFourFieldsType;
         FourierProbe(const FourierProbe&)            = delete;
         FourierProbe& operator=(const FourierProbe&) = delete;
         FourierProbe(FourierProbe&&)                 = default;
@@ -142,7 +137,7 @@ namespace chdr::solver {
          * @param window Rectangle or periodic Hann weights on gate-local indices.
          * @param phiIsZero Explicit declaration permitting R1 electric samples.
          */
-        FourierProbe(const VectorField& geometry, LevelContract levels, double dt, ProbeBox box,
+        FourierProbe(const EMFieldsType& geometry, LevelContract levels, double dt, ProbeBox box,
                      std::vector<ProbeChannel> channels, std::vector<double> frequencies,
                      std::int64_t firstStep, std::int64_t samples,
                      ProbeWindow window = ProbeWindow::Rectangle, bool phiIsZero = false)
@@ -202,8 +197,8 @@ namespace chdr::solver {
          * @pre At count zero, reconstruct initial E/B after loading histories.
          * Prefer SolverFourierProbe for evolving solver fields: it supplies these arguments.
          */
-        void sample(std::int64_t step, const VectorField& electric, const VectorField& magnetic,
-                    const VectorField& rawMagnetic, const PotentialField& currentA) {
+        void sample(std::int64_t step, const EMFieldsType& electric, const EMFieldsType& magnetic,
+                    const EMFieldsType& rawMagnetic, const AJFourFieldsType& currentA) {
             if (step < record_m.firstStep_m || step >= record_m.firstStep_m + record_m.samples_m)
                 return;
             if (step != record_m.firstStep_m + samplesSeen_m)
@@ -237,8 +232,8 @@ namespace chdr::solver {
         using ChannelView                      = Kokkos::View<ProbeChannel*>;
         using FactorView                       = Kokkos::View<double***>;
         using ValueView                        = Kokkos::View<double****>;
-        using VectorFieldView                  = VectorField::view_type::const_type;
-        using FourPotentialView                = PotentialField::view_type::const_type;
+        using VectorFieldView                  = EMFieldsType::view_type::const_type;
+        using FourPotentialView                = AJFourFieldsType::view_type::const_type;
         struct OutputBuffers {
             std::vector<double> values_m;
             std::vector<int> counts_m;
@@ -298,7 +293,7 @@ namespace chdr::solver {
         }
 
         /// Reject out-of-domain boxes and bound the two-double output by MPI's integer count.
-        void initializeGeometry(const VectorField& geometry) {
+        void initializeGeometry(const EMFieldsType& geometry) {
             const auto& domain = geometry.getLayout().getDomain();
             std::size_t count  = 1;
             const auto width   = record_m.channels_m.size() * record_m.frequencies_m.size() * 2;
@@ -333,7 +328,7 @@ namespace chdr::solver {
         }
 
         /// Global indices are ordered x/y/z, with z contiguous in the output.
-        std::vector<std::array<int, 4>> ownedCells(const VectorField& geometry) {
+        std::vector<std::array<int, 4>> ownedCells(const EMFieldsType& geometry) {
             const auto& local = geometry.getLayout().getLocalNDIndex();
             std::vector<std::array<int, 4>> owned;
             for (int i = box_m.first_m[0]; i <= box_m.last_m[0]; ++i)
@@ -491,8 +486,8 @@ namespace chdr::solver {
          * this access follows the same restriction documented by IPPL's FFT wrappers.
          * Call sample() for the public sampling protocol, including gate/phase preparation.
          */
-        void accumulate(const VectorField& electric, const VectorField& magnetic,
-                        const VectorField& rawMagnetic, const PotentialField& currentA) {
+        void accumulate(const EMFieldsType& electric, const EMFieldsType& magnetic,
+                        const EMFieldsType& rawMagnetic, const AJFourFieldsType& currentA) {
             const VectorFieldView e = electric.getView(), b = magnetic.getView(),
                                   raw = rawMagnetic.getView();
             const FourPotentialView a = currentA.getView();
@@ -632,6 +627,6 @@ namespace chdr::solver {
         SolverType& solver_m;
         unsigned long long revision_m;
         FourierProbe probe_m;
-        std::optional<FourierProbe::VectorField> raw_m;
+        std::optional<EMFieldsType> raw_m;
     };
 }  // namespace chdr::solver
