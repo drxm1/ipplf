@@ -158,6 +158,13 @@ There is one row for every measured state, including step zero:
 | `phaseReal,phaseImag,phaseAmplitude` | Normalized potential Fourier coefficient and magnitude |
 | `phaseIncrement,phaseSpeed` | Signed increment in radians and cumulative speed |
 | `count` | Global owned-cell count: 4096 coarse, 32768 fine |
+| `energyE,energyB,energy` | Field energies `0.5*hx*hy*hz*sum(abs(E)^2)`, `0.5*hx*hy*hz*sum(abs(B)^2)` over owned cells, and their sum; diagnostic only, no acceptance check |
+| `energyInvariant` | Cross-level energy of the newest two potential histories, labelled `timeE`; conserved by the source-free periodic update; diagnostic only |
+
+E and B are summed at their own raw times (`timeE`, `timeB`), so `energy` adds two
+different times and is not conserved exactly. `energyInvariant` is the conserved
+energy of the three-level update; its definition and source are in
+[VacuumEnergy.h](VacuumEnergy.h).
 
 Initial `phaseSpeed` is empty because no time has elapsed. Rank zero attempts to
 print each sample before its own validation; another rank's MPI abort can prevent
