@@ -12,9 +12,11 @@
 #include <limits>
 
 #include "BoxSetup.h"
+#include "VacuumSetup.h"
 
 namespace {
     using namespace chdr::solver;
+    using chdr::vacuum::preparePotentialHalo;
 
     /// Set a sentinel everywhere, then write unique global IDs on owned cells only.
     void fillOwnedIdentifiers(AJFourFieldsType& potential, ippl::Vector<int, SpatialDim> first) {

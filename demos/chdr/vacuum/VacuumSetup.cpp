@@ -1,6 +1,5 @@
 #include "VacuumSetup.h"
 
-#include <algorithm>
 #include <array>
 #include <stdexcept>
 
@@ -26,39 +25,6 @@ namespace chdr::vacuum {
             spacing[d] = (upper[d] - lower[d]) / cells[d];
         }
         return Fields(spacing, lower, upper, {false, false, true}, domain, lower, true);
-    }
-
-    /** @brief Require at least two owned cells per axis on every rank.
-     * @param layout Initialized, consistent 3D layout on an MPI intracommunicator.
-     * @pre All ranks in layout.comm call this in matching collective order.
-     * @throws std::runtime_error If any rank has fewer than two cells on an axis.
-     * @details Checks extents for the default one-cell halo, not arbitrary stencils.
-     * Any grid size/split axes; see HaloCells::exchangeBoundaries in src/Field/HaloCells.hpp.
-     */
-    void checkLocalDomain(const ippl::FieldLayout<Dim>& layout) {
-        const auto& local    = layout.getLocalNDIndex();
-        const int localValid = std::all_of(local.begin(), local.end(), [](const auto& axis) {
-            return axis.length() >= 2;
-        });
-        int globalValid      = 0;
-        MPI_Allreduce(&localValid, &globalValid, 1, MPI_INT, MPI_MIN, layout.comm);
-        if (!globalValid)
-            throw std::runtime_error(
-                "Every rank must own at least two cells per local axis, required by IPPL halo "
-                "exchange");
-    }
-
-    /** @brief Allocate E/B/J storage and zero the charge/current source.
-     * @param fields Container owning the mesh, layout and resulting field storage.
-     * @pre Fresh setup after checkLocalDomain; keep fields at this address afterward.
-     * @details FELFieldContainer::initializeFields calls Field::initialize(mesh, layout)
-     * without a halo argument, using its nghost=1 default (src/Field/Field.h).
-     * Potential histories belong to the solver; evaluate_EB initializes E and B.
-     */
-    void initializeFieldStorage(Fields& fields) {
-        fields.initializeFields();
-        // Scalar assignment zeros every source component in owned and halo cells.
-        fields.getJ() = 0.0;
     }
 
     /** @brief Finish pending writes and synchronize one potential's periodic halos.

@@ -19,6 +19,7 @@
 #include "CoreTestSupport.h"
 #include "MonitorTestSupport.h"
 #include "SpatialDimension.h"
+#include "VacuumSetup.h"
 #include "Waves.h"
 
 static_assert(
@@ -28,6 +29,7 @@ static_assert(
 namespace {
     using namespace chdr::solver;
     using namespace chdr::solver::coreTest;
+    using chdr::vacuum::preparePotentialHalo;
 
     /** @brief Produce R2's extra scalar history while retaining the common vector slots.
      * @details prime.step() fills scratch A_np1 without shifting its histories or

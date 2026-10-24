@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "VacuumFailure.h"
+#include "Util.h"
 
 int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);
@@ -24,9 +24,9 @@ int main(int argc, char* argv[]) {
             GTEST_FLAG_SET(random_seed, 1);
         result = RUN_ALL_TESTS();
     } catch (const IpplException& error) {
-        result = chdr::vacuum::abortFailure(error.where(), error.what());
+        result = chdr::core::util::abortFailure(error.where(), error.what());
     } catch (const std::exception& error) {
-        result = chdr::vacuum::abortFailure("RUN_ALL_TESTS", error.what());
+        result = chdr::core::util::abortFailure("RUN_ALL_TESTS", error.what());
     }
     MPI_Allreduce(MPI_IN_PLACE, &result, 1, MPI_INT, MPI_MAX, *ippl::Comm);
     ippl::finalize();

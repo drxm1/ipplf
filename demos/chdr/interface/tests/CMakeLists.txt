@@ -1,6 +1,5 @@
 include(AddIpplTest)
-add_ippl_test(test-plane-interface COMPILE_ONLY SOURCES ../../vacuum/tests/TestMain.cpp
-              test_plane_interface.cpp)
+add_ippl_test(test-plane-interface COMPILE_ONLY SOURCES ${CHDR_TEST_MAIN} test_plane_interface.cpp)
 target_link_libraries(test-plane-interface PRIVATE chdr-solver)
 add_test(NAME chdr.interface.normal COMMAND test-plane-interface
                                             --gtest_filter=PlaneInterface.Normal)

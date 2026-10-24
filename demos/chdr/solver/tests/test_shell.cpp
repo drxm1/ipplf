@@ -12,6 +12,7 @@
 
 #include "BoxSetup.h"
 #include "SpatialDimension.h"
+#include "VacuumSetup.h"
 #include "VacuumWave.h"
 
 static_assert(chdr::solver::SpatialDim == 3,

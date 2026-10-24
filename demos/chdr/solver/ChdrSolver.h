@@ -30,16 +30,16 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include "FELFieldContainer.hpp"
+#include "FieldContainer.h"
 #include "LevelContract.h"
 #include "MaterialFormulation.h"
 #include "MaterialStepContext.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
+#include "MaxwellSolvers/StandardFDTDSolver.h"
 #include "Operators.h"
 #include "Reconstruction.h"
 #include "SpatialDimension.h"
 #include "StaggeredReconstruction.h"
-#include "VacuumSetup.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "ChdrSolver.h requires three spatial dimensions for its Cartesian implementation");
@@ -95,12 +95,6 @@ namespace chdr::solver {
             : physical_m(physical) {}
         double physical_m;
     };
-
-    /// Caller-owned mesh, layout, source and output storage container.
-    using ChDRFieldContainer = FELFieldContainer<double, SpatialDim>;
-
-    /// Three-component electric or magnetic field storage type on an IPPL mesh.
-    using EMFieldsType = VField_t<double, SpatialDim>;
 
     /// Configured Standard base; retain the alias name for existing ChdrSolver callers.
     using StandardSolverPeriodic =

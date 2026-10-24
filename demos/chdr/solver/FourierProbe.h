@@ -27,9 +27,9 @@
 #include <utility>
 #include <vector>
 
+#include "FieldContainer.h"
 #include "LevelContract.h"
 #include "SpatialDimension.h"
-#include "VacuumSetup.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "FourierProbe.h requires three spatial dimensions for its Cartesian implementation");
@@ -118,10 +118,10 @@ namespace chdr::solver {
     class FourierProbe {
     public:
         /// E/B storage with Cartesian components indexed from zero through SpatialDim-1.
-        using VectorField = VField_t<double, SpatialDim>;
+        using VectorField = EMFieldsType;
         /// Potential storage: scalar component zero, Cartesian vector components 1 through
         /// SpatialDim.
-        using PotentialField                         = SourceField_t<double, SpatialDim>;
+        using PotentialField                         = AJFourFieldsType;
         FourierProbe(const FourierProbe&)            = delete;
         FourierProbe& operator=(const FourierProbe&) = delete;
         FourierProbe(FourierProbe&&)                 = default;

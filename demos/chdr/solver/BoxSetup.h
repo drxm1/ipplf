@@ -6,6 +6,7 @@
 #include <array>
 
 #include "ChdrSolver.h"
+#include "FieldContainer.h"
 #include "SpatialDimension.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
@@ -28,15 +29,6 @@ namespace chdr::solver {
     ChDRFieldContainer makeBoxFieldContainer(
         std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
         unsigned splitAxis = 0, std::array<bool, SpatialDim> periodic = {true, true, true});
-
-    /// Reusing from the vacuum wave example
-    using chdr::vacuum::checkLocalDomain;
-
-    /// Reusing from the vacuum wave example
-    using chdr::vacuum::initializeFieldStorage;
-
-    /// Reusing from the vacuum wave example
-    using chdr::vacuum::preparePotentialHalo;
 
     /** @brief Write owned analytic components at their declared positions and times.
      * @tparam AnalyticSampler Device-copyable functor returning one component value from

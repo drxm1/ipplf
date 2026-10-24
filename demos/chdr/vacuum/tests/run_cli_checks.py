@@ -59,7 +59,7 @@ def run_case(args, directory, specification):
     with out_path.open('w') as out, err_path.open('w') as err:
         with (directory / 'stdin.txt').open('r') as stdin:
             status = invoke(argv, directory, environment, out, err, stdin)
-    reason = '--steps exceeds the one-period benchmark' if prefix else 'vacuum rank '
+    reason = '--steps exceeds the one-period benchmark' if prefix else 'rank '
     expected = status == 0 if success else status not in (0, 124) and reason in err_path.read_text()
     return {'case': name, 'argv': argv, 'cwd': str(directory), 'exit_code': status,
             'expected_success': success, 'passed': expected,

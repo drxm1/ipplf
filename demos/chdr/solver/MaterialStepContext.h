@@ -5,15 +5,10 @@
 
 #include "Ippl.h"
 
-#include "FELFieldContainer.hpp"
+#include "FieldContainer.h"
 #include "SpatialDimension.h"
 
 namespace chdr::solver {
-    /// Four-component scalar/vector potential or charge/current storage type.
-    /// Component zero stores \f$\phi\f$ or \f$\rho\f$; components 1 through SpatialDim
-    /// store the Cartesian components of \f$\mathbf A\f$ or \f$\mathbf J\f$.
-    using AJFourFieldsType = SourceField_t<double, SpatialDim>;
-
     /** @brief Give a MaterialUpdate access to ChdrSolver's fields and step operations.
      * @details ChdrSolver owns both a concrete implementation of this context
      * interface and a MaterialUpdate object. For one step, it passes its context

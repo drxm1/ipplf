@@ -17,7 +17,7 @@ add_ippl_test(
   test-chdr-vacuum
   COMPILE_ONLY
   SOURCES
-  TestMain.cpp
+  ${CHDR_TEST_MAIN}
   test_first_step.cpp
   test_setup.cpp
   test_diagnostics.cpp
@@ -26,6 +26,7 @@ add_ippl_test(
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
+target_link_libraries(test-chdr-vacuum PRIVATE chdr-solver)
 
 # Exercise the actual debug guards in this test target, including VacuumSetup.cpp. This does not
 # change the production executable's build configuration.

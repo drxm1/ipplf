@@ -15,6 +15,7 @@
 
 #include "BoxSetup.h"
 #include "SpatialDimension.h"
+#include "VacuumSetup.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,
@@ -22,6 +23,8 @@ static_assert(
 
 namespace chdr::solver::test {
     using Complex = std::complex<double>;
+    /// Periodic halo preparation of the vacuum-wave example; the core uses prepareHistories().
+    using chdr::vacuum::preparePotentialHalo;
 
     /** @brief Finite Fourier series of one mode or a transversely neutralized Gaussian train.
      * @pre The test meshes have even cell counts and resolve the selected single mode.

@@ -3,7 +3,7 @@ add_ippl_test(
   test-chdr-interface-unit
   COMPILE_ONLY
   SOURCES
-  ../../vacuum/tests/TestMain.cpp
+  ${CHDR_TEST_MAIN}
   test_o1vs_regression.cpp
   test_interface_energy.cpp
   test_simulation.cpp

@@ -17,6 +17,7 @@
 #include "ChdrSolver.h"
 #include "FourierProbe.h"
 #include "SpatialDimension.h"
+#include "VacuumSetup.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

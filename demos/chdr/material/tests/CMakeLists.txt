@@ -4,13 +4,13 @@ add_ippl_test(
   test-chdr-material
   COMPILE_ONLY
   SOURCES
-  ../../vacuum/tests/TestMain.cpp
+  ${CHDR_TEST_MAIN}
   test_owner.cpp
   test_halo.cpp
   test_derived.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../vacuum"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../solver"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
 target_link_libraries(test-chdr-material PRIVATE chdr-material)
 target_compile_options(test-chdr-material PRIVATE -UNDEBUG)

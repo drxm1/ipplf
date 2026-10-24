@@ -9,10 +9,10 @@
 #include <string>
 
 #include "../output/FieldOutput.h"
+#include "Util.h"
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
 #include "VacuumEnergy.h"
-#include "VacuumFailure.h"
 #include "VacuumSetup.h"
 
 namespace {
@@ -191,9 +191,9 @@ namespace {
             runConfigured(parseOptions(argc, argv));
             return 0;
         } catch (const IpplException& error) {
-            return abortFailure(error.where(), error.what());
+            return chdr::core::util::abortFailure(error.where(), error.what());
         } catch (const std::exception& error) {
-            return abortFailure("runVacuumWave", error.what());
+            return chdr::core::util::abortFailure("runVacuumWave", error.what());
         }
     }
 }  // namespace

@@ -3,7 +3,8 @@ add_ippl_test(
   test-chdr-solver
   COMPILE_ONLY
   SOURCES
-  ../../vacuum/tests/TestMain.cpp
+  ${CHDR_TEST_MAIN}
+  ../../vacuum/VacuumSetup.cpp
   test_shell.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
