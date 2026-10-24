@@ -3,14 +3,13 @@ add_ippl_test(
   test-chdr-solver
   COMPILE_ONLY
   SOURCES
-  ${CHDR_TEST_MAIN}
   ../../vacuum/VacuumSetup.cpp
   test_shell.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
   "${CMAKE_CURRENT_SOURCE_DIR}/../../vacuum"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
-target_link_libraries(test-chdr-solver PRIVATE chdr-solver)
+target_link_libraries(test-chdr-solver PRIVATE chdr-solver chdr-testing)
 target_compile_options(test-chdr-solver PRIVATE -UNDEBUG)
 target_link_libraries(test-chdr-solver PRIVATE nlohmann_json::nlohmann_json)
 find_package(Python3 QUIET COMPONENTS Interpreter)

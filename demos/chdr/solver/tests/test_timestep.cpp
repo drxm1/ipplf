@@ -14,7 +14,7 @@
 #include "MediumOracles.h"
 #include "MonitorTestSupport.h"
 #include "SpatialDimension.h"
-#include "VacuumSetup.h"
+#include "testing/Util.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,
@@ -23,7 +23,7 @@ static_assert(
 namespace {
     using namespace chdr::solver;
     using namespace chdr::solver::coreTest;
-    using chdr::vacuum::preparePotentialHalo;
+    using chdr::testing::util::preparePotentialHalo;
 
     struct ZeroSamples {
         KOKKOS_INLINE_FUNCTION double operator()(double, double, double, double, unsigned) const {

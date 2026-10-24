@@ -15,7 +15,7 @@
 #include "BoxSetup.h"
 #include "MonitorTestSupport.h"
 #include "SpatialDimension.h"
-#include "VacuumSetup.h"
+#include "testing/Util.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,
@@ -23,7 +23,7 @@ static_assert(
 
 namespace {
     using namespace chdr::solver;
-    using chdr::vacuum::preparePotentialHalo;
+    using chdr::testing::util::preparePotentialHalo;
 
     /** @brief Fixed spatial mode metadata; all coordinates are global integer indices.
      * @details Integer-index sampling gives nonzero amplitude at the even-grid

@@ -11,11 +11,11 @@
 
 #include "BoxSetup.h"
 #include "Operators.h"
-#include "VacuumSetup.h"
+#include "testing/Util.h"
 
 namespace {
     using namespace chdr::solver;
-    using chdr::vacuum::preparePotentialHalo;
+    using chdr::testing::util::preparePotentialHalo;
 
     /// Put cosine and sine in adjacent components so each derivative has an independent oracle.
     void loadFourierMode(AJFourFieldsType& potential, ippl::Vector<double, 3> waveNumber) {

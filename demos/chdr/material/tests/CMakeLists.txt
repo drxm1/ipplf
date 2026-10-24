@@ -4,7 +4,6 @@ add_ippl_test(
   test-chdr-material
   COMPILE_ONLY
   SOURCES
-  ${CHDR_TEST_MAIN}
   test_owner.cpp
   test_halo.cpp
   test_derived.cpp
@@ -12,7 +11,7 @@ add_ippl_test(
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
   "${CMAKE_CURRENT_SOURCE_DIR}/../../solver"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../fel")
-target_link_libraries(test-chdr-material PRIVATE chdr-material)
+target_link_libraries(test-chdr-material PRIVATE chdr-material chdr-testing)
 target_compile_options(test-chdr-material PRIVATE -UNDEBUG)
 foreach(suite Owner Halo Derived)
   add_test(NAME chdr.material.${suite}.serial COMMAND test-chdr-material

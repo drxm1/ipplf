@@ -1,13 +1,11 @@
 /** @file test_setup.cpp
- * @brief Independent initialization, local-domain and debug halo-guard tests.
+ * @brief Independent initialization and local-domain tests.
  * @details The sine/history reference is our substitution in Fallahi, MITHRA 2.0,
  * arXiv:2009.13645v1, Eqs. (3.6)-(3.15), printed pp.12-13. The shifted grid is
  * a coordinate/timestep fixture, not a new propagation benchmark. Required
  * stencil faces follow StandardFDTDSolver::step (StandardFDTDSolver.hpp:65-69) and
  * FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp:113-118).
  * Domain rejection follows HaloCells::exchangeBoundaries (HaloCells.hpp:122-128).
- * Debug guards are tested only
- * when the same production VacuumSetup.cpp is compiled without NDEBUG.
  */
 #include "Ippl.h"
 
@@ -179,68 +177,4 @@ namespace {
         expectInitialization(fields);
     }
 
-#ifdef NDEBUG
-    /// @brief Fail visibly if the test target was built without the intended debug checks.
-    TEST(VacuumHaloGuards, RequiresDebugGuardsInThisTestTarget) {
-        FAIL() << "Compile the test target and its VacuumSetup.cpp without NDEBUG";
-    }
-#else
-    /** @brief Fresh periodic storage per guard test; fields outlive the solver.
-     * @details Invalid configurations are introduced consistently on all ranks so local
-     * guards throw before halo communication. This does not test rank-divergent misuse.
-     */
-    class VacuumHaloGuards : public ::testing::Test {
-    protected:
-        void SetUp() override {
-            initializeFieldStorage(fields_m);
-            solver_m =
-                std::make_unique<VacuumSolver>(fields_m.getJ(), fields_m.getE(), fields_m.getB());
-        }
-        Fields fields_m = makePeriodicFieldContainer();
-        std::unique_ptr<VacuumSolver> solver_m;
-    };
-
-    /// @brief Accept ordinary one-cell periodic storage and synchronize its faces.
-    TEST_F(VacuumHaloGuards, AcceptsValidPeriodicStorage) {
-        EXPECT_NO_THROW(preparePotentialHalo(solver_m->A_n));
-    }
-
-    /// @brief Reject a field before any view has been allocated.
-    TEST_F(VacuumHaloGuards, RejectsUnallocatedStorage) {
-        PotentialField empty;
-        EXPECT_THROW(preparePotentialHalo(empty), std::logic_error);
-    }
-
-    /// @brief Reject two-cell halos, outside this helper's one-cell contract.
-    TEST_F(VacuumHaloGuards, RejectsWrongHaloWidth) {
-        PotentialField potential;
-        potential.initialize(fields_m.getMesh(), fields_m.getFL(), 2);
-        potential.setFieldBC(solver_m->A_n.getFieldBC());
-        EXPECT_THROW(preparePotentialHalo(potential), std::logic_error);
-    }
-
-    /// @brief Reject a layout whose periodic flag disagrees with the helper contract.
-    TEST_F(VacuumHaloGuards, RejectsNonperiodicLayout) {
-        fields_m.getFL().isAllPeriodic_m = false;
-        EXPECT_THROW(preparePotentialHalo(solver_m->A_n), std::logic_error);
-    }
-
-    /// @brief Reject a missing face boundary object.
-    TEST_F(VacuumHaloGuards, RejectsMissingFace) {
-        solver_m->A_n.getFieldBC()[0].reset();
-        EXPECT_THROW(preparePotentialHalo(solver_m->A_n), std::logic_error);
-    }
-
-    /// @brief Reject a face boundary object with a nonperiodic type.
-    TEST_F(VacuumHaloGuards, RejectsNonperiodicFace) {
-        solver_m->A_n.getFieldBC()[0] = std::make_shared<ippl::NoBcFace<PotentialField> >(0);
-        EXPECT_THROW(preparePotentialHalo(solver_m->A_n), std::logic_error);
-    }
-
-    /// @brief Reject a periodic boundary object assigned to the wrong face.
-    TEST_F(VacuumHaloGuards, RejectsWrongFaceIndex) {
-        solver_m->A_n.getFieldBC()[0] = std::make_shared<ippl::PeriodicFace<PotentialField> >(1);
-        EXPECT_THROW(preparePotentialHalo(solver_m->A_n), std::logic_error);
-    }
-#endif
 }  // namespace
