@@ -7,10 +7,10 @@
 #include <string>
 #include <type_traits>
 
-#include "../simulation/ChDRSimulationManager.h"
 #include "MovieCases.h"
 #include "MovieFaceSolver.h"
 #include "TMAnnulusStart.h"
+#include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::interface {

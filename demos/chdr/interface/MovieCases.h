@@ -7,10 +7,10 @@
 #include <stdexcept>
 #include <string>
 
-#include "../material/RectangleXZ.h"
-#include "../simulation/SimulationConfig.h"
 #include "AnnulusStart.h"
 #include "TMAnnulusStart.h"
+#include "core/material/RectangleXZ.h"
+#include "core/simulation/SimulationConfig.h"
 
 namespace chdr::interface {
     /// Cell-centred upper-left half-plane; ties on the diagonal belong to the dielectric.

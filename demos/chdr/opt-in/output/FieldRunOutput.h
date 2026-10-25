@@ -10,10 +10,10 @@
 #include <stdexcept>
 #include <string>
 
+#include "core/output/FieldOutput.h"
+#include "core/simulation/SimulationConfig.h"
 #include "opt-in/diagnostics/AlignedFieldEnergy.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
-#include "output/FieldOutput.h"
-#include "simulation/SimulationConfig.h"
 
 namespace chdr::output {
     /// Record Cartesian component offsets in the writer's E-then-B component order.

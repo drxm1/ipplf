@@ -7,7 +7,7 @@ add_ippl_test(
   test_shell.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../vacuum")
-target_link_libraries(test-chdr-solver PRIVATE chdr-solver chdr-diagnostics chdr-testing)
+target_link_libraries(test-chdr-solver PRIVATE chdr-core chdr-diagnostics chdr-testing)
 target_compile_options(test-chdr-solver PRIVATE -UNDEBUG)
 target_link_libraries(test-chdr-solver PRIVATE nlohmann_json::nlohmann_json)
 find_package(Python3 QUIET COMPONENTS Interpreter)

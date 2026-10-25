@@ -24,7 +24,7 @@ add_ippl_test(
   ../VacuumSetup.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/..")
-target_link_libraries(test-chdr-vacuum PRIVATE chdr-solver chdr-testing)
+target_link_libraries(test-chdr-vacuum PRIVATE chdr-core chdr-testing)
 
 # Keep the debug checks of the test utilities active in this test target. This does not change the
 # production executable's build configuration.

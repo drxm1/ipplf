@@ -9,7 +9,7 @@ INPUT                  = StudentGuide.md Documentation.dox \
                          ChdrMeshConfig.h PrismGeometry.h BrickGeometry.h \
                          mesh-1.cpp MaterialViewer.h MeshVisualization.h \
                          test_geometry.cpp verify_mesh_output.py \
-                         ../material/MaterialOwner.h
+                         ../core/material/MaterialOwner.h
 INPUT_ENCODING         = UTF-8
 RECURSIVE              = NO
 USE_MDFILE_AS_MAINPAGE  = StudentGuide.md

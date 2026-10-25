@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "solver/Util.h"
+#include "core/base/Util.h"
 
 int main(int argc, char* argv[]) {
     ippl::initialize(argc, argv);

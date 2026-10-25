@@ -3,8 +3,8 @@
  */
 #pragma once
 
-#include "../simulation/ChDRSimulationManager.h"
 #include "PlanarSlab.h"
+#include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 
 namespace chdr::interface {

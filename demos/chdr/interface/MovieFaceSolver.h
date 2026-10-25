@@ -5,7 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "../solver/ChdrSolver.h"
+#include "core/solver/ChdrSolver.h"
 
 namespace chdr::interface {
     /** @brief Supply six face speeds to the existing Mur dispatcher for field movies.

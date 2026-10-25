@@ -8,12 +8,12 @@
 #include <stdexcept>
 #include <string>
 
-#include "../output/FieldOutput.h"
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
 #include "VacuumEnergy.h"
 #include "VacuumSetup.h"
-#include "solver/Util.h"
+#include "core/base/Util.h"
+#include "core/output/FieldOutput.h"
 
 namespace {
     int runVacuumWave(int argc, char* argv[]);

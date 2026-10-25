@@ -6,7 +6,7 @@
 #include <Kokkos_MathematicalConstants.hpp>
 #include <algorithm>
 
-#include "../../output/FieldOutput.h"
+#include "core/output/FieldOutput.h"
 
 using Vector = Kokkos::Array<double, 3>;
 using View   = Kokkos::View<Vector***, Kokkos::LayoutLeft>;

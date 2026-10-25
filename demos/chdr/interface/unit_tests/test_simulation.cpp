@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-#include "../../simulation/ChDRSimulationManager.h"
+#include "core/simulation/ChDRSimulationManager.h"
 
 namespace {
     using namespace chdr;

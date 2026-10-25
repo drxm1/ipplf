@@ -3,11 +3,11 @@
  */
 #include <gtest/gtest.h>
 
-#include "../../simulation/ChDRSimulationManager.h"
 #include "../MovieCases.h"
 #include "../MovieFaceSolver.h"
 #include "../TMAnnulusStart.h"
 #include "CoreTestSupport.h"
+#include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/diagnostics/AlignedFieldEnergy.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 
