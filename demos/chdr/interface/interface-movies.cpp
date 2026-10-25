@@ -7,11 +7,11 @@
 #include <string>
 #include <type_traits>
 
-#include "../output/FieldRunOutput.h"
 #include "../simulation/ChDRSimulationManager.h"
 #include "MovieCases.h"
 #include "MovieFaceSolver.h"
 #include "TMAnnulusStart.h"
+#include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::interface {
     /// Movie selection and output location; the optional step count permits extending a run.

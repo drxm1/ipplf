@@ -9,9 +9,9 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "MonitorRecords.h"
-#include "Monitors.h"
 #include "SpatialDimension.h"
+#include "opt-in/diagnostics/MonitorRecords.h"
+#include "opt-in/diagnostics/Monitors.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

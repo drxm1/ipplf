@@ -18,9 +18,9 @@
 #include <stdexcept>
 
 #include "ChdrSolver.h"
-#include "MonitorExpressions.h"
-#include "MonitorRecords.h"
 #include "SpatialDimension.h"
+#include "opt-in/diagnostics/MonitorExpressions.h"
+#include "opt-in/diagnostics/MonitorRecords.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "Monitors.h requires three spatial dimensions for its Cartesian implementation");

@@ -22,8 +22,8 @@
  */
 #pragma once
 
-#include "MonitorExpressions.h"
 #include "SpatialDimension.h"
+#include "opt-in/diagnostics/MonitorExpressions.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

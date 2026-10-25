@@ -5,8 +5,8 @@
 
 #include "BoxSetup.h"
 #include "CoreTestSupport.h"
-#include "FourierProbe.h"
-#include "Monitors.h"
+#include "opt-in/diagnostics/FourierProbe.h"
+#include "opt-in/diagnostics/Monitors.h"
 
 namespace chdr::solver::test {
     /** @brief Permit potential sampling at Mur while excluding reconstructed outer-layer fields.

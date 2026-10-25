@@ -12,8 +12,8 @@
 #include <iostream>
 
 #include "MonitorTestSupport.h"
-#include "Monitors.h"
 #include "SpatialDimension.h"
+#include "opt-in/diagnostics/Monitors.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

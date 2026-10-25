@@ -7,7 +7,7 @@
 #include "ChdrSolver.h"
 #include "MediumCases.h"
 #include "MediumOracles.h"
-#include "Monitors.h"
+#include "opt-in/diagnostics/Monitors.h"
 
 namespace chdr::solver::test {
     /** @brief Check map-wide validity and the bound without advancing a solver.

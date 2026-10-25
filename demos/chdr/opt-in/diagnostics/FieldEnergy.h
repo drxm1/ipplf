@@ -59,9 +59,9 @@ namespace chdr::solver {
         };
         /** @brief Accumulate the two cross-level quadratic invariants in one device pass.
          * @details With a and b the current and previous vector histories,
-         * \f$2W_A/V=\sum[\varepsilon_d((a_d-b_d)/dt)^2+(Ca)_d(Cb)_d]+g(a)g(b)/\chi\f$.
-         * The scalar counterpart is \f$2W_\Phi/V=\chi((\phi-\phi')/dt)^2+
-         * \sum\varepsilon_d(D_d^+\phi)(D_d^+\phi')\f$.
+         *      \f$2W_A/V=\sum[\varepsilon_d((a_d-b_d)/dt)^2+(Ca)_d(Cb)_d]+g(a)g(b)/\chi\f$.
+         * The scalar counterpart is
+         *      \f$2W_\Phi/V=\chi((\phi-\phi')/dt)^2 + \sum\varepsilon_d(D_d^+\phi)(D_d^+\phi')\f$.
          * These are the cross-level wave invariants [kreiss2002SecondOrderWave,
          * section 2, before Eq. (2.10)], specialized to Chew's masses and stiffness
          * [chew2014generalizedgauge, Eqs. (16)--(18)]. Both are conserved without

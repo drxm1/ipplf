@@ -18,12 +18,12 @@
 #include "BoxSetup.h"
 #include "ChdrSolver.h"
 #include "CoreTestSupport.h"
-#include "Monitors.h"
 #include "RankRecords.h"
 #include "SerialReference.h"
 #include "SpatialDimension.h"
 #include "WaveNorms.h"
 #include "Waves.h"
+#include "opt-in/diagnostics/Monitors.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "Convergence.h requires three spatial dimensions for its Cartesian implementation");

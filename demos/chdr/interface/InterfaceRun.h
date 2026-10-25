@@ -4,8 +4,8 @@
 #pragma once
 
 #include "../simulation/ChDRSimulationManager.h"
-#include "FieldEnergy.h"
 #include "PlanarSlab.h"
+#include "opt-in/diagnostics/FieldEnergy.h"
 
 namespace chdr::interface {
     using RunBox          = simulation::RunBox;

@@ -5,8 +5,8 @@
 #include <complex>
 #include <functional>
 
-#include "FourierProbe.h"
 #include "InterfaceRun.h"
+#include "opt-in/diagnostics/FourierProbe.h"
 
 namespace chdr::interface {
     /** @brief Configuration of a normal-incidence example in units of the x cell width.

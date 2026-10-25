@@ -1,6 +1,6 @@
 include(AddIpplTest)
 add_ippl_test(test-plane-interface COMPILE_ONLY SOURCES test_plane_interface.cpp)
-target_link_libraries(test-plane-interface PRIVATE chdr-solver chdr-testing)
+target_link_libraries(test-plane-interface PRIVATE chdr-solver chdr-diagnostics chdr-testing)
 add_test(NAME chdr.interface.normal COMMAND test-plane-interface
                                             --gtest_filter=PlaneInterface.Normal)
 add_test(NAME chdr.interface.long.brewster COMMAND test-plane-interface

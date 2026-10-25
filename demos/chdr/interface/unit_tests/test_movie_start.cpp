@@ -7,9 +7,9 @@
 #include "../MovieCases.h"
 #include "../MovieFaceSolver.h"
 #include "../TMAnnulusStart.h"
-#include "AlignedFieldEnergy.h"
 #include "CoreTestSupport.h"
-#include "FieldEnergy.h"
+#include "opt-in/diagnostics/AlignedFieldEnergy.h"
+#include "opt-in/diagnostics/FieldEnergy.h"
 
 namespace {
     using namespace chdr;

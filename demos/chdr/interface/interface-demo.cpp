@@ -6,10 +6,10 @@
 #include <memory>
 #include <sstream>
 
-#include "../output/FieldRunOutput.h"
 #include "InterfaceRun.h"
 #include "PacketStart.h"
 #include "PlanePulse.h"
+#include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::interface {
     /// Record the existing packet case in code axis order, with the x-z display plane explicit.
