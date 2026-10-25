@@ -7,7 +7,7 @@
 
 #include <stdexcept>
 
-#include "FieldContainer.h"
+#include "core/base/FieldContainer.h"
 
 namespace chdr::testing::util {
     /** @brief Finish pending writes and synchronize one potential's periodic halos.

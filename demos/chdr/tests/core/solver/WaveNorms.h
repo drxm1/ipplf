@@ -13,9 +13,9 @@
 #include <cmath>
 #include <utility>
 
-#include "ChdrSolver.h"
-#include "SpatialDimension.h"
 #include "Waves.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/ChdrSolver.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "WaveNorms.h requires three spatial dimensions for its Cartesian implementation");

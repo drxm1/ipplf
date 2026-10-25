@@ -22,7 +22,7 @@
  */
 #pragma once
 
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 #include "opt-in/diagnostics/MonitorExpressions.h"
 
 static_assert(

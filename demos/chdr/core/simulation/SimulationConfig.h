@@ -6,7 +6,7 @@
 #include <array>
 #include <optional>
 
-#include "ChdrSolver.h"
+#include "core/solver/ChdrSolver.h"
 
 namespace chdr::simulation {
     /** @brief Define the Cartesian box and its MPI partition independently of the material map.

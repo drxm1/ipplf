@@ -2,7 +2,7 @@
  * @brief Localized transverse packet for qualitative periodic interface demonstrations.
  */
 #pragma once
-#include "PlanarSlab.h"
+#include "core/material/PlanarSlab.h"
 
 namespace chdr::interface {
     /** @brief Sample a Gaussian carrier, or its weighted discrete curl, at two time levels.

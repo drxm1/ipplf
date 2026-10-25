@@ -10,9 +10,9 @@
 #include <bit>
 #include <gtest/gtest.h>
 
-#include "PlanarSlab.h"
 #include "RandomFields.h"
 #include "SerialReference.h"
+#include "core/material/PlanarSlab.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 
 namespace {

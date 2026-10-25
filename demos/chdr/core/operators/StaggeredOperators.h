@@ -12,8 +12,8 @@
  */
 #pragma once
 
-#include "Operators.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
+#include "core/operators/Operators.h"
 
 namespace chdr::solver {
     /** @brief Difference to the adjacent half-cell location, or its absolute evaluation.

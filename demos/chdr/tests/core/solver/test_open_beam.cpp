@@ -7,11 +7,11 @@
 #include <Kokkos_Complex.hpp>
 #include <gtest/gtest.h>
 
-#include "BoxSetup.h"
 #include "CoreTestSupport.h"
 #include "RankWitness.h"
 #include "SerialReference.h"
 #include "TwoWaveState.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {
     namespace beam {

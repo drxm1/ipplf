@@ -16,7 +16,7 @@
 #include "ComovingPotentials.h"
 #include "MonitorTestSupport.h"
 #include "RankRecords.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

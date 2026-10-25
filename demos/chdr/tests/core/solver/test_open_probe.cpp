@@ -3,8 +3,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "BoxSetup.h"
 #include "CoreTestSupport.h"
+#include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 #include "opt-in/diagnostics/Monitors.h"
 

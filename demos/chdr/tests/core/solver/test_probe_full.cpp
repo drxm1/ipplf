@@ -13,10 +13,10 @@
 #include <memory>
 #include <string>
 
-#include "BoxSetup.h"
-#include "ChdrSolver.h"
-#include "SpatialDimension.h"
 #include "VacuumSetup.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
+#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 
 static_assert(

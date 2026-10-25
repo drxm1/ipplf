@@ -37,7 +37,7 @@
 
 #include <cmath>
 
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 namespace chdr::solver {
     /// Select the inherited periodic vacuum wave operator and its matching Fourier symbol.

@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "BoxSetup.h"
+#include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
 
 namespace {

@@ -30,16 +30,16 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include "FieldContainer.h"
-#include "LevelContract.h"
-#include "MaterialFormulation.h"
-#include "MaterialStepContext.h"
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "MaxwellSolvers/StandardFDTDSolver.h"
-#include "Operators.h"
-#include "Reconstruction.h"
-#include "SpatialDimension.h"
-#include "StaggeredReconstruction.h"
+#include "core/base/FieldContainer.h"
+#include "core/base/LevelContract.h"
+#include "core/base/SpatialDimension.h"
+#include "core/formulation/MaterialFormulation.h"
+#include "core/formulation/MaterialStepContext.h"
+#include "core/operators/Operators.h"
+#include "core/operators/Reconstruction.h"
+#include "core/operators/StaggeredReconstruction.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "ChdrSolver.h requires three spatial dimensions for its Cartesian implementation");

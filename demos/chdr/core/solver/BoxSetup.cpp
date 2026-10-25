@@ -1,7 +1,7 @@
 /** @file BoxSetup.cpp
  * @brief Construct a mesh/layout owner without allocating its field views.
  */
-#include "BoxSetup.h"
+#include "core/solver/BoxSetup.h"
 
 #include <cmath>
 #include <stdexcept>

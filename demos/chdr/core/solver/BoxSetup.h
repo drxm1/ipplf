@@ -5,9 +5,9 @@
 
 #include <array>
 
-#include "ChdrSolver.h"
-#include "FieldContainer.h"
-#include "SpatialDimension.h"
+#include "core/base/FieldContainer.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/ChdrSolver.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "BoxSetup.h requires three spatial dimensions for its Cartesian implementation");

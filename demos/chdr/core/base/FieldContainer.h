@@ -11,7 +11,7 @@
 #include "Ippl.h"
 
 #include "FELFieldContainer.hpp"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 namespace chdr::solver {
     /// Caller-owned mesh, layout, source and output storage container.

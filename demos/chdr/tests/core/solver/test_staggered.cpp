@@ -17,8 +17,8 @@
 #include <limits>
 
 #include "MonitorTestSupport.h"
-#include "SpatialDimension.h"
-#include "StaggeredOperators.h"
+#include "core/base/SpatialDimension.h"
+#include "core/operators/StaggeredOperators.h"
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(

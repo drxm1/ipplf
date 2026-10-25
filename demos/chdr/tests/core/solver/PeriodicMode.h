@@ -10,7 +10,7 @@
 #include <cmath>
 #include <stdexcept>
 
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 namespace chdr::solver {
     /** @brief Reject a wave whose phase fails to close on a declared periodic box.

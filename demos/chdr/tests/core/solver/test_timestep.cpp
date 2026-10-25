@@ -13,7 +13,7 @@
 #include "CoreTestSupport.h"
 #include "MediumOracles.h"
 #include "MonitorTestSupport.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 #include "testing/Util.h"
 
 static_assert(

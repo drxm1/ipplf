@@ -6,8 +6,8 @@
 #include "Ippl.h"
 
 #include "FELFieldContainer.hpp"
-#include "FieldContainer.h"
 #include "MaxwellSolvers/StandardFDTDSolver.h"
+#include "core/base/FieldContainer.h"
 
 /// Vacuum-wave setup; callers initialize IPPL and retain the owning fields.
 namespace chdr::vacuum {

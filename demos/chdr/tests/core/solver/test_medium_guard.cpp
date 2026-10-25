@@ -3,10 +3,10 @@
  */
 #include <gtest/gtest.h>
 
-#include "BoxSetup.h"
-#include "ChdrSolver.h"
 #include "MediumCases.h"
 #include "MediumOracles.h"
+#include "core/solver/BoxSetup.h"
+#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/Monitors.h"
 
 namespace chdr::solver::test {

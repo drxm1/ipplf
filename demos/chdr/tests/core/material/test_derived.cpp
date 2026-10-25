@@ -1,8 +1,8 @@
 /** @file test_derived.cpp
  * @brief Compare every cached coefficient cell with its independently authored closed form.
  */
-#include "O1VSCoefficients.h"
 #include "OwnerTestSupport.h"
+#include "core/material/O1VSCoefficients.h"
 
 namespace chdr::material::test {
     /** @brief Compare a face field over its complete allocation with the independent oracle.

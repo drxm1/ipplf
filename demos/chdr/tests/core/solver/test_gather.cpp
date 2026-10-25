@@ -5,9 +5,9 @@
  */
 #include <gtest/gtest.h>
 
-#include "BoxSetup.h"
 #include "RankRecords.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "test_gather.cpp requires three spatial dimensions for its Cartesian implementation");

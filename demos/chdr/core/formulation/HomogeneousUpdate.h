@@ -5,8 +5,8 @@
 
 #include <cmath>
 
-#include "MaterialStepContext.h"
-#include "Operators.h"
+#include "core/formulation/MaterialStepContext.h"
+#include "core/operators/Operators.h"
 
 namespace chdr::solver {
     /** @brief Evolve homogeneous Lorenz-gauge potentials with physical sources.

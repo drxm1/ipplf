@@ -2,7 +2,7 @@
  * @brief Cell and positive-face coefficient rules for the variable-scalar gauge.
  */
 #pragma once
-#include "MaterialOwner.h"
+#include "core/material/MaterialOwner.h"
 
 namespace chdr::material {
     /** @brief Store \f$\varepsilon^{-2}\f$ at cell centres, without the gauge parameter.

@@ -22,10 +22,10 @@
 #include <cmath>
 #include <limits>
 
-#include "BoxSetup.h"
-#include "Operators.h"
-#include "SpatialDimension.h"
-#include "StaggeredOperators.h"
+#include "core/base/SpatialDimension.h"
+#include "core/operators/Operators.h"
+#include "core/operators/StaggeredOperators.h"
+#include "core/solver/BoxSetup.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

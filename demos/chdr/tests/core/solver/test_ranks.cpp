@@ -8,12 +8,12 @@
  */
 #include <gtest/gtest.h>
 
-#include "BoxSetup.h"
-#include "ChdrSolver.h"
 #include "MonitorTestSupport.h"
 #include "RankRecords.h"
-#include "SpatialDimension.h"
 #include "Waves.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
+#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(chdr::solver::SpatialDim == 3,

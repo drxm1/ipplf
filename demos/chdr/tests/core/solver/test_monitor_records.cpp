@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 #include "opt-in/diagnostics/MonitorRecords.h"
 #include "opt-in/diagnostics/Monitors.h"
 

@@ -4,8 +4,8 @@
 #pragma once
 #include <stdexcept>
 
-#include "ChdrSolver.h"
-#include "O1VSCoefficients.h"
+#include "core/material/O1VSCoefficients.h"
+#include "core/solver/ChdrSolver.h"
 
 namespace chdr::solver {
     namespace alignedEnergyDetail {

@@ -6,7 +6,7 @@
 #pragma once
 #include <gtest/gtest.h>
 
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(

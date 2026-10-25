@@ -12,7 +12,7 @@
 #include <fstream>
 #include <vector>
 
-#include "BoxSetup.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {
     /** @brief Read exactly two four-component binary64 histories from a generated fixture.

@@ -4,10 +4,10 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "BoxSetup.h"
 #include "CoreTestSupport.h"
 #include "OpenRunSupport.h"
 #include "RandomPotentialHistoryFixture.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {
     /** @brief Compare a medium step with the same vacuum kernel at its internal timestep.

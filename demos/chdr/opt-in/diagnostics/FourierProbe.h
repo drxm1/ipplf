@@ -27,9 +27,9 @@
 #include <utility>
 #include <vector>
 
-#include "FieldContainer.h"
-#include "LevelContract.h"
-#include "SpatialDimension.h"
+#include "core/base/FieldContainer.h"
+#include "core/base/LevelContract.h"
+#include "core/base/SpatialDimension.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "FourierProbe.h requires three spatial dimensions for its Cartesian implementation");

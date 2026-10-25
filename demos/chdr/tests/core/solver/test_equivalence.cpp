@@ -18,8 +18,8 @@
 
 #include "CoreTestSupport.h"
 #include "MonitorTestSupport.h"
-#include "SpatialDimension.h"
 #include "Waves.h"
+#include "core/base/SpatialDimension.h"
 #include "testing/Util.h"
 
 static_assert(

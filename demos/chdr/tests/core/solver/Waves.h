@@ -8,10 +8,10 @@
 #include <array>
 #include <stdexcept>
 
-#include "LevelContract.h"
-#include "Operators.h"
 #include "PeriodicMode.h"
-#include "SpatialDimension.h"
+#include "core/base/LevelContract.h"
+#include "core/base/SpatialDimension.h"
+#include "core/operators/Operators.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "Waves.h requires three spatial dimensions for its Cartesian implementation");

@@ -17,7 +17,7 @@
 #include <limits>
 #include <utility>
 
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

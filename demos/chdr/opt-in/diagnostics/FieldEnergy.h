@@ -5,8 +5,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "ChdrSolver.h"
-#include "O1VSOperator.h"
+#include "core/formulation/O1VSOperator.h"
+#include "core/solver/ChdrSolver.h"
 
 namespace chdr::solver {
     /** @brief Whole-domain sums for one discrete potential invariant, not per-cell values.

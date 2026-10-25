@@ -9,7 +9,7 @@
 #pragma once
 #include "MediumOracles.h"
 #include "PeriodicMode.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "LorenzWave.h requires three spatial dimensions for its Cartesian implementation");

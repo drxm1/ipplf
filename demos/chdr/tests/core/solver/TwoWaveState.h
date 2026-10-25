@@ -4,8 +4,8 @@
 #pragma once
 #include <vector>
 
-#include "LevelContract.h"
 #include "OpenBoxCases.h"
+#include "core/base/LevelContract.h"
 
 namespace chdr::solver::test::reflection {
     using Complex = OracleComplex;

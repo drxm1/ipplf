@@ -6,8 +6,8 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "SpatialDimension.h"
 #include "VacuumSetup.h"
+#include "core/base/SpatialDimension.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 
 static_assert(chdr::solver::SpatialDim == 3,

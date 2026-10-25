@@ -17,8 +17,8 @@
 #include <array>
 #include <stdexcept>
 
-#include "ChdrSolver.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/MonitorExpressions.h"
 #include "opt-in/diagnostics/MonitorRecords.h"
 

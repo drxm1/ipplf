@@ -8,9 +8,9 @@
 #include <stdexcept>
 #include <utility>
 
-#include "BoxSetup.h"
 #include "Manager/BaseManager.h"
-#include "SimulationConfig.h"
+#include "core/simulation/SimulationConfig.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::simulation {
     /** @brief Construct and advance a configured field problem and invoke experiment observers.

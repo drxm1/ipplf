@@ -5,15 +5,7 @@
 add_subdirectory(material)
 
 add_library(chdr-core STATIC base/FieldContainer.cpp solver/BoxSetup.cpp)
-# The demos/chdr root carries the qualified includes. The unit directories stay exported until the
-# include conversion commit; they let the bare includes of the old layout resolve.
-target_include_directories(
-  chdr-core
-  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/.."
-         "${CMAKE_CURRENT_SOURCE_DIR}/base"
-         "${CMAKE_CURRENT_SOURCE_DIR}/operators"
-         "${CMAKE_CURRENT_SOURCE_DIR}/formulation"
-         "${CMAKE_CURRENT_SOURCE_DIR}/solver"
-         "${CMAKE_CURRENT_SOURCE_DIR}/simulation"
-         "${CMAKE_CURRENT_SOURCE_DIR}/output")
+# Only the demos/chdr root is exported: every core header is included by its path, and the compiler
+# rejects a bare include.
+target_include_directories(chdr-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(chdr-core PUBLIC ippl chdr-material chdr-fel-headers)

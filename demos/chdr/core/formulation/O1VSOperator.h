@@ -2,8 +2,8 @@
  * @brief Device expressions for the variable-scalar generalized gauge.
  */
 #pragma once
-#include "MaterialStepContext.h"
-#include "O1VSCoefficients.h"
+#include "core/formulation/MaterialStepContext.h"
+#include "core/material/O1VSCoefficients.h"
 
 namespace chdr::solver {
     /** @brief Read one potential level and immutable face/node coefficients.

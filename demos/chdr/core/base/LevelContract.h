@@ -15,8 +15,8 @@
 #include <array>
 #include <stdexcept>
 
-#include "HalfStepOffset.h"
-#include "SpatialDimension.h"
+#include "core/base/HalfStepOffset.h"
+#include "core/base/SpatialDimension.h"
 
 namespace chdr::solver {
     /// Select spatial component placement and its associated discrete operators.

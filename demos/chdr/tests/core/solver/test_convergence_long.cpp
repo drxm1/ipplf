@@ -4,7 +4,7 @@
  * TODO: REVIEW.
  */
 #include "Convergence.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

@@ -4,7 +4,7 @@
 #pragma once
 #include <limits>
 
-#include "MaterialFormulation.h"
+#include "core/formulation/MaterialFormulation.h"
 
 namespace chdr::solver::test {
     /** @brief Expected acceptance for one material map and solver selection.

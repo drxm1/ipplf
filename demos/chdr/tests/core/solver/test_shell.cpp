@@ -10,10 +10,10 @@
 #include <limits>
 #include <type_traits>
 
-#include "BoxSetup.h"
-#include "SpatialDimension.h"
 #include "VacuumSetup.h"
 #include "VacuumWave.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "test_shell.cpp requires three spatial dimensions for its Cartesian implementation");

@@ -5,8 +5,8 @@
 
 #include "Ippl.h"
 
-#include "FieldContainer.h"
-#include "SpatialDimension.h"
+#include "core/base/FieldContainer.h"
+#include "core/base/SpatialDimension.h"
 
 namespace chdr::solver {
     /** @brief Give a MaterialUpdate access to ChdrSolver's fields and step operations.

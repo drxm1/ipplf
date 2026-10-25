@@ -5,8 +5,8 @@
 #include <gtest/gtest.h>
 
 #include "FELFieldContainer.hpp"
-#include "MaterialOwner.h"
 #include "OwnerOracles.h"
+#include "core/material/MaterialOwner.h"
 
 namespace chdr::material::test {
     inline const CellIndex Cells(12, 14, 16);

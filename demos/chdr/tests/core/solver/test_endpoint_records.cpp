@@ -12,9 +12,9 @@
 #include <iomanip>
 #include <iostream>
 
-#include "BoxSetup.h"
 #include "MonitorTestSupport.h"
-#include "SpatialDimension.h"
+#include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
 
 static_assert(
