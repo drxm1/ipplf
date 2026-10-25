@@ -4,6 +4,3 @@ add_library(chdr-solver STATIC BoxSetup.cpp FieldContainer.cpp)
 target_include_directories(chdr-solver PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
                                               "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(chdr-solver PUBLIC ippl chdr-material chdr-fel-headers)
-if(BUILD_TESTING AND IPPL_ENABLE_UNIT_TESTS)
-  add_subdirectory(tests)
-endif()

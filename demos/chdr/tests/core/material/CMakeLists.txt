@@ -1,15 +1,6 @@
 find_package(GTest REQUIRED)
 include(AddIpplTest)
-add_ippl_test(
-  test-chdr-material
-  COMPILE_ONLY
-  SOURCES
-  test_owner.cpp
-  test_halo.cpp
-  test_derived.cpp
-  INCLUDE_DIRS
-  "${CMAKE_CURRENT_SOURCE_DIR}/.."
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../solver")
+add_ippl_test(test-chdr-material COMPILE_ONLY SOURCES test_owner.cpp test_halo.cpp test_derived.cpp)
 target_link_libraries(test-chdr-material PRIVATE chdr-material chdr-testing chdr-fel-headers)
 target_compile_options(test-chdr-material PRIVATE -UNDEBUG)
 foreach(suite Owner Halo Derived)

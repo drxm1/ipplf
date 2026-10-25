@@ -8,7 +8,7 @@ add_ippl_test(
   test_simulation.cpp
   test_movie_start.cpp
   INCLUDE_DIRS
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../solver/tests")
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/core/solver")
 target_link_libraries(test-chdr-interface-unit PRIVATE chdr-solver chdr-diagnostics chdr-testing
                                                        nlohmann_json::nlohmann_json)
 target_compile_options(test-chdr-interface-unit PRIVATE -UNDEBUG)

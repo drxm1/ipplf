@@ -18,3 +18,7 @@ add_subdirectory(solver)
 add_subdirectory(opt-in/diagnostics)
 add_subdirectory(opt-in/output)
 add_subdirectory(interface)
+
+if(BUILD_TESTING AND IPPL_ENABLE_UNIT_TESTS)
+  add_subdirectory(tests)
+endif()
