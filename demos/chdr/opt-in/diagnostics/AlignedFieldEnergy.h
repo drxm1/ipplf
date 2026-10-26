@@ -4,8 +4,13 @@
 #pragma once
 #include <stdexcept>
 
+#include "core/base/SpatialDimension.h"
 #include "core/material/O1VSCoefficients.h"
 #include "core/solver/ChdrSolver.h"
+
+static_assert(
+    chdr::solver::SpatialDim == 3,
+    "AlignedFieldEnergy.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {
     namespace alignedEnergyDetail {
@@ -42,7 +47,11 @@ namespace chdr::solver {
      * no boundary-specific quadrature weights or boundary fluxes are included. This
      * diagnostic is distinct from the cross-level invariant in FieldEnergy.h and is not
      * asserted to be exactly conserved. MPI reduction counts each owned sample once.
-     * @pre Fields have been reconstructed for the current state; owner is the solver's material.
+     * @param state A ChdrSolver in the staggered reading with R2, its fields reconstructed for
+     * the current state. Every rank of its layout calls this function.
+     * @param owner The solver's MaterialOwner; the function does not check this identity. Its
+     * harmonic face permittivities are derived on the first call (collective) and cached.
+     * @return \f$W_h\f$, identical on every rank.
      */
     template <class Base>
     double alignedFieldEnergy(ChdrSolver<Base>& state, const material::MaterialOwner& owner) {

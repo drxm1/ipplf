@@ -5,12 +5,16 @@
 #include <stdexcept>
 #include <vector>
 
+#include "core/base/SpatialDimension.h"
 #include "core/formulation/O1VSOperator.h"
 #include "core/solver/ChdrSolver.h"
 
+static_assert(chdr::solver::SpatialDim == 3,
+              "FieldEnergy.h requires three spatial dimensions for its Cartesian implementation");
+
 namespace chdr::solver {
     /** @brief Whole-domain sums for one discrete potential invariant, not per-cell values.
-     * @details vacuum_m and dielectric_m partition the owned node, face and edge
+     * @details vacuum_m and dielectric_m partition the owned cell-centre, face and edge
      * contributions by material region; total() adds both regions. absolute_m is
      * the sum of absolute elementary terms before cancellation, a numerical
      * cancellation scale rather than an additional physical energy.
@@ -27,10 +31,10 @@ namespace chdr::solver {
      * These are the discrete cross-level invariants defined in energyDetail::Reduction,
      * not generally the instantaneous electromagnetic field energy.
      * The accumulation proceeds as follows:
-     * 1. Compute contributions from each owned cell and associated staggered nodes, faces and
-     * edges.
+     * 1. Compute contributions from each owned cell: its centre and the associated staggered
+     * faces and edges.
      * 2. Sum locally on each rank, excluding halo cells from the ownership count.
-     * 3. Combine all ranks and apply the cell-volume factor.
+     * 3. Combine all ranks and apply the factor \f$\Delta V/2\f$.
      */
     struct EnergyRecord {
         EnergyParts vector_m, scalar_m;
@@ -79,7 +83,7 @@ namespace chdr::solver {
             /** @brief Split terms by their staggered locations, counting each once.
              * A face belongs to the dielectric when its permittivity differs from one.
              * An edge belongs there when any of its four adjoining cells is dielectric;
-             * nodes use the cell value. Thus both slab interfaces count as dielectric.
+             * cell centres use the cell value. Thus both slab interfaces count as dielectric.
              */
             KOKKOS_INLINE_FUNCTION void operator()(int i, int j, int k, Sums& sums) const {
                 const unsigned region = epsilon_m(i, j, k) == 1 ? 0 : 1;
@@ -135,11 +139,15 @@ namespace chdr::solver {
     }  // namespace energyDetail
 
     /** @brief Read both leapfrog invariants, their material split, and cancellation scales.
-     * @pre The solver uses O1-VS and owner supplies the same material coefficients.
-     * Current and previous halos are valid; all communicator ranks participate.
+     * @param solver A ChdrSolver with the O1-VS formulation, both potential slots loaded and
+     * their halos valid. Every rank of its layout calls this function.
+     * @param owner The MaterialOwner that was passed to the solver constructor. The function
+     * does not check this identity; another owner gives sums with other coefficients.
+     * @return The two invariants with their vacuum/dielectric split, their cancellation scales
+     * and their time labels, identical on every rank.
      * @details No fields are copied to host: only twelve compensated reduction
-     * scalars cross MPI. Region membership follows the node, face and edge rule in Reduction.
-     * A positive initial total is required before forming relative drift; an
+     * scalars cross MPI. Region membership follows the cell-centre, face and edge rule in
+     * Reduction. A positive initial total is required before forming relative drift; an
      * identically zero scalar invariant is reported without normalization.
      */
     template <class Base>

@@ -5,7 +5,6 @@
 
 #include "core/material/PlanarSlab.h"
 #include "core/simulation/ChDRSimulationManager.h"
-#include "opt-in/diagnostics/FieldEnergy.h"
 
 namespace chdr::interface {
     using RunBox          = simulation::RunBox;

@@ -1,12 +1,10 @@
 /** @file test_open_shell.cpp
- * @brief Check open-box construction, physical Mur speeds and supported observations.
+ * @brief Check open-box construction and physical Mur speeds.
  */
 #include <gtest/gtest.h>
 
 #include "CoreTestSupport.h"
 #include "core/solver/BoxSetup.h"
-#include "opt-in/diagnostics/FourierProbe.h"
-#include "opt-in/diagnostics/Monitors.h"
 
 namespace chdr::solver::test {
     /** @brief Require the boundary description and its speed to survive a storage reset.

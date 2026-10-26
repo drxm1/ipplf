@@ -6,8 +6,8 @@
 #include "core/material/O1VSCoefficients.h"
 
 namespace chdr::solver {
-    /** @brief Read one potential level and immutable face/node coefficients.
-     * @details Components 1--3 lie on positive faces; component zero lies at nodes.
+    /** @brief Read one potential level and immutable face and cell-centre coefficients.
+     * @details Components 1--3 lie on positive faces; component zero lies at cell centres.
      * With backward divergence G, this evaluates \f$g=G(\varepsilon A)\f$,
      * \f$\gamma=G(A)\f$ and \f$\chi=\alpha\varepsilon^2\f$
      * [chew2014generalizedgauge, Eqs. (15)--(18)].

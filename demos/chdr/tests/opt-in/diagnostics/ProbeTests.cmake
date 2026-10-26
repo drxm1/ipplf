@@ -1,5 +1,5 @@
 # Register channel-wiring checks and the serial/two-rank spectrum comparison. The basic point and
-# configuration tests are registered by the parent CMakeLists.txt.
+# configuration tests are registered by the CMakeLists.txt that includes this file.
 target_sources(test-chdr-diagnostics PRIVATE test_probe_full.cpp)
 chdr_diagnostics_test(
   probe_wiring
@@ -22,12 +22,14 @@ if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
       $<TARGET_FILE:test-chdr-diagnostics> --mpiexec "${MPIEXEC_EXECUTABLE}"
       "--numproc-flag=${MPIEXEC_NUMPROC_FLAG}" ${probe_mpi_flags} --output-dir
       "${CHDR_DIAGNOSTICS_RECORD_ROOT}/probe-ranks")
+  # The script runs FourierProbeT8.FrozenGatesAndNaNGhosts on one rank and on two ranks, each run
+  # bounded by 60 s inside the script, and compares the two record files.
   set_tests_properties(
     chdr.diagnostics.probe.ranks
     PROPERTIES LABELS
                "chdr;diagnostics;unit;probe;mpi"
                TIMEOUT
-               60
+               150
                PROCESSORS
                2
                ENVIRONMENT

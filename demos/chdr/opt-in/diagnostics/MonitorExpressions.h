@@ -22,10 +22,10 @@
 #include <cmath>
 #include <limits>
 
+#include "core/base/FieldContainer.h"
 #include "core/base/SpatialDimension.h"
 #include "core/operators/Operators.h"
 #include "core/operators/StaggeredOperators.h"
-#include "core/solver/BoxSetup.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,
@@ -256,7 +256,7 @@ namespace chdr::solver {
     }  // namespace monitorDetail
 
     /** @brief Owned-cell residual maxima and unnormalized global Euclidean norms.
-     * @details \f$r_{cell}=\max |R|/S\f$ and \f$r_{global}=\max|R|/\max S\f$;
+     * @details \f$r_{\mathrm{cell}}=\max |R|/S\f$ and \f$r_{\mathrm{global}}=\max|R|/\max S\f$;
      * \f$0/0=0\f$. Scale is the absolute evaluation, including inner stencils.
      * Reference scale: [jeannerod2013ImprovedErrorBounds, Eq. (1.6)]; the file
      * documentation distinguishes this diagnostic from a formal error bound.

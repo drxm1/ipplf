@@ -47,10 +47,12 @@ namespace chdr::solver {
      * source cannot change the completed-step Gauss result.
      * Callers may start monitoring at any solve count; reconstruct initial E
      * only at count zero. Every rank in the layout participates in the same order.
-     * The object allocates 23 doubles per cell including halos: three four-component
-     * histories, one three-component electric history, and two four-component work
-     * arrays. A consecutive collocated R2 sample performs four full-view copies,
-     * 14 halo fills and nine residual reductions (two MPI collectives each).
+     * The object allocates 23 doubles per cell including halos: one four-component
+     * potential copy, two four-component source copies, two four-component work
+     * arrays and one three-component electric copy. In every reading and
+     * reconstruction, a monitored step with continuity available performs four
+     * full-view copies, 14 halo fills and nine residual reductions (two MPI
+     * collectives each); without continuity, 12 halo fills and eight reductions.
      * Monitoring is optional and may be sparse; continuity is unavailable after
      * a skipped solve or history reload unless its preceding source is explicitly seeded.
      * Formula checks assume the inherited vacuum step and sources written before

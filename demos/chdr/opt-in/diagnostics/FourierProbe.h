@@ -1,15 +1,15 @@
 /** @file FourierProbe.h
  * @brief Owned-cell, time-labelled running Fourier transforms.
  *
- * This file will provide frequency-domain measurements during a simulation.
+ * This file provides frequency-domain measurements during a simulation.
  *
- * One can select a point, plane or region, the field components to observe,
- * and the frequencies of interest. As the solver advances, the fourier probe
- * can accumulate their fourier transforms without storing the full time history.
- * It uses each quantities time label (see the LevelContract) and handles the
- * ownership across MPI ranks.
+ * One selects a point, plane or region, the field components to observe, and the
+ * frequencies of interest. As the solver advances, the Fourier probe accumulates
+ * their Fourier transforms without storing the full time history. It uses each
+ * quantity's time label (see the LevelContract) and handles the ownership across
+ * MPI ranks.
  *
- * Will be used for: measurements for reflection, transmission and radiation spectra.
+ * Used for: measurements of reflection, transmission and radiation spectra.
  */
 #pragma once
 
@@ -172,8 +172,8 @@ namespace chdr::solver {
             return TWO_PI * ((product - std::nearbyint(product)) + remainder);
         }
 
-        /// Periodic Hann weights use gate-local indices [heinzel2002SpectrumSpectralDensity, Eq.
-        /// (17)].
+        /// Periodic Hann weights use gate-local indices
+        /// [heinzel2002SpectrumSpectralDensity, Eq. (17)].
         double weight(std::int64_t sample) const {
             return record_m.window_m == ProbeWindow::Rectangle
                        ? 1.0

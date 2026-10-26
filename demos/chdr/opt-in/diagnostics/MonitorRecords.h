@@ -23,6 +23,7 @@
 #pragma once
 
 #include "core/base/SpatialDimension.h"
+#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/MonitorExpressions.h"
 
 static_assert(

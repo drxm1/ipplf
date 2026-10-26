@@ -12,6 +12,7 @@
 #include <iostream>
 
 #include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/Monitors.h"
 #include "tests/core/solver/MonitorTestSupport.h"
 

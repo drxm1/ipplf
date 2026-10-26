@@ -55,7 +55,9 @@ function(chdr_diagnostics_test suite filter)
   endif()
 endfunction()
 
-# As before the split of the interface tests: one rank runs the normal split only.
+# InterfaceEnergy.NormalSplit and .TangentialSplit differ only in the MPI decomposition axis: along
+# the slab normal x (the rank seam lies on the slab face) or along y. One rank has no decomposition,
+# so its entry runs NormalSplit only; two ranks run both.
 chdr_diagnostics_test(energy "InterfaceEnergy.*" "InterfaceEnergy.NormalSplit")
 chdr_diagnostics_test(monitors "ChdrMonitors.*")
 chdr_diagnostics_test(monitor-records "ChdrMonitorRecords.*")

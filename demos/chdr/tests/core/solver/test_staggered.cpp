@@ -19,6 +19,7 @@
 #include "MonitorTestSupport.h"
 #include "core/base/SpatialDimension.h"
 #include "core/operators/StaggeredOperators.h"
+#include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(
