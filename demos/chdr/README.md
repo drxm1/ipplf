@@ -1,0 +1,85 @@
+# ChDR: Cherenkov diffraction radiation in IPPL
+
+This directory holds the ChDR code of my master's project:
+- a potential-based FDTD solver (wrapper) for dielectric media on IPPL's fields in `core/solver/`,
+- some optional measurement utilities in `opt-in/diagnostics/`,
+- some utilities to write vtk outputs (`core/output/`),
+- currently three little programs under `apps`:
+  - `vacuum-wave`: test evolving a vacuum wave for one period,
+  - `planar-interface`: a few simple interface cases,
+  - `interface-movies`: some videos of ring/annulus-shaped initialized fields hitting a few different dielectric geometries,
+- tests (to be organized and documented better),
+- the mesh geometry for comparison against the meep simulation under `mesh/` that was provided to me,
+- a one-dimensional Python code for later 1d comparisons (`1d/`) and a literature review (`ideas-lit-research/`) which were also provided to me.
+
+`demos/CMakeLists.txt` adds this directory with `IPPL_ENABLE_CHDR=ON`; the tests need `BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS`.
+
+## Layout
+
+| Directory | Content | Documentation |
+|---|---|---|
+| `core/` | The code that no experiment, test or optional measurement owns, one unit per directory: the field container and sampling contract (`base/`), the material description (`material/`), the discrete operators (`operators/`), the material formulations (`formulation/`), the potential solver `ChdrSolver` and the box constructor (`solver/`), the simulation manager (`simulation/`) and the field writer (`output/`) | [`core/README.md`](core/README.md), [`core/solver/README.md`](core/solver/README.md) |
+| `opt-in/diagnostics/` | The residual monitors, the Gauss formula check, the Fourier probe and the two field energies; nothing in `core/` depends on them | [`opt-in/diagnostics/README.md`](opt-in/diagnostics/README.md) |
+| `opt-in/output/` | `FieldRunOutput.h`: frames, material and `energy.csv` for a run of the simulation manager | The header |
+| `apps/vacuum-wave/` | `chdr-vacuum-wave`: the vacuum plane wave in a periodic box, the benchmark of the inherited vacuum update | [`apps/vacuum-wave/README.md`](apps/vacuum-wave/README.md), [`ViewingGuide.org`](apps/vacuum-wave/ViewingGuide.org) |
+| `apps/planar-interface/` | `planar-interface`: one planar dielectric in a periodic box; the plane-pulse reflection measurement and the packet cases | [`apps/planar-interface/README.md`](apps/planar-interface/README.md) |
+| `apps/interface-movies/` | `interface-movies`: an open box with Mur faces, ring starts and eight movie cases; `render_movie.py`, which renders the output of both interface programs | [`apps/interface-movies/README.md`](apps/interface-movies/README.md) |
+| `tests/` | One directory per unit of the code it tests: `core/<unit>`, `opt-in/diagnostics`, `apps/<program>`, `1d` | The section Tests below |
+| `testing/` | Shared test support: the GoogleTest main `TestMain.cpp` and `Util.h`, included as `testing/Util.h` | |
+| `mesh/` | `mesh-1`: the supervisor's distributed mesh and dielectric radiator example with Catalyst output, and its geometry test | [`mesh/README.md`](mesh/README.md), [`mesh/StudentGuide.md`](mesh/StudentGuide.md) |
+| `1d/` | The one-dimensional spectral prototype in Python: the field and radiated spectrum of a point electron near an infinite planar interface, by analytic matching per transverse mode | [`1d/README.md`](1d/README.md) |
+| `boundaries/unit_tests/` | Tests of the IPPL library changes for per-axis periodic layouts and Mur faces (`src/FieldLayout`, `src/MaxwellSolvers`); `demos/CMakeLists.txt` registers them, with entries named after their suites | The test sources |
+| `ideas-lit-reseach/` | The literature review `chdr_literature_review.tex` and reading notes | |
+
+## Includes and targets
+
+Every header is included by its path from this directory, for example
+`#include "core/solver/ChdrSolver.h"`, `#include "opt-in/diagnostics/Monitors.h"`,
+`#include "apps/vacuum-wave/VacuumSetup.h"` or
+`#include "tests/core/solver/CoreTestSupport.h"`. A bare include such as
+`#include "ChdrSolver.h"` does not compile. The CMake targets export this
+directory as their include root:
+
+| Target | Kind | Content |
+|---|---|---|
+| `chdr-core` | static library | `core/`; links `ippl`, `chdr-material` and `chdr-fel-headers` |
+| `chdr-material` | interface | `core/material/` (header only) |
+| `chdr-fel-headers` | interface | The field container headers of `demos/fel` |
+| `chdr-diagnostics` | interface | `opt-in/diagnostics/`; links `chdr-core` |
+| `chdr-run-output` | interface | `opt-in/output/` |
+| `chdr-testing` | interface | `testing/`; compiles the GoogleTest main into each test executable |
+| `chdr-vacuum-wave`, `planar-interface`, `interface-movies`, `mesh-1` | executables | The programs |
+
+No file under `core/` includes a file from `apps/`, `opt-in/`, `tests/` or
+`testing/`.
+
+## Build and tests
+
+From the IPPL checkout, with the usual toolchain and dependency options:
+
+```sh
+cmake -S . -B build -DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_FEL=ON \
+  -DIPPL_ENABLE_FFT=ON -DIPPL_ENABLE_SOLVERS=ON \
+  -DBUILD_TESTING=ON -DIPPL_ENABLE_UNIT_TESTS=ON
+cmake --build build --parallel 2
+ctest --test-dir build -R '^chdr\.' -LE 'long|record' --output-on-failure
+```
+
+The CTest entries are named `chdr.<unit>.<suite>[.<variant>]`, where the unit is
+the directory under `tests/` and the variant is `serial` or `mpi2` (two MPI
+ranks, one OpenMP thread each):
+
+| Prefix | Tests of | Directory |
+|---|---|---|
+| `chdr.solver.` | the potential solver, the operators and the sampling contract | `tests/core/solver` |
+| `chdr.material.`, `chdr.formulation.`, `chdr.simulation.` | the material owner, the O1-VS formulation, the simulation manager | `tests/core/<unit>` |
+| `chdr.diagnostics.` | the opt-in diagnostics | `tests/opt-in/diagnostics` |
+| `chdr.vacuum.`, `chdr.interface.` | the three programs; `chdr.interface.movies.*` belong to `interface-movies` | `tests/apps/<program>` |
+| `chdr.mesh.` | the mesh example | `mesh/` |
+| `chdr.1d.` | the one-dimensional prototype (`unittest`; needs a Python with NumPy, SciPy and Matplotlib, `CHDR_1D_PYTHON`) | `tests/1d` |
+
+Labels: `long` marks ladders and trajectories above one minute, `record`
+marks entries that only print records, `holdout` marks the disabled holdout
+entries, and `unavailable` marks entries registered as skipped because Python,
+an MPI launcher or ParaView is missing. The boundary tests under
+`boundaries/unit_tests/` carry their suite names without the `chdr.` prefix.

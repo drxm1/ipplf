@@ -1,4 +1,5 @@
-# ChDR geometry and vacuum-wave demos.
+# ChDR: the potential solver core, the opt-in diagnostics, the programs under apps/, the mesh
+# geometry for meep comparisons and the tests. README.md maps the directory.
 message(STATUS "Configuring demos/chdr/")
 
 # Shared test support: every ChDR test executable links chdr-testing, which compiles the common
