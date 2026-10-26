@@ -19,8 +19,6 @@ function(chdr_solver_skip name reason)
   set_tests_properties(chdr.solver.${name} PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP:" LABELS
                                                       "chdr;solver;unit;unavailable")
 endfunction()
-target_sources(test-chdr-solver PRIVATE test_monitors.cpp)
-target_sources(test-chdr-solver PRIVATE test_monitor_records.cpp)
 target_sources(test-chdr-solver PRIVATE test_compact.cpp)
 target_sources(test-chdr-solver PRIVATE test_staggered.cpp)
 
@@ -46,8 +44,6 @@ function(chdr_solver_test suite filter)
   endif()
 endfunction()
 chdr_solver_test(shell "SolverShell.*")
-chdr_solver_test(monitors "ChdrMonitors.*")
-chdr_solver_test(monitor-records "ChdrMonitorRecords.*")
 chdr_solver_test(compact "CompactOperators.*")
 chdr_solver_test(staggered "ChdrStaggered.*")
 target_sources(test-chdr-solver PRIVATE test_setup.cpp)
@@ -102,9 +98,6 @@ foreach(case ObliqueStandard ObliqueNonStandard AxialNonStandardStable
   chdr_solver_test(gauge.${case} "GaugeWave.${case}")
 endforeach()
 
-target_sources(test-chdr-solver PRIVATE test_probe.cpp)
-chdr_solver_test(probe "FourierProbe.*")
-include(ProbeTests.cmake)
 target_sources(test-chdr-solver PRIVATE test_comoving.cpp)
 chdr_solver_test(comoving "ComovingT7.*")
 foreach(variant serial mpi2)
@@ -148,8 +141,7 @@ set_tests_properties(
              "chdr;solver;holdout"
              ENVIRONMENT
              "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
-target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp
-                                        test_open_probe.cpp)
+target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp)
 set(randomPotentialHistoryFixtureDirectory
     "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")
 add_custom_command(

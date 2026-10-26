@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 
-#include "VacuumSetup.h"
+#include "apps/vacuum-wave/VacuumSetup.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"

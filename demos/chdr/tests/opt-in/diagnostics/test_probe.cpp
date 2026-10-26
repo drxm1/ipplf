@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "VacuumSetup.h"
+#include "apps/vacuum-wave/VacuumSetup.h"
 #include "core/base/SpatialDimension.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 
