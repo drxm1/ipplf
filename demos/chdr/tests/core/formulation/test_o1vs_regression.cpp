@@ -4,8 +4,8 @@
 #include <array>
 #include <gtest/gtest.h>
 
-#include "RandomFields.h"
 #include "opt-in/diagnostics/Monitors.h"
+#include "tests/core/solver/RandomFields.h"
 
 namespace {
     using namespace chdr;

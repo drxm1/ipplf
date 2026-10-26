@@ -3,8 +3,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "../PlanePulse.h"
 #include "InterfaceOracles.h"
+#include "apps/planar-interface/PlanePulse.h"
 
 namespace chdr::interface {
     /** @brief Independently check the invariant's normalization with raw electromagnetic fields.

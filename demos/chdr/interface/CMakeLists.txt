@@ -1,8 +1,0 @@
-add_executable(interface-demo interface-demo.cpp)
-target_link_libraries(interface-demo PRIVATE chdr-core chdr-diagnostics chdr-run-output)
-add_executable(interface-movies interface-movies.cpp)
-target_link_libraries(interface-movies PRIVATE chdr-core chdr-diagnostics chdr-run-output)
-if(BUILD_TESTING AND IPPL_ENABLE_UNIT_TESTS)
-  add_subdirectory(unit_tests)
-  add_subdirectory(tests)
-endif()

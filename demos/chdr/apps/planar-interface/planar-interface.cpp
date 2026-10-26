@@ -1,4 +1,4 @@
-/** @file interface-demo.cpp
+/** @file planar-interface.cpp
  * @brief Periodic dielectric packet demonstrations and a plane-wave reflection measurement.
  */
 #include <iomanip>

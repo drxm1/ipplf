@@ -10,10 +10,10 @@
 #include <bit>
 #include <gtest/gtest.h>
 
-#include "RandomFields.h"
-#include "SerialReference.h"
 #include "core/material/PlanarSlab.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
+#include "tests/core/solver/RandomFields.h"
+#include "tests/core/solver/SerialReference.h"
 
 namespace {
     using namespace chdr;

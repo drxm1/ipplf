@@ -3,13 +3,13 @@
  */
 #include <gtest/gtest.h>
 
-#include "../MovieCases.h"
-#include "../MovieFaceSolver.h"
-#include "../TMAnnulusStart.h"
-#include "CoreTestSupport.h"
+#include "apps/interface-movies/MovieCases.h"
+#include "apps/interface-movies/MovieFaceSolver.h"
+#include "apps/interface-movies/TMAnnulusStart.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/diagnostics/AlignedFieldEnergy.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
+#include "tests/core/solver/CoreTestSupport.h"
 
 namespace {
     using namespace chdr;

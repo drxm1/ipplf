@@ -10,24 +10,16 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800 LABELS
              "chdr;interface")
 set_tests_properties(chdr.interface.long.brewster PROPERTIES LABELS "chdr;interface;long")
+# planar-interface runs its half-space case for four steps on a small box.
 add_test(
-  NAME chdr.interface.unit.smoke
+  NAME chdr.interface.smoke
   COMMAND
-    "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:interface-demo>"
+    "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:planar-interface>"
     "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/smoke-frames" -P
     "${CMAKE_CURRENT_SOURCE_DIR}/smoke.cmake")
 set_tests_properties(
-  chdr.interface.unit.smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT
-                                       60 LABELS "chdr;interface;unit")
-add_test(
-  NAME chdr.interface.movies.smoke
-  COMMAND
-    "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:interface-movies>"
-    "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/movie-smoke-frames" -P
-    "${CMAKE_CURRENT_SOURCE_DIR}/movies-smoke.cmake")
-set_tests_properties(
-  chdr.interface.movies.smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false"
-                                         TIMEOUT 60 LABELS "chdr;interface;unit")
+  chdr.interface.smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 60
+                                  LABELS "chdr;interface;smoke")
 if(MPIEXEC_EXECUTABLE)
   set(interface_mpi "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
                     $<TARGET_FILE:test-plane-interface> ${MPIEXEC_POSTFLAGS})

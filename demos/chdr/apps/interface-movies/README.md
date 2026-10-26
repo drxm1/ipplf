@@ -1,9 +1,11 @@
-# Dielectric interface examples and movies
+# Open-box dielectric interface movies
 
-Build `interface-demo` and `interface-movies` with `IPPL_ENABLE_CHDR=ON`.
+Build `interface-movies` with `IPPL_ENABLE_CHDR=ON`.
 Lengths use cell units; the speed of light, vacuum permittivity and vacuum
 permeability are one. Movie plots use z horizontally, x vertically and y out
-of plane. The two y cells are periodic.
+of plane. The two y cells are periodic. The packet cases of
+[planar-interface](../planar-interface/README.md) write the same output format
+and are rendered with the `render_movie.py` described here.
 
 ## Open-box annulus movies
 
@@ -43,7 +45,7 @@ of a Ricker pulse [Schneider, *Understanding the FDTD Method*, section 5.2.3].
 The radial amplitude factor is a large-radius approximation to the vacuum
 potential equation [Chew, 2014, section 2]; it is not an exact outgoing
 discrete solution. The Gaussian tails are cut off outside the prescribed
-annular band, and the driver checks that both histories start entirely in
+annular band, and `interface-movies` checks that both histories start entirely in
 vacuum, clear of the open faces.
 
 These movies demonstrate field evolution. They do not establish interface
@@ -78,35 +80,6 @@ peak and the smaller x/z spacing as a fixed normalization.
 The TM movie carries a visible warning about its nonzero Gauss residual under
 Mur; the recorded residual is a limitation of this demonstration, not evidence
 of a constraint-preserving open boundary.
-
-## Existing periodic packet examples
-
-```sh
-OMP_NUM_THREADS=1 interface-demo plane
-OMP_NUM_THREADS=1 interface-demo half-space --output periodic-half-space
-OMP_NUM_THREADS=1 interface-demo slab --output periodic-slab
-OMP_NUM_THREADS=1 interface-demo brewster-te --output periodic-brewster-te
-OMP_NUM_THREADS=1 interface-demo brewster-tm --output periodic-brewster-tm
-python3 render_movie.py periodic-half-space
-python3 render_movie.py periodic-brewster-tm --field B_raw
-```
-
-Packet examples also use the x-z plane with y out of plane, but retain
-periodic boundaries on every axis. Full meshes are 512 by 2 by 512;
-`--smoke` selects 32 by 2 by 32 and four steps. The packet starts at z=256
-for the normal cases and z=128 for Brewster cases. Normal cases run 560
-steps and Brewster cases 1,000, with output every ten steps.
-
-The material occupies x from zero to 230 in half-space cases, or from 156
-to 230 in the slab. Its second half-space interface lies at the periodic
-wrap. The translating Gaussian packet is approximate and intended for
-qualitative field pictures.
-
-The separate `plane` mode retains its exact-lattice measurement configuration.
-It prints complex reflection/transmission amplitudes, their Fresnel and lattice
-references, and energy drift. The material solver uses harmonic face
-permittivities and the generalized-gauge potential equations
-[Chew, 2014, section 2](https://arxiv.org/abs/1406.4780).
 
 ## Output and rendering
 
@@ -144,6 +117,7 @@ can select it explicitly. The renderer selects `B_raw` when metadata declares
 `polarization=TM`, otherwise `E_raw`; `--field` overrides this choice. Use
 `--field B_raw` for legacy TM packet outputs without polarization metadata.
 
-Small regressions and plane checks run with
-`ctest -R chdr.interface -LE 'long|reserved'`. The reserved configuration remains
-disabled. The movie smoke check runs all eight TE/TM cases for four steps.
+`ctest -R chdr.interface.movies` runs the checks of `interface-movies`: the unit
+test of the annulus starts and the smoke check, which runs all eight TE/TM cases
+for four steps. The plane-pulse checks (`ctest -R chdr.interface -E movies`)
+belong to `planar-interface`.
