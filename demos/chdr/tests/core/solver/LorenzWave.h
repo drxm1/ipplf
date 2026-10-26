@@ -3,8 +3,6 @@
  *
  * An anylatic test generator that supplies potential samples and source sample.
  * Also provides corresponding E and B reference fields.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include "MediumOracles.h"

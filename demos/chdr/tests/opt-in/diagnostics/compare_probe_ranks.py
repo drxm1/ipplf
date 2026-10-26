@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Run the C++ finite-window probe test at both rank counts and compare its output.
 
-The producer is FourierProbeT8.FrozenGatesAndNaNGhosts. It records a scale R
-from the time step, window sum and tone amplitudes, defined by checkProbeValue().
+The test FourierProbeSpectra.FrozenGatesAndNaNGhosts writes the record. It records a
+scale R from the time step, window sum and tone amplitudes, defined by checkProbeValue().
 Every complex output is compared using that scale with relative tolerance 1e-14.
 Field evolution and the closed-form Fourier reference remain in the C++ test.
-
-TODO: REVIEW.
 """
 import argparse
 import math
@@ -15,7 +13,7 @@ from pathlib import Path
 import struct
 import subprocess
 
-PRODUCER = "FourierProbeT8.FrozenGatesAndNaNGhosts"
+RECORD_TEST = "FourierProbeSpectra.FrozenGatesAndNaNGhosts"
 
 
 def expected_keys():
@@ -55,7 +53,7 @@ def read_record(path, ranks):
 
 
 def test_command(args, ranks):
-    test_filter = f"--gtest_filter={PRODUCER}"
+    test_filter = f"--gtest_filter={RECORD_TEST}"
     if ranks == 1:
         return [args.executable, "--gtest_color=no", test_filter]
     return [args.mpiexec, args.numproc_flag, "2", *args.mpi_preflag,
@@ -74,9 +72,9 @@ def run_case(args, ranks):
     (args.output_dir / f"probe-ranks{ranks}.log").write_text(completed.stdout)
     print(completed.stdout, end="")
     if completed.returncode:
-        raise RuntimeError(f"T8 failed with {ranks} ranks: exit {completed.returncode}")
-    if f"[       OK ] {PRODUCER}" not in completed.stdout:
-        raise RuntimeError(f"Probe producer did not execute successfully with {ranks} ranks")
+        raise RuntimeError(f"{RECORD_TEST} failed with {ranks} ranks: exit {completed.returncode}")
+    if f"[       OK ] {RECORD_TEST}" not in completed.stdout:
+        raise RuntimeError(f"{RECORD_TEST} did not pass with {ranks} ranks")
     return read_record(path, ranks)
 
 
@@ -103,7 +101,8 @@ def compare_records(serial, parallel):
         relative, identical = compare_value(key, value, parallel[key])
         maximum = max(maximum, relative)
         bitwise &= identical
-    print(f"T8 rank comparison: {len(serial)} complex values, max difference/R={maximum:.17g}, "
+    print(f"Probe spectra rank comparison: {len(serial)} complex values, "
+          f"max difference/R={maximum:.17g}, "
           f"bitwise_equal={bitwise}")
 
 

@@ -3,8 +3,6 @@
  * @details Global-index snapshots and independent reductions are compared by
  * the CTest fixture. Monitor residuals are normalized before comparison; a
  * near-zero residual is never used as its own relative-error denominator.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 

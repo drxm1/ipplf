@@ -4,8 +4,6 @@ Owned-cell differences use the field's maximum as their scale. Independent
 positive sums and maxima use a relative comparison. Residuals arrive already
 normalized by their absolute evaluation and therefore use an absolute comparison.
 Continuum approximation errors are separate JSONL records and are not read here.
-
-TODO: REVIEW.
 """
 import json
 import math

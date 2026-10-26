@@ -1,9 +1,7 @@
 /** @file test_probe_full.cpp
  * @brief Closed-form checks of point/plane spectra and their rank-count invariance.
- * @details FourierProbeT8 is the extended probe test suite. Its output tag "T8"
- * identifies per-gate error summaries and the spectra consumed by compare_probe_ranks.py.
- *
- * TODO: REVIEW.
+ * @details FourierProbeSpectra is the extended probe test suite. It prints per-gate error
+ * summaries and writes the spectra that compare_probe_ranks.py compares across rank counts.
  */
 #include <cstdlib>
 #include <fstream>
@@ -190,8 +188,8 @@ namespace {
             , levels_m(levels) {
             const auto e   = fields.getE().getView();
             total_m        = e.extent(0) * e.extent(1) * e.extent(2);
-            spatial_m      = SpaceView("T8 spatial factors", total_m, 11, 2, 2);
-            temporal_m     = TimeView("T8 temporal factors", 11, 2, 2);
+            spatial_m      = SpaceView("probe spectra spatial factors", total_m, 11, 2, 2);
+            temporal_m     = TimeView("probe spectra temporal factors", 11, 2, 2);
             temporalHost_m = Kokkos::create_mirror_view(temporal_m);
             initializeSpatial();
         }
@@ -210,7 +208,7 @@ namespace {
                                       fields_m.getE().getNghost(),
                                       plane,
                                       std::numeric_limits<double>::quiet_NaN()};
-            Kokkos::parallel_for("T8 poison ghosts and write samples", total_m, kernel);
+            Kokkos::parallel_for("probe spectra poison ghosts and write samples", total_m, kernel);
         }
 
     private:
@@ -336,7 +334,7 @@ namespace {
                      ++frequency)
                     checkProbeValue(record, probeNumber, cell, channel, frequency, errors, output);
         }
-        std::cout << "T8 probe=" << probeNumber << " cells=" << record.indices_m.size()
+        std::cout << "spectra probe=" << probeNumber << " cells=" << record.indices_m.size()
                   << " max_error/R=" << std::setprecision(17) << errors.maximum_m
                   << " min_wrong_label_error/R=" << errors.wrongLabelMinimum_m << '\n';
     }
@@ -377,7 +375,7 @@ namespace {
         if (const char* path = std::getenv("CHDR_PROBE_OUTPUT"); path && ippl::Comm->rank() == 0) {
             output.open(path);
             if (!output)
-                throw std::runtime_error("Cannot open the T8 rank record");
+                throw std::runtime_error("Cannot open the probe rank record");
             output << "# communicator_size " << ippl::Comm->size() << '\n';
         }
         EXPECT_EQ(probes[0]->metadata().window_m, ProbeWindow::Rectangle);
@@ -507,7 +505,7 @@ namespace {
                         dt, hz, frequency, 3);
     }
 
-    TEST(FourierProbeT8, LiveSolverChannels) {
+    TEST(FourierProbeSpectra, LiveSolverChannels) {
         for (auto ebReconstructionConvention :
              {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
               EBReconstructionConvention::R2Prime})
@@ -517,7 +515,7 @@ namespace {
                                                    SpatialDiscretization::Collocated);
     }
 
-    TEST(FourierProbeT8, FrozenGatesAndNaNGhosts) {
+    TEST(FourierProbeSpectra, FrozenGatesAndNaNGhosts) {
         auto fields = makeFields();
         chdr::vacuum::initializeFieldStorage(fields);
         EMFieldsType raw;
@@ -530,7 +528,7 @@ namespace {
     }
 
     /// A separately labelled raw B channel carries the label-shift factor for identical data.
-    TEST(FourierProbeT8, IdenticalSamplesGiveTheLabelShiftFactor) {
+    TEST(FourierProbeSpectra, IdenticalSamplesGiveTheLabelShiftFactor) {
         auto fields = makeFields();
         chdr::vacuum::initializeFieldStorage(fields);
         FourierProbe probe(fields.getE(), {EBReconstructionConvention::R2}, DT,
@@ -580,8 +578,8 @@ namespace {
         return coordinate;
     }
 
-    void checkShellWiring(EBReconstructionConvention ebReconstructionConvention,
-                          SpatialDiscretization spatialDiscretization) {
+    void checkSolverChannelWiring(EBReconstructionConvention ebReconstructionConvention,
+                                  SpatialDiscretization spatialDiscretization) {
         auto fields = makeFields();
         chdr::vacuum::initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
@@ -602,7 +600,7 @@ namespace {
         }
     }
 
-    TEST(FourierProbeT8, ShellLabelsAndChannelCoordinates) {
+    TEST(FourierProbeSpectra, SolverLabelsAndChannelCoordinates) {
         for (auto ebReconstructionConvention :
              {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
               EBReconstructionConvention::R2Prime})
@@ -610,11 +608,11 @@ namespace {
                  {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
                 if (spatialDiscretization == SpatialDiscretization::Collocated
                     || ebReconstructionConvention == EBReconstructionConvention::R2)
-                    checkShellWiring(ebReconstructionConvention, spatialDiscretization);
+                    checkSolverChannelWiring(ebReconstructionConvention, spatialDiscretization);
     }
 
     /// Exercise the same accumulation kernel with the Standard staggered channel positions.
-    TEST(FourierProbeT8, StaggeredPlaneClosedForm) {
+    TEST(FourierProbeSpectra, StaggeredPlaneClosedForm) {
         auto fields = makeFields();
         chdr::vacuum::initializeFieldStorage(fields);
         EMFieldsType raw;

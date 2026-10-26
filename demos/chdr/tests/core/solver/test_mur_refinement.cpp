@@ -1,4 +1,4 @@
-/** @file test_open_refinement.cpp
+/** @file test_mur_refinement.cpp
  * @brief Compare the centre-plane discrete reflection with its continuum limit.
  */
 #include <gtest/gtest.h>
@@ -51,7 +51,7 @@ namespace chdr::solver::test::reflection {
      * The interval allows finite-mesh terms in the centred Mur discretization; the discrete
      * and continuum coefficients are independently defined in ReflectionOracles.h.
      */
-    TEST(OpenReflectionRefinement, CentrePlaneOrder) {
+    TEST(MurReflectionRefinement, CentrePlaneOrder) {
         for (const auto& row : refinementRows) {
             SCOPED_TRACE(row.name_m);
             const double coarse = refinementError(row, 2), fine = refinementError(row, 4);
@@ -66,7 +66,7 @@ namespace chdr::solver::test::reflection {
 
     /// Three-mesh angular and evanescent tables; evolved marks only an independently checked coarse
     /// row.
-    TEST(OpenReflectionRefinement, CodeConfirmedRows) {
+    TEST(MurReflectionRefinement, CodeConfirmedRows) {
         const auto precision = std::cout.precision(17);
         const auto record    = [](const Case& row, bool normal, bool evolved, int refinement) {
             auto kt = normal ? std::array<double, 3>{} : row.tangent();

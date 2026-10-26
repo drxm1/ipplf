@@ -1,7 +1,5 @@
 /** @file CoreTestSupport.h
  * @brief Small device-reduction and host-snapshot helpers shared by the core audits.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include <limits>

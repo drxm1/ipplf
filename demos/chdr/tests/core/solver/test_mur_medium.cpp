@@ -1,4 +1,4 @@
-/** @file test_open_medium.cpp
+/** @file test_mur_medium.cpp
  * @brief Compare matched homogeneous absorption with the internal vacuum step.
  */
 #include <cstring>
@@ -17,7 +17,7 @@ namespace chdr::solver::test {
      * Potentials must agree bitwise, since both calls execute the same recurrence
      * [chew2014generalizedgauge, equations (12)-(13); HomogeneousUpdate].
      */
-    TEST(OpenShell, MatchedMediumEqualsInternalVacuumStep) {
+    TEST(MurMedium, MatchedMediumEqualsInternalVacuumStep) {
         for (double epsilon : {2.13, 3.7}) {
             auto mediumFields =
                 makeBoxFieldContainer({16, 16, 16}, {16, 16, 16}, 2, {false, false, false});
@@ -84,7 +84,7 @@ namespace chdr::solver::test {
      * The control speed exceeds the production guard deliberately; this test exercises
      * the existing negative-control bypass, not an admissible propagation configuration.
      */
-    TEST(OpenShell, SpeedControlPreservesStateAndClosure) {
+    TEST(MurMedium, SpeedControlPreservesStateAndClosure) {
         for (auto axes : {std::array{true, true, true}, std::array{false, true, true},
                           std::array{false, false, false}}) {
             for (bool shipped : {false, true}) {

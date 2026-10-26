@@ -6,8 +6,6 @@
  * 2. sum of absolute values,
  * 3. sum of squared values
  * So this file provides statistics that are computed from rank-owned field cells.
- *
- * TODO: REVIEW.
  */
 #pragma once
 

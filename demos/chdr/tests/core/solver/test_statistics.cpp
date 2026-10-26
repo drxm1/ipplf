@@ -1,7 +1,5 @@
 /** @file test_statistics.cpp
  * @brief Independent small-array checks of distributed field statistics.
- *
- * TODO: REVIEW.
  */
 #include "SerialReference.h"
 #include "core/base/SpatialDimension.h"

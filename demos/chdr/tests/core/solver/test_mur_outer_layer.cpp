@@ -1,4 +1,4 @@
-/** @file test_outer_layer.cpp
+/** @file test_mur_outer_layer.cpp
  * @brief Check reconstructed outer-layer fields against independent polynomial values.
  */
 #include <complex>
@@ -11,7 +11,7 @@
 
 namespace chdr::solver::test {
     namespace {
-        using Shell      = ChdrSolver<StandardSolverPeriodic>;
+        using Solver     = ChdrSolver<StandardSolverPeriodic>;
         namespace oracle = open_boundary_oracle;
         constexpr std::array<int, 3> Cells{8, 6, 10};
         constexpr std::array<double, 3> Spacing{1, .8, 1.25};
@@ -20,7 +20,7 @@ namespace chdr::solver::test {
          * Ghosts start at zero so the unchanged reconstruction can first demonstrate
          * the missing-extension error. Expected samples come only from the oracle.
          */
-        void loadPolynomial(Shell& solver, bool periodicY) {
+        void loadPolynomial(Solver& solver, bool periodicY) {
             const auto coefficients = oracle::polynomialFixture(periodicY);
             for (auto* field : {&solver.A_n, &solver.A_nm1}) {
                 *field    = 0.;
@@ -49,7 +49,7 @@ namespace chdr::solver::test {
          * Include only the outermost owned layers of open axes, including their
          * edges and corners. Each component uses its own sample location.
          */
-        double layerError(EMFieldsType& field, Shell& solver, bool periodicY, Quantity quantity) {
+        double layerError(EMFieldsType& field, Solver& solver, bool periodicY, Quantity quantity) {
             const auto c = oracle::polynomialFixture(periodicY);
             const bool staggered =
                 solver.spatialDiscretization() == SpatialDiscretization::Staggered;
@@ -82,7 +82,7 @@ namespace chdr::solver::test {
          * reconstructs the self-communicator fields; the shared comparison uses each field's
          * nonzero serial maximum and records binary equality separately from its tolerance.
          */
-        void checkFieldRanks(Shell& solver, const EMFieldsType& raw, bool periodicY) {
+        void checkFieldRanks(Solver& solver, const EMFieldsType& raw, bool periodicY) {
             if (solver.A_n.getLayout().comm.size() == 1)
                 return;
             const auto electric    = gatherOwned(solver.electricField());
@@ -91,8 +91,8 @@ namespace chdr::solver::test {
             RankAgreement electricRank{}, magneticRank{}, rawRank{};
             if (solver.A_n.getLayout().comm.rank() == 0) {
                 SerialFields fields(solver.A_n);
-                Shell serial(fields.source_m, fields.electric_m, fields.magnetic_m,
-                             EBReconstructionConvention::R2, solver.spatialDiscretization());
+                Solver serial(fields.source_m, fields.electric_m, fields.magnetic_m,
+                              EBReconstructionConvention::R2, solver.spatialDiscretization());
                 serial.setTimeStepUnchecked(solver.getDt());
                 EMFieldsType serialRaw(fields.mesh_m, fields.layout_m);
                 loadPolynomial(serial, periodicY);
@@ -116,15 +116,15 @@ namespace chdr::solver::test {
      * averaged B and raw B. Prepared fields must be within 1e-13 on both
      * all-open and mixed boxes. CTest runs the same fixtures on one and two ranks.
      */
-    TEST(OpenOuterLayer, PolynomialFieldsAndZeroGhostControl) {
+    TEST(MurOuterLayer, PolynomialFieldsAndZeroGhostControl) {
         for (bool periodicY : {false, true})
             for (auto reading :
                  {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered}) {
                 auto fields =
                     makeBoxFieldContainer(Cells, {8, 4.8, 12.5}, 2, {false, periodicY, false});
                 initializeFieldStorage(fields);
-                Shell solver(fields.getJ(), fields.getE(), fields.getB(),
-                             EBReconstructionConvention::R2, reading);
+                Solver solver(fields.getJ(), fields.getE(), fields.getB(),
+                              EBReconstructionConvention::R2, reading);
                 solver.setSafetyFactor(.9);
                 EMFieldsType raw(fields.getMesh(), fields.getFL());
                 loadPolynomial(solver, periodicY);
@@ -154,15 +154,15 @@ namespace chdr::solver::test {
      * \f$1/(kh)\f$ for the forward upper face (deduction from the difference rows in
      * Fornberg (1988), Table 1, and Ryu et al. (2016), Appendix A). No evolution is used.
      */
-    TEST(OpenOuterLayerRecords, ZeroGhostMagnitude) {
+    TEST(MurOuterLayerRecords, ZeroGhostMagnitude) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "This record uses one rank";
         for (auto reading : {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
             for (int ppw : {10, 20, 40, 80}) {
                 auto fields = makeBoxFieldContainer({24, 2, 4}, {24, 2, 4}, 2, {false, true, true});
                 initializeFieldStorage(fields);
-                Shell solver(fields.getJ(), fields.getE(), fields.getB(),
-                             EBReconstructionConvention::R2, reading);
+                Solver solver(fields.getJ(), fields.getE(), fields.getB(),
+                              EBReconstructionConvention::R2, reading);
                 EMFieldsType raw(fields.getMesh(), fields.getFL());
                 const bool staggered = reading == SpatialDiscretization::Staggered;
                 const double k       = 2 * Kokkos::numbers::pi_v<double> / ppw;

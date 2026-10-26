@@ -4,8 +4,6 @@
  * [christlieb2024GaugeConserving, Lemma 3.3, Theorem 3.5] and
  * [clemens2001FiniteIntegration, Eqs. (18)-(24)]. Fixtures use global integer
  * indices so decomposition cannot change the input bit patterns.
- *
- * TODO: REVIEW.
  */
 #include <cstdint>
 #include <gtest/gtest.h>
@@ -93,9 +91,9 @@ namespace {
             fillNoise(fields.getJ(), 71 + step);
             maximum = std::max(maximum, checkIdentityReport(monitors.advance(solver), step));
         }
-        // The "A2/A3" tag identifies magnetic-divergence and Faraday residual checks.
+        // The printed line reports the magnetic-divergence and Faraday residual maxima.
         if (ippl::Comm->rank() == 0)
-            std::cout << "A2/A3 stencil=" << int(solver.stencil())
+            std::cout << "divergence_faraday stencil=" << int(solver.stencil())
                       << " reconstruction=" << int(ebReconstructionConvention)
                       << " maximum=" << maximum << " threshold=1e-12\n";
         checkElectricPerturbation(solver, monitors);

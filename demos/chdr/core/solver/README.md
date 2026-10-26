@@ -165,18 +165,18 @@ own rules for the outermost Mur layer and for nonperiodic layouts
 a source, and halo accumulation does not wrap deposits across nonperiodic
 global boundaries.
 
-`OpenReflection`, `OpenFieldReflection` and `OpenReflectionRefinement` compare
+`MurReflection`, `MurFieldReflection` and `MurReflectionRefinement` compare
 propagating, grazing and evanescent modes with independent discrete reflection
-values. `OpenFamilies` checks local edge/corner compatibility. `OpenStability`
-checks fixed long trajectories, not stability for arbitrary initial data;
-`OpenBeam` compares a finite beam in an all-Mur box with a reference run using
-periodic transverse axes and Mur faces normal to x. The disabled reflection
-holdout is configured separately.
+values. `MurEdgeCornerFamilies` checks local edge/corner compatibility.
+`MurStability` checks fixed long trajectories, not stability for arbitrary
+initial data; `OpenBeam` compares a finite beam in an all-Mur box with a
+reference run using periodic transverse axes and Mur faces normal to x. The
+disabled reflection holdout is configured separately.
 
 Tests labelled `record` also print dense three-mesh reflection tables, vacuum
 gauge and Gauss residuals, the field error from an unfilled physical ghost, and
 the drift from unrestricted initial boundary data. The positive potential
-diagnostic in `OpenStabilityRecords` is defined by its temporal differences and
+diagnostic in `MurStabilityRecords` is defined by its temporal differences and
 spatial links; it is not a conserved energy. `OpenGaugeRecords` distinguishes
 the closed physical layer from an interior comparison with the plane-wave
 oracle. These records carry their own labels and normalization and impose no
@@ -374,7 +374,7 @@ with the run log.
 | `TimeStep`, `TimeStepLong`, `TimeStepRecords` | Permitted range, effective safety factor, bounded/growing histories and endpoint records |
 | `ComovingT7` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
 | `RankGather`, `RankCases`, `SerialReference`, `StableStatistics` | Owned fields and well-conditioned reductions across rank layouts |
-| `SolverShell` | Inherited vacuum evolution against the vacuum-wave setup |
+| `ChdrSolverContract` | Construction contract of `ChdrSolver`, and its evolution against IPPL's Standard solver on the vacuum-wave setup |
 | `Operators`, `CompactOperators`, `BoxSetup` | Difference symbols, periodic halos and geometry |
 | `ChdrStaggered` | Staggered difference composition, component positions and the Standard staggered R2 reconstruction |
 

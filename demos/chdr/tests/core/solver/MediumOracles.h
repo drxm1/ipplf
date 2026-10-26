@@ -45,7 +45,7 @@ namespace chdr::solver {
      * Eqs. (3.60), (3.62), p. 51]. The bound is strict: at equality the two roots of the
      * leapfrog recurrence coincide [kreiss2002SecondOrderWave, section 2, p. 1944]. Evaluated
      * as one square root of the quotient, deliberately not as a product of two roots. Serves
-     * the step-bound check: the shell's step equals the safety factor times this value.
+     * the step-bound check: the step of ChdrSolver equals the safety factor times this value.
      */
     inline double mediumMaxStableTimeStep(double eps, ippl::Vector<double, SpatialDim> h) {
         return std::sqrt(eps / (1 / (h[0] * h[0]) + 1 / (h[1] * h[1]) + 1 / (h[2] * h[2])));
@@ -84,7 +84,7 @@ namespace chdr::solver {
         return 2 * std::asin(dt / 2 * std::sqrt(discreteWaveNumberSquared(waveNumber, h) / eps));
     }
 
-    /** @brief Factor from the scaled forcing of the update to the physical source the shell
+    /** @brief Factor from the scaled forcing of the update to the physical source ChdrSolver
      * accepts: \f$\rho = \varepsilon^2 s_{\varepsilon,0}\f$, \f$J_d =
      * \varepsilon\,s_{\varepsilon,d}\f$.
      * @details Dividing the medium equations by \f$-\varepsilon\f$ gives

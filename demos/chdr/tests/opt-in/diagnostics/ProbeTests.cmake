@@ -3,9 +3,9 @@
 target_sources(test-chdr-diagnostics PRIVATE test_probe_full.cpp)
 chdr_diagnostics_test(
   probe_wiring
-  "FourierProbeT8.IdenticalSamplesGiveTheLabelShiftFactor:FourierProbeT8.ShellLabelsAndChannelCoordinates:FourierProbeT8.StaggeredPlaneClosedForm:FourierProbeT8.LiveSolverChannels"
+  "FourierProbeSpectra.IdenticalSamplesGiveTheLabelShiftFactor:FourierProbeSpectra.SolverLabelsAndChannelCoordinates:FourierProbeSpectra.StaggeredPlaneClosedForm:FourierProbeSpectra.LiveSolverChannels"
 )
-chdr_diagnostics_test(probe_gates "FourierProbeT8.FrozenGatesAndNaNGhosts")
+chdr_diagnostics_test(probe_gates "FourierProbeSpectra.FrozenGatesAndNaNGhosts")
 
 if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
   set(probe_mpi_flags)
@@ -22,8 +22,8 @@ if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
       $<TARGET_FILE:test-chdr-diagnostics> --mpiexec "${MPIEXEC_EXECUTABLE}"
       "--numproc-flag=${MPIEXEC_NUMPROC_FLAG}" ${probe_mpi_flags} --output-dir
       "${CHDR_DIAGNOSTICS_RECORD_ROOT}/probe-ranks")
-  # The script runs FourierProbeT8.FrozenGatesAndNaNGhosts on one rank and on two ranks, each run
-  # bounded by 60 s inside the script, and compares the two record files.
+  # The script runs FourierProbeSpectra.FrozenGatesAndNaNGhosts on one rank and on two ranks, each
+  # run bounded by 60 s inside the script, and compares the two record files.
   set_tests_properties(
     chdr.diagnostics.probe.ranks
     PROPERTIES LABELS

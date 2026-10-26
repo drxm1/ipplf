@@ -1,7 +1,5 @@
 /** @file MonitorTestSupport.h
  * @brief Shared final-transition checks for evolved periodic test cases.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include <gtest/gtest.h>

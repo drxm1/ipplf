@@ -8,8 +8,6 @@
  * GaugeMaximum uses the centred scalar-gradient magnitude as the common reference
  * scale for collocated and staggered gauge-wave tests; runGaugeSteps accumulates
  * the sampled error and reference maxima across each specified run.
- *
- * TODO: REVIEW.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>

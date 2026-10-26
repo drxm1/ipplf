@@ -5,8 +5,6 @@
  * [fallahi2020mithra20fullwavesimulation, Eqs. (3.6)-(3.9)]; half-step labels
  * follow [christlieb2024GaugeConserving, Eqs. (25)-(29)]. Each returned norm states its own
  * denominator.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include <array>

@@ -4,8 +4,6 @@
  * Every rank copies its field view to a host mirror, packs owned cells only,
  * and sends plain doubles with their global component indices. Rank zero
  * restores x/y/z/component order and checks ownership before writing a record.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include "Ippl.h"

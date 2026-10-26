@@ -77,7 +77,7 @@ namespace chdr::solver {
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * ChdrSolver enforces this choice and supplies the required history and label interface.
      * @tparam AnalyticSampler Device-copyable scalar-valued analytic potential sampler.
-     * @param solver Initialized shell whose final time spacing is already selected.
+     * @param solver An initialized ChdrSolver whose final time spacing is already selected.
      * @param sample Device-callable sample(x,y,z,time,component), with scalar potential
      * in component zero and Cartesian vector potential in components 1 through SpatialDim.
      * @details [fallahi2020mithra20fullwavesimulation, section 3.1.4]; component
@@ -107,7 +107,7 @@ namespace chdr::solver {
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * ChdrSolver enforces this choice and supplies the required source and label interface.
      * @tparam AnalyticSampler Device-copyable scalar-valued charge/current sampler.
-     * @param solver Shell whose sourceField is overwritten on owned cells.
+     * @param solver The ChdrSolver whose sourceField is overwritten on owned cells.
      * @param sample Device-callable sample(x,y,z,time,component), returning charge density
      * for component zero and Cartesian current density for components 1 through SpatialDim.
      * @param sourceStep Source index for the next solve, normally solver.completedSolves().

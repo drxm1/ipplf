@@ -57,7 +57,7 @@ namespace chdr::solver {
 
         /** @brief Return the Standard bound multiplied by the refractive index.
          * @details \f$\Delta t_{\max}=\sqrt\varepsilon
-         * (\sum_d h_d^{-2})^{-1/2}\f$; the endpoint is excluded by the shell
+         * (\sum_d h_d^{-2})^{-1/2}\f$; the endpoint is excluded by ChdrSolver
          * [fallahi2020mithra20fullwavesimulation, Eq. (3.20), with speed
          * \f$c/\sqrt\varepsilon\f$; kreiss2002SecondOrderWave, section 2].
          * spacing is the physical cell spacing. The return value bounds the caller's

@@ -1,5 +1,5 @@
-/** @file test_open_shell.cpp
- * @brief Check open-box construction and physical Mur speeds.
+/** @file test_mur_faces.cpp
+ * @brief Check the Mur face description of ChdrSolver and its physical speed conversion.
  */
 #include <gtest/gtest.h>
 
@@ -11,7 +11,7 @@ namespace chdr::solver::test {
      * Each topology is constructed identically on every rank. Unsupported
      * NonStandard open boxes must throw before entering a halo collective.
      */
-    TEST(OpenShell, TopologyAndReset) {
+    TEST(MurFaces, DescriptionSurvivesStorageReset) {
         for (auto axes : {std::array{true, true, true}, std::array{false, false, false},
                           std::array{false, true, true}, std::array{false, false, true}}) {
             auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 6, 10}, 2, axes);
@@ -41,7 +41,7 @@ namespace chdr::solver::test {
      * timestep ratio; Mur weights depend on speed times timestep
      * [mur1981AbsorbingBoundaryFdtd, section IV, equation (16)].
      */
-    TEST(OpenShell, PhysicalSpeedConversion) {
+    TEST(MurFaces, PhysicalSpeedConversion) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 6, 10}, 2, {false, true, true});
         initializeFieldStorage(fields);
         const material::MaterialOwner owner(

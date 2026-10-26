@@ -1,10 +1,9 @@
-/** @file test_shell.cpp
- * @brief Compare the existing Standard solver and shell on the periodic vacuum-wave setup.
- * @details The oracle is the existing Standard solver invoked with the same
- * initial histories. This regression checks shell plumbing and solve counting;
- * The unchanged vacuum-demo tests separately establish the physical wave reference.
- *
- * TODO: REVIEW.
+/** @file test_solver_contract.cpp
+ * @brief The construction contract of ChdrSolver, and its evolution against IPPL's Standard
+ * solver on the periodic vacuum-wave setup.
+ * @details The oracle is IPPL's Standard solver invoked with the same initial histories. This
+ * regression checks the field bindings of ChdrSolver and its solve counting; the vacuum-wave
+ * tests separately establish the physical wave reference.
  */
 #include <gtest/gtest.h>
 #include <limits>
@@ -15,8 +14,9 @@
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
-              "test_shell.cpp requires three spatial dimensions for its Cartesian implementation");
+static_assert(
+    chdr::solver::SpatialDim == 3,
+    "test_solver_contract.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
     using namespace chdr::solver;
@@ -36,7 +36,7 @@ namespace {
         const double infinity = std::numeric_limits<double>::infinity();
         double error          = 0.0;
         Kokkos::parallel_reduce(
-            "Shell field difference", first.getFieldRangePolicy(),
+            "ChdrSolver field difference", first.getFieldRangePolicy(),
             KOKKOS_LAMBDA(int i, int j, int k, double& maximum) {
                 for (unsigned c = 0; c < SpatialDim; ++c) {
                     const double value = Kokkos::abs(a(i, j, k)[c] - b(i, j, k)[c]);
@@ -65,36 +65,36 @@ namespace {
 
     /// @brief Exercise the same base solve path for 128 steps, then check explicit reset counting.
     void compareBaseEvolution(StandardSolverPeriodic& base,
-                              ChdrSolver<StandardSolverPeriodic>& shell,
-                              ChDRFieldContainer& baseFields, ChDRFieldContainer& shellFields) {
-        EXPECT_EQ(shell.getDt(), base.getDt());
+                              ChdrSolver<StandardSolverPeriodic>& chdrSolver,
+                              ChDRFieldContainer& baseFields, ChDRFieldContainer& chdrFields) {
+        EXPECT_EQ(chdrSolver.getDt(), base.getDt());
         for (int step = 1; step <= 128; ++step) {
             base.solve();
-            shell.solve();
-            EXPECT_EQ(shell.completedSolves(), step);
-            EXPECT_EQ(difference(baseFields.getE(), shellFields.getE()), 0.0);
-            EXPECT_EQ(difference(baseFields.getB(), shellFields.getB()), 0.0);
+            chdrSolver.solve();
+            EXPECT_EQ(chdrSolver.completedSolves(), step);
+            EXPECT_EQ(difference(baseFields.getE(), chdrFields.getE()), 0.0);
+            EXPECT_EQ(difference(baseFields.getB(), chdrFields.getB()), 0.0);
         }
-        shell.initialize();
-        EXPECT_EQ(shell.completedSolves(), 0);
+        chdrSolver.initialize();
+        EXPECT_EQ(chdrSolver.completedSolves(), 0);
     }
 
-    TEST(SolverShell, MatchesBaseOnM001) {
-        auto baseFields  = chdr::vacuum::makePeriodicFieldContainer();
-        auto shellFields = chdr::vacuum::makePeriodicFieldContainer();
+    TEST(ChdrSolverContract, MatchesBaseSolverOnTheVacuumWave) {
+        auto baseFields = chdr::vacuum::makePeriodicFieldContainer();
+        auto chdrFields = chdr::vacuum::makePeriodicFieldContainer();
         chdr::vacuum::initializeFieldStorage(baseFields);
-        chdr::vacuum::initializeFieldStorage(shellFields);
+        chdr::vacuum::initializeFieldStorage(chdrFields);
         StandardSolverPeriodic base(baseFields.getJ(), baseFields.getE(), baseFields.getB(),
                                     ippl::FDTDBoundary::fromLayout(baseFields.getFL()));
-        ChdrSolver<StandardSolverPeriodic> shell(shellFields.getJ(), shellFields.getE(),
-                                                 shellFields.getB(),
-                                                 EBReconstructionConvention::R1);
+        ChdrSolver<StandardSolverPeriodic> chdrSolver(chdrFields.getJ(), chdrFields.getE(),
+                                                      chdrFields.getB(),
+                                                      EBReconstructionConvention::R1);
         initializeVacuumHistories(base);
-        initializeVacuumHistories(shell);
-        compareBaseEvolution(base, shell, baseFields, shellFields);
+        initializeVacuumHistories(chdrSolver);
+        compareBaseEvolution(base, chdrSolver, baseFields, chdrFields);
     }
 
-    TEST(SolverShell, DeclaresMixedElectricLabel) {
+    TEST(ChdrSolverContract, DeclaresMixedElectricLabel) {
         const LevelContract contract{EBReconstructionConvention::R1};
         EXPECT_THROW(contract.halfStepLabel(Quantity::Electric), std::invalid_argument);
         EXPECT_EQ(contract.halfStepLabel(Quantity::Electric, true).count(), -1);
@@ -102,7 +102,7 @@ namespace {
         EXPECT_EQ(contract.labelTime(Quantity::Electric, 3, 0.125, true), 0.3125);
     }
 
-    TEST(SolverShell, RefusesUnsupportedHaloWidth) {
+    TEST(ChdrSolverContract, RefusesUnsupportedHaloWidth) {
         auto fields = chdr::vacuum::makePeriodicFieldContainer();
         chdr::vacuum::initializeFieldStorage(fields);
         EMFieldsType wrong;
@@ -112,7 +112,7 @@ namespace {
                      IpplException);
     }
 
-    TEST(SolverShell, RequiresExplicitChoiceAndFixedBindings) {
+    TEST(ChdrSolverContract, RequiresExplicitChoiceAndFixedBindings) {
         static_assert(!std::is_constructible_v<ChdrSolver<StandardSolverPeriodic>,
                                                AJFourFieldsType&, EMFieldsType&, EMFieldsType&>);
         EXPECT_EQ(LevelContract{}.ebReconstructionConvention_m, EBReconstructionConvention::R2);
@@ -126,7 +126,7 @@ namespace {
         EXPECT_THROW(solver.computeRawMagneticField(fields.getB()), IpplException);
     }
 
-    TEST(SolverShell, RejectsDistinctLayoutOwners) {
+    TEST(ChdrSolverContract, RejectsDistinctLayoutOwners) {
         auto first  = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         auto second = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(first);
@@ -136,7 +136,7 @@ namespace {
                      IpplException);
     }
 
-    TEST(SolverShell, InitialFieldsHonorSelectedReconstruction) {
+    TEST(ChdrSolverContract, InitialFieldsHonorSelectedReconstruction) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
@@ -151,7 +151,7 @@ namespace {
         EXPECT_EQ(solver.completedSolves(), 0);
     }
 
-    TEST(SolverShell, CollectivelyRefusesInsufficientLocalOwnership) {
+    TEST(ChdrSolverContract, CollectivelyRefusesInsufficientLocalOwnership) {
         const int ranks = ippl::Comm->size();
         if (ranks < 2)
             GTEST_SKIP() << "Requires a split with unequal local extents";

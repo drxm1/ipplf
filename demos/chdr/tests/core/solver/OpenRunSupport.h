@@ -84,9 +84,9 @@ namespace chdr::solver::test {
 
     using OpenStandardSolver = OpenTestSolver<ChdrSolver<StandardSolverPeriodic>>;
 
-    /** @brief Build an ordinary shell or a test control on caller-owned field storage.
+    /** @brief Build an ordinary ChdrSolver or a test control on caller-owned field storage.
      * @details Zero epsilon selects owner-free vacuum. A positive value constructs a uniform
-     * material; the shell retains the validated scalar value, so the temporary owner can die.
+     * material; the ChdrSolver retains the validated scalar value, so the temporary owner can die.
      * Source, output fields, mesh and layout must outlive the returned solver.
      */
     template <class Solver = OpenStandardSolver>

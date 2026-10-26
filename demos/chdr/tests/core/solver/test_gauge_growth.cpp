@@ -7,8 +7,6 @@
  * B5 labels the collocated first/last-period growth record; T2 is the discrete
  * gauge mode and T3 the continuum mixed wave. Staggered histories are records
  * without a ratio criterion because their gauge is at round-off.
- *
- * TODO: REVIEW.
  */
 #include <algorithm>
 #include <cmath>

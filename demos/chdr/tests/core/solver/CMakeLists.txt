@@ -4,7 +4,7 @@ add_ippl_test(
   COMPILE_ONLY
   SOURCES
   ../../../apps/vacuum-wave/VacuumSetup.cpp
-  test_shell.cpp
+  test_solver_contract.cpp
   INCLUDE_DIRS
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../apps/vacuum-wave")
 target_link_libraries(test-chdr-solver PRIVATE chdr-core chdr-diagnostics chdr-testing)
@@ -43,7 +43,7 @@ function(chdr_solver_test suite filter)
                  "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
   endif()
 endfunction()
-chdr_solver_test(shell "SolverShell.*")
+chdr_solver_test(contract "ChdrSolverContract.*")
 chdr_solver_test(compact "CompactOperators.*")
 chdr_solver_test(staggered "ChdrStaggered.*")
 target_sources(test-chdr-solver PRIVATE test_setup.cpp)
@@ -70,8 +70,8 @@ function(chdr_open_record name filter)
                                                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 endfunction()
 chdr_open_record(gauge OpenGaugeRecords.VacuumRepresentatives)
-chdr_open_record(zero-ghost OpenOuterLayerRecords.ZeroGhostMagnitude)
-chdr_open_record(all-cell-drift OpenStabilityRecords.AllCellDrift)
+chdr_open_record(zero-ghost MurOuterLayerRecords.ZeroGhostMagnitude)
+chdr_open_record(all-cell-drift MurStabilityRecords.AllCellDrift)
 target_sources(test-chdr-solver PRIVATE test_gather.cpp)
 chdr_solver_test(gather "RankGather.*")
 target_sources(test-chdr-solver PRIVATE test_manufactured.cpp)
@@ -112,25 +112,25 @@ foreach(variant serial mpi2)
 endforeach()
 include(StaggeredTests.cmake)
 include(MediumTests.cmake)
-target_sources(test-chdr-solver PRIVATE test_open_reflection.cpp test_open_field_reflection.cpp
-                                        test_open_refinement.cpp)
-chdr_solver_test(open.reflection "OpenReflection.ExactTwoWaveRows")
-chdr_solver_test(open.field-reflection "OpenFieldReflection.SignedElectricAndMagnetic")
-chdr_solver_test(open.refinement "OpenReflectionRefinement.CentrePlaneOrder")
-chdr_solver_test(open.records "OpenReflectionRefinement.CodeConfirmedRows")
+target_sources(test-chdr-solver PRIVATE test_mur_reflection.cpp test_mur_field_reflection.cpp
+                                        test_mur_refinement.cpp)
+chdr_solver_test(mur.reflection "MurReflection.ExactTwoWaveRows")
+chdr_solver_test(mur.field-reflection "MurFieldReflection.SignedElectricAndMagnetic")
+chdr_solver_test(mur.refinement "MurReflectionRefinement.CentrePlaneOrder")
+chdr_solver_test(mur.records "MurReflectionRefinement.CodeConfirmedRows")
 foreach(variant serial mpi2)
-  if(TEST chdr.solver.open.records.${variant})
-    set_tests_properties(chdr.solver.open.records.${variant} PROPERTIES LABELS "chdr;solver;record")
+  if(TEST chdr.solver.mur.records.${variant})
+    set_tests_properties(chdr.solver.mur.records.${variant} PROPERTIES LABELS "chdr;solver;record")
   endif()
 endforeach()
 add_test(
-  NAME chdr.solver.open.holdout
+  NAME chdr.solver.mur.holdout
   COMMAND
     "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
     $<TARGET_FILE:test-chdr-solver> ${MPIEXEC_POSTFLAGS} --gtest_also_run_disabled_tests
-    --gtest_filter=OpenReflection.DISABLED_Holdout)
+    --gtest_filter=MurReflection.DISABLED_Holdout)
 set_tests_properties(
-  chdr.solver.open.holdout
+  chdr.solver.mur.holdout
   PROPERTIES DISABLED
              TRUE
              PROCESSORS
@@ -141,7 +141,7 @@ set_tests_properties(
              "chdr;solver;holdout"
              ENVIRONMENT
              "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
-target_sources(test-chdr-solver PRIVATE test_open_shell.cpp test_open_medium.cpp)
+target_sources(test-chdr-solver PRIVATE test_mur_faces.cpp test_mur_medium.cpp)
 set(randomPotentialHistoryFixtureDirectory
     "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")
 add_custom_command(
@@ -162,20 +162,21 @@ add_dependencies(test-chdr-solver chdr-random-potential-history-fixtures)
 target_compile_definitions(
   test-chdr-solver
   PRIVATE CHDR_RANDOM_POTENTIAL_HISTORY_FIXTURE_DIR="${randomPotentialHistoryFixtureDirectory}")
-chdr_solver_test(open.shell "OpenShell.*")
-target_sources(test-chdr-solver PRIVATE test_outer_layer.cpp)
-chdr_solver_test(open.outer-layer "OpenOuterLayer.*")
+chdr_solver_test(mur.faces "MurFaces.*")
+chdr_solver_test(mur.medium "MurMedium.*")
+target_sources(test-chdr-solver PRIVATE test_mur_outer_layer.cpp)
+chdr_solver_test(mur.outer-layer "MurOuterLayer.*")
 target_sources(test-chdr-solver PRIVATE test_open_beam.cpp)
-target_sources(test-chdr-solver PRIVATE test_open_stability.cpp test_open_families.cpp)
-chdr_solver_test(open.families "OpenFamilies.*")
-chdr_solver_test(open.stability "OpenStability.InnerDataEnvelope")
-chdr_solver_test(open.stability-control "OpenStability.MismatchedSpeedControl")
-set_tests_properties(chdr.solver.open.stability-control.mpi2 PROPERTIES DISABLED TRUE)
+target_sources(test-chdr-solver PRIVATE test_mur_stability.cpp test_mur_families.cpp)
+chdr_solver_test(mur.families "MurEdgeCornerFamilies.*")
+chdr_solver_test(mur.stability "MurStability.InnerDataEnvelope")
+chdr_solver_test(mur.stability-control "MurStability.MismatchedSpeedControl")
+set_tests_properties(chdr.solver.mur.stability-control.mpi2 PROPERTIES DISABLED TRUE)
 foreach(suite stability stability-control)
   foreach(variant serial mpi2)
-    if(TEST chdr.solver.open.${suite}.${variant})
-      set_tests_properties(chdr.solver.open.${suite}.${variant} PROPERTIES TIMEOUT 1800 LABELS
-                                                                           "chdr;solver;long")
+    if(TEST chdr.solver.mur.${suite}.${variant})
+      set_tests_properties(chdr.solver.mur.${suite}.${variant} PROPERTIES TIMEOUT 1800 LABELS
+                                                                          "chdr;solver;long")
     endif()
   endforeach()
 endforeach()

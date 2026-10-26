@@ -1,7 +1,5 @@
 /** @file test_probe.cpp
  * @brief Minimal closed-form and interface checks for the time-labelled Fourier probe.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 #include <limits>

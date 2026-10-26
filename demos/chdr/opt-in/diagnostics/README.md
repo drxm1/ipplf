@@ -433,17 +433,17 @@ their measured maxima; `ctest -V` shows them.
 | `chdr.diagnostics.monitors` | `test_monitors.cpp`, `ChdrMonitors.*` | Collocated random and Nyquist data, R1, R2 and R2Prime, Standard and NonStandard: magnetic divergence and Faraday at most \f$10^{-12}\f$; a planted E error is detected; exact zeros for zero data; planted continuity values; continuity unavailable after gaps and reloads |
 | `chdr.diagnostics.monitor-records` | `test_monitor_records.cpp`, `ChdrMonitorRecords.*` | Collocated `gauss_m` at most \f$10^{-12}\f$ for each reconstruction and stencil; result unchanged after a live-source overwrite |
 | `chdr.diagnostics.probe` | `test_probe.cpp`, `FourierProbe.*` | Refusals, gate order, FMA phase against an integer reference, Hann weights and sums, collective ownership failure (two ranks only) |
-| `chdr.diagnostics.open-refusals` | `test_open_probe.cpp`, `OpenShell.ProbeLayerAndMonitorRefusals` | In both readings, field probes refused on the outermost Mur layer and potentials accepted there; `Monitors` refused on an open layout |
-| `chdr.diagnostics.probe_wiring` | `test_probe_full.cpp`, four `FourierProbeT8` tests | Label-shift factor \f$e^{i\pi\nu}\f$; channel labels and coordinates for each supported reading and reconstruction; staggered plane against the closed form; `SolverFourierProbe` on an evolving mode in five solver configurations |
-| `chdr.diagnostics.probe_gates` | `test_probe_full.cpp`, `FourierProbeT8.FrozenGatesAndNaNGhosts` | Two planes (rectangle and Hann) and six points over 100000 steps with NaN in every halo: each value within \f$10^{-12}R\f$ of a long-double closed form; a wrong half-step label differs by at least \f$10^{-6}R\f$ |
+| `chdr.diagnostics.mur-layer-refusals` | `test_mur_layer.cpp`, `MurLayer.ProbeAndMonitorRefusals` | In both readings, field probes refused on the outermost Mur layer and potentials accepted there; `Monitors` refused on a layout with a nonperiodic axis |
+| `chdr.diagnostics.probe_wiring` | `test_probe_full.cpp`, four `FourierProbeSpectra` tests | Label-shift factor \f$e^{i\pi\nu}\f$; channel labels and coordinates for each supported reading and reconstruction; staggered plane against the closed form; `SolverFourierProbe` on an evolving mode in five solver configurations |
+| `chdr.diagnostics.probe_gates` | `test_probe_full.cpp`, `FourierProbeSpectra.FrozenGatesAndNaNGhosts` | Two planes (rectangle and Hann) and six points over 100000 steps with NaN in every halo: each value within \f$10^{-12}R\f$ of a long-double closed form; a wrong half-step label differs by at least \f$10^{-6}R\f$ |
 | `chdr.diagnostics.probe.ranks` | `compare_probe_ranks.py` | Serial against two-rank output of `FrozenGatesAndNaNGhosts` |
 
 \f$R=\Delta t\,S_1\sum_s\lvert a_s\rvert\f$ bounds the transform of the test signal with tone
 amplitudes \f$a_s\f$ (deduction from [oskooi2010meep, Eq. (6)] and
 [heinzel2002SpectrumSpectralDensity, Eq. (19)]). `chdr.diagnostics.probe.ranks` runs
-`FourierProbeT8.FrozenGatesAndNaNGhosts` on one and on two ranks with `CHDR_PROBE_OUTPUT` set.
+`FourierProbeSpectra.FrozenGatesAndNaNGhosts` on one and on two ranks with `CHDR_PROBE_OUTPUT` set.
 Rank zero writes `# communicator_size N` and one line per value: probe, cell, channel, frequency,
-\f$R\f$, real and imaginary part. The script requires that the producer passes in both runs,
+\f$R\f$, real and imaginary part. The script requires that the test passes in both runs,
 complete coverage (262 cells, 11 channels, 6 frequencies), identical \f$R\f$, finite values and a
 difference of at most \f$10^{-14}R\f$; it reports bitwise equality but does not require it.
 Without Python3 or an MPI launcher the entry is registered as skipped, with the label

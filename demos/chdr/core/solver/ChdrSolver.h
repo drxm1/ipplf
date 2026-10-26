@@ -1,5 +1,6 @@
 /** @file ChdrSolver.h
- * @brief Demo-level potential solver shell with periodic or Mur faces.
+ * @brief Potential solver on top of IPPL's Standard and NonStandard FDTD solvers, with periodic
+ * or Mur faces.
  *
  * WHY ANOTHER SOLVER CLASS? WHY DO WE INHERIT FROM Standard / NonStandard FDTD SOLVERS?
  * This is done here because the regular FDTDSolverBase calls the following algorithm:
@@ -200,7 +201,7 @@ namespace chdr::solver {
             formulationParameters_m   = parameters;
         }
 
-        /// The service adapter borrows this shell's address; bindings cannot be copied or moved.
+        /// The service adapter borrows this solver's address; bindings cannot be copied or moved.
         ChdrSolver(const ChdrSolver&)            = delete;
         ChdrSolver& operator=(const ChdrSolver&) = delete;
         ChdrSolver(ChdrSolver&&)                 = delete;
@@ -236,7 +237,7 @@ namespace chdr::solver {
         /** @brief Reset base storage and solve count while retaining an explicit step override.
          * @details Call before loading histories: the base initializer zeros its slots.
          * A previously set explicit timestep survives reinitialization so the loaded time labels
-         * continue to use the step selected through this shell.
+         * continue to use the step selected through this ChdrSolver.
          * E/B are not reconstructed here; call evaluateInitialFields after loading
          * both potential histories before reading either output array.
          */
@@ -325,7 +326,7 @@ namespace chdr::solver {
         }
         /// @brief Reconstruct the loaded histories without advancing the solve count.
         void evaluateInitialFields() { reconstructEB(); }
-        /// Preserve the shell's selected reconstruction when using the familiar base entry point.
+        /// Preserve the reconstruction selected in this ChdrSolver when using the base entry point.
         void evaluate_EB() { reconstructEB(); }
         /// @return Number of completed solve calls since initialization.
         long long completedSolves() const { return completed_m; }
@@ -387,14 +388,15 @@ namespace chdr::solver {
         /// @return Borrowed charge/current array written before the next solve.
         AJFourFieldsType& sourceField() { return *this->JN_mp; }
 
-        /// Bound field ownership is fixed at construction; rebuild the shell to change it.
+        /// Bound field ownership is fixed at construction; construct a new ChdrSolver to change it.
         void setSources(AJFourFieldsType&) override {
-            throw IpplException("ChdrSolver::setSources", "Construct a new shell to rebind fields");
+            throw IpplException("ChdrSolver::setSources",
+                                "Construct a new ChdrSolver to rebind fields");
         }
-        /// Hide the unchecked base rebinding entry point for normal shell use.
+        /// Hide the unchecked base rebinding entry point for normal ChdrSolver use.
         void setEMFields(EMFieldsType&, EMFieldsType&) {
             throw IpplException("ChdrSolver::setEMFields",
-                                "Construct a new shell to rebind fields");
+                                "Construct a new ChdrSolver to rebind fields");
         }
 
         /// The class static_assert restricts PotentialSolverBase to StandardSolverPeriodic
@@ -541,9 +543,9 @@ namespace chdr::solver {
             PotentialSolverBase::step();
         }
 
-        /** @brief Lend the existing potential slots and shell operations to an update.
-         * @details This member stores a reference to its enclosing shell, not copies
-         * of the fields. The shell is noncopyable and nonmovable so that the reference
+        /** @brief Lend the existing potential slots and ChdrSolver operations to an update.
+         * @details This member stores a reference to its enclosing ChdrSolver, not copies
+         * of the fields. The ChdrSolver is noncopyable and nonmovable so that the reference
          * cannot silently point at an old instance. The update borrows this context
          * only during advance(); all dispatch through this adapter occurs on the host.
          */
@@ -625,7 +627,7 @@ namespace chdr::solver {
         LevelContract contract_m;
         /// Own formulation workspace; a null pointer selects the inherited vacuum step.
         std::unique_ptr<MaterialUpdate> update_m;
-        /// Borrow this stable shell address without creating a new adapter per step.
+        /// Borrow the stable address of this ChdrSolver without creating a new adapter per step.
         StepContext context_m{*this};
         /// Cached material metadata for queries; the formulation owns its numerical data.
         double homogeneousPermittivity_m = 1.0;

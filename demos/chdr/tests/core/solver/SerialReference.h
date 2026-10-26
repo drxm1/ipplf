@@ -2,8 +2,6 @@
  * @brief Compare a distributed wave run with a rank-zero MPI_COMM_SELF execution.
  * @details The retained output tag "A9 communicator-self witness" identifies
  * records of the maximum per-cell and reduction-relative differences.
- *
- * TODO: REVIEW.
  */
 #pragma once
 

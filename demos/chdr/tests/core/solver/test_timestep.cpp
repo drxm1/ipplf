@@ -3,8 +3,6 @@
  * @details Bounds are derived in Operators.h from fallahi2020mithra20fullwavesimulation, Eqs.
  * (3.17), (3.19)-(3.20), (3.24). Tests compare the same initial data below and above the spectral
  * stability bound.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 #include <iostream>

@@ -2,8 +2,6 @@
  * @brief Sourced-wave test of the communicator-self comparison on both spatial readings.
  * @details The separate serial mesh, layout and field storage must reproduce the
  * distributed evolution while each communicator performs its own halo exchanges.
- *
- * TODO: REVIEW.
  */
 #include "SerialReference.h"
 #include "Waves.h"

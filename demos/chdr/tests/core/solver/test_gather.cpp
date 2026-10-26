@@ -1,7 +1,5 @@
 /** @file test_gather.cpp
  * @brief Global index order, exact ownership and NaN halo exclusion in rank dumps.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 

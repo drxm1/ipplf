@@ -1,7 +1,7 @@
 include(AddIpplTest)
 # test_probe.cpp and test_probe_full.cpp build their periodic fields with the vacuum-wave setup, as
-# test_shell.cpp of the solver tests does. VacuumSetup.cpp stays an app file until that setup moves
-# onto BoxSetup.
+# test_solver_contract.cpp of the solver tests does. VacuumSetup.cpp stays an app file until that
+# setup moves onto BoxSetup.
 add_ippl_test(
   test-chdr-diagnostics
   COMPILE_ONLY
@@ -11,7 +11,7 @@ add_ippl_test(
   test_monitors.cpp
   test_monitor_records.cpp
   test_probe.cpp
-  test_open_probe.cpp)
+  test_mur_layer.cpp)
 # SerialReference.h (borrowed from tests/core/solver) brings in RankRecords.h, which uses JSON.
 target_link_libraries(test-chdr-diagnostics PRIVATE chdr-core chdr-diagnostics chdr-testing
                                                     nlohmann_json::nlohmann_json)
@@ -62,5 +62,5 @@ chdr_diagnostics_test(energy "InterfaceEnergy.*" "InterfaceEnergy.NormalSplit")
 chdr_diagnostics_test(monitors "ChdrMonitors.*")
 chdr_diagnostics_test(monitor-records "ChdrMonitorRecords.*")
 chdr_diagnostics_test(probe "FourierProbe.*")
-chdr_diagnostics_test(open-refusals "OpenShell.ProbeLayerAndMonitorRefusals")
+chdr_diagnostics_test(mur-layer-refusals "MurLayer.ProbeAndMonitorRefusals")
 include(ProbeTests.cmake)

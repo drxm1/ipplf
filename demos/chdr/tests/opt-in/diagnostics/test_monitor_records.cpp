@@ -3,8 +3,6 @@
  * @details GaussIdentity explains the discrete formula derived from
  * [christlieb2024GaugeConserving, Theorem 3.5]. Distinct histories exercise each
  * reconstruction's scalar slot and the delayed R2Prime electric output.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 #include <iostream>
@@ -72,9 +70,9 @@ namespace {
             checkFormulaReport(report, maximum);
             checkLateSource(solver, monitors, report);
         }
-        // "A4" labels the Gauss-defect versus discrete-formula comparison.
+        // The printed line reports the Gauss-defect versus discrete-formula comparison.
         if (ippl::Comm->rank() == 0)
-            std::cout << "A4 stencil=" << int(solver.stencil())
+            std::cout << "gauss stencil=" << int(solver.stencil())
                       << " reconstruction=" << int(ebReconstructionConvention)
                       << " Gauss=" << maximum << " threshold=1e-12\n";
     }

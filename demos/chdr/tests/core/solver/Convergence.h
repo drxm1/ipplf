@@ -8,8 +8,6 @@
  * Helpers parameterized by PotentialSolverBase select the inherited Standard or
  * NonStandard potential update. SolverType instead denotes the complete ChdrSolver
  * interface, including its potential histories, source field and E/B outputs.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include <gtest/gtest.h>
@@ -62,7 +60,7 @@ namespace chdr::solver::test {
                        : std::array<int, SpatialDim>{n, n, NS ? 3 * n / 2 : n};
     }
 
-    /** @brief Load continuum samples at the shell's labels and reconstruct initial fields.
+    /** @brief Load continuum samples at the labels of ChdrSolver and reconstruct initial fields.
      * @details Select the medium step before sampling either initial history slot.
      * makeMediumWave supplies continuum frequency and amplitudes independently
      * of the discrete update. Their evolution error is therefore retained in

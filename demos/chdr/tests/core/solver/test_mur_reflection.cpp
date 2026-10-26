@@ -1,4 +1,4 @@
-/** @file test_open_reflection.cpp
+/** @file test_mur_reflection.cpp
  * @brief Exact two-wave continuation, sensitive controls and MPI witnesses for Mur faces.
  */
 #include "RankWitness.h"
@@ -111,7 +111,7 @@ namespace chdr::solver::test::reflection {
         }
     }
 
-    TEST(OpenReflection, ExactTwoWaveRows) {
+    TEST(MurReflection, ExactTwoWaveRows) {
         for (const auto& row : cases)
             for (auto reading :
                  {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
@@ -123,7 +123,7 @@ namespace chdr::solver::test::reflection {
      * periods. Their expressions are evaluated only if this disabled test is
      * explicitly selected. The propagating row also checks both field polarizations.
      */
-    TEST(OpenReflection, DISABLED_Holdout) {
+    TEST(MurReflection, DISABLED_Holdout) {
         const std::array<double, 3> h{1.15, 1, .85};
         const double dt =
             .9 * std::sqrt(3.1) / std::sqrt(1 / (h[0] * h[0]) + 1 + 1 / (h[2] * h[2]));

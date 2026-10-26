@@ -1,4 +1,4 @@
-/** @file test_open_field_reflection.cpp
+/** @file test_mur_field_reflection.cpp
  * @brief Check signed electric and magnetic reflection at their declared sample positions.
  */
 #include "ReflectionRun.h"
@@ -80,7 +80,7 @@ namespace chdr::solver::test::reflection {
 
     /// Two propagating rows, two readings and two polarizations, with identical MPI/serial
     /// fixtures.
-    TEST(OpenFieldReflection, SignedElectricAndMagnetic) {
+    TEST(MurFieldReflection, SignedElectricAndMagnetic) {
         for (const auto& row : {cases[1], cases[7]})
             for (auto reading :
                  {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})

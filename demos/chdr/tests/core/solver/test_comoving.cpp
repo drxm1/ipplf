@@ -3,8 +3,6 @@
  * @details Output rows tagged T7a describe one Fourier mode; T7b describes the
  * neutralized Gaussian train. P1 columns contain exact-symbol predictions and
  * P2 columns contain their leading-order expansions, defined by comovingSymbols().
- *
- * TODO: REVIEW.
  */
 #include <algorithm>
 #include <gtest/gtest.h>

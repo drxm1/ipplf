@@ -1,4 +1,4 @@
-/** @file test_open_stability.cpp
+/** @file test_mur_stability.cpp
  * @brief Check long-run potential envelopes from fixed inner-cell random histories.
  */
 #include "OpenRunSupport.h"
@@ -96,7 +96,7 @@ namespace chdr::solver::test {
      * each split along z.
      * Exact NumPy data use seed 81413, independent histories and component-major global order.
      */
-    TEST(OpenStability, InnerDataEnvelope) {
+    TEST(MurStability, InnerDataEnvelope) {
         for (bool periodicY : {false, true})
             for (const auto h : {std::array{1., 1., 1.}, std::array{1.25, .8, 1.}})
                 for (double epsilon : {1., 2.13})
@@ -113,7 +113,7 @@ namespace chdr::solver::test {
      * This violates the supported boundary-speed interval. The 1e6 floor is far below this
      * fixture's measured growth of 1.9e22 and separates it from the bounded matched runs.
      */
-    TEST(OpenStability, MismatchedSpeedControl) {
+    TEST(MurStability, MismatchedSpeedControl) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "The growing control is a serial fixture";
         stabilityCase(false, {1., 1., 1.}, 2.13, true, true);
@@ -162,7 +162,7 @@ namespace chdr::solver::test {
 
     /// Unrestricted initial boundary data: report affine drift and the independently defined Q
     /// ratio.
-    TEST(OpenStabilityRecords, AllCellDrift) {
+    TEST(MurStabilityRecords, AllCellDrift) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "This record uses one rank";
         auto fields = makeBoxFieldContainer({16, 16, 16}, {16, 16, 16}, 2, {false, false, false});

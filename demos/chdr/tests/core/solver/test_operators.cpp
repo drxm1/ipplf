@@ -3,8 +3,6 @@
  * @details Wave symbols follow [fallahi2020mithra20fullwavesimulation,
  * Eqs. (3.17), (3.24)]; the centered symbol follows
  * [trefethen1996FiniteDifferenceSpectral, Eqs. (5.1.8)-(5.1.9), p. 195].
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 #include <limits>

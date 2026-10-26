@@ -1,7 +1,5 @@
 /** @file test_convergence_long.cpp
  * @brief Full refinement ladders and the explicitly disabled independent anisotropic case.
- *
- * TODO: REVIEW.
  */
 #include "Convergence.h"
 #include "core/base/SpatialDimension.h"

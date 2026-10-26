@@ -99,7 +99,7 @@ namespace chdr::solver {
 
         /** @brief Retain the state before the source is consumed by one solve.
          * @tparam SolverType Solver exposing ChdrSolver's history, field and level interface.
-         * @param solver Shell whose next solve is to be monitored.
+         * @param solver The ChdrSolver whose next solve is to be monitored.
          * @pre The caller has written the current source and initialized potential halos.
          * @throws std::logic_error If another beforeSolve is still awaiting afterSolve,
          * or if the solver has non-unit material permittivity or gauge parameter.
@@ -138,7 +138,7 @@ namespace chdr::solver {
 
         /** @brief Evaluate the completed step and retain its source for continuity.
          * @tparam SolverType Same solver type passed to beforeSolve.
-         * @param solver Same shell, after exactly the one bracketed solve.
+         * @param solver The same ChdrSolver, after exactly the one bracketed solve.
          * @return Updated records whose availability flags describe retained history.
          */
         template <class SolverType>
@@ -282,7 +282,7 @@ namespace chdr::solver {
         // NVCC extended lambdas require their enclosing member function to be public.
         // These workspace helpers are implementation details; use advance/beforeSolve/afterSolve.
         /** @brief Cache output B and its uncancelled scale, or compute the raw curl.
-         * @param solver Shell supplying valid potential halos and reconstructed B.
+         * @param solver The ChdrSolver supplying valid potential halos and reconstructed B.
          * @param raw Select current raw curl rather than measured output B.
          * @details Internal workspace operation; advance controls its call order.
          */
@@ -319,7 +319,7 @@ namespace chdr::solver {
 
     public:
         /** @brief Cache measured E while expanding its potential-based absolute scale.
-         * @param solver Shell supplying potential histories and reconstructed E.
+         * @param solver The ChdrSolver supplying potential histories and reconstructed E.
          * @details Internal workspace operation; advance controls its call order.
          */
         template <class SolverType>
@@ -344,7 +344,7 @@ namespace chdr::solver {
         }
 
         /** @brief Evaluate Faraday using consecutive raw curls and the current output E.
-         * @param solver Shell supplying valid current and previous potential halos.
+         * @param solver The ChdrSolver supplying valid current and previous potential halos.
          * @param d Cartesian residual component, from zero through two.
          * @return Reduction of the selected residual against its absolute scale.
          * @pre fillElectricWorkspace has prepared this monitor's workspace.

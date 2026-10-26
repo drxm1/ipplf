@@ -5,8 +5,6 @@
  * Theorem 3.5, p. 8] and [fallahi2020mithra20fullwavesimulation,
  * Eqs. (3.17), (3.24)]. A6 labels these gauge-cancellation records.
  * No continuum approximation replaces the oracle here.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 #include <iostream>

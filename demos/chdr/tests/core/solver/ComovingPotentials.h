@@ -1,7 +1,5 @@
 /** @file ComovingPotentials.h
  * @brief Analytic periodic co-moving potentials and independent field-error symbols.
- *
- * TODO: REVIEW.
  */
 #pragma once
 

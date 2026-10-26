@@ -2,8 +2,6 @@
  * @brief Natural-position staggered derivative symbols and component-offset metadata.
  * @details Signed half-cell symbols follow by Fourier substitution into
  * [ryu2016potentialfdtd, Appendix A, Eqs. (19)-(20)] (deduction).
- *
- * TODO: REVIEW.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>

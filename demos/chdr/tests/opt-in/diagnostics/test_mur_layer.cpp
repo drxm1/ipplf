@@ -1,5 +1,5 @@
-/** @file test_open_probe.cpp
- * @brief Reject unsupported observations on the outermost open layer.
+/** @file test_mur_layer.cpp
+ * @brief Reject unsupported observations on the outermost Mur layer.
  */
 #include <gtest/gtest.h>
 
@@ -11,10 +11,10 @@
 namespace chdr::solver::test {
     /** @brief Permit potential sampling at Mur while excluding reconstructed outer-layer fields.
      * The same layer rule applies to collocated and staggered readings. A box
-     * touching only a periodic face remains valid. Monitors reject open layouts
-     * before allocating work arrays with periodic derivative assumptions.
+     * touching only a periodic face remains valid. Monitors reject a layout with a
+     * nonperiodic axis before allocating work arrays with periodic derivative assumptions.
      */
-    TEST(OpenShell, ProbeLayerAndMonitorRefusals) {
+    TEST(MurLayer, ProbeAndMonitorRefusals) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 6, 10}, 2, {false, true, true});
         initializeFieldStorage(fields);
         for (auto reading : {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered}) {

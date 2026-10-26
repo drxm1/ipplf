@@ -8,8 +8,6 @@
  * Every term is exercised [salari2000CodeVerificationMms, section 3.1].
  * T1 identifies these manufactured-source records; the negative control
  * shifts charge sampling by half a step.
- *
- * TODO: REVIEW.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>

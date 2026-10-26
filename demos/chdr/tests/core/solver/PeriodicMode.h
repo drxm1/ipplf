@@ -1,7 +1,5 @@
 /** @file PeriodicMode.h
  * @brief Shared host validation for analytic periodic mode generators.
- *
- * TODO: REVIEW.
  */
 #pragma once
 #include "Ippl.h"

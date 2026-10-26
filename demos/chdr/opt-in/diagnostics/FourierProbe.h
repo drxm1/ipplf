@@ -575,7 +575,7 @@ namespace chdr::solver {
     class SolverFourierProbe {
     public:
         /** @brief Capture one solver's immutable sampling configuration.
-         * @param solver Initialized shell with its final time step and loaded histories.
+         * @param solver An initialized ChdrSolver with its final time step and loaded histories.
          * @param box Inclusive global-index sampling box.
          * @param channels Quantities and Cartesian components; scalar phi uses component zero.
          * @param frequencies Frequencies in cycles per step.

@@ -1,7 +1,5 @@
 /** @file Waves.h
  * @brief Analytic generators; samples use global positions and explicit labels.
- *
- * TODO: REVIEW.
  */
 #pragma once
 

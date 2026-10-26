@@ -5,8 +5,6 @@
  * zero is \f$a_n=(-1)^n(n+1)\f$. Deduction from
  * [fallahi2020mithra20fullwavesimulation, Eqs. (3.17), (3.24)].
  * The record also follows the host symbol using its actual rounded step.
- *
- * TODO: REVIEW.
  */
 #include <gtest/gtest.h>
 #include <iomanip>

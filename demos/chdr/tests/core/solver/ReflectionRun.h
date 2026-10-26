@@ -27,7 +27,7 @@ namespace chdr::solver::test::reflection {
     /** @brief Evolve both exact quadratures with normal or deliberately defective finishing.
      * @details Control 1 changes only Mur speed by 1e-6; control 2 restores the
      * original halo ordering. The physical step and component time labels come
-     * from the shell. Initial histories are prepared once, then solve() advances
+     * from ChdrSolver. Initial histories are prepared once, then solve() advances
      * thirty times. No observation exchanges potentials or repairs control halos.
      * Mesh/layout owners must outlive this routine; source is identically zero.
      */

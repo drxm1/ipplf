@@ -1,4 +1,4 @@
-/** @file test_open_families.cpp
+/** @file test_mur_families.cpp
  * @brief Check local plane-wave compatibility of Mur faces, edges and corners.
  */
 #include <cstring>
@@ -157,7 +157,7 @@ namespace chdr::solver::test {
 
     /// Two aspects, two media, two physical steps and eight corners plus one mixed edge: 72
     /// fixtures.
-    TEST(OpenFamilies, LocalCompatibility) {
+    TEST(MurEdgeCornerFamilies, LocalCompatibility) {
         for (const auto h : {std::array{1., 1., 1.}, std::array{1.25, .8, 1.}})
             for (double epsilon : {1., 2.13})
                 for (bool nearCfl : {false, true})
@@ -170,7 +170,7 @@ namespace chdr::solver::test {
 
     /// Serial all-open fields have no stale wrap; only distributed all-open and mixed cases must
     /// fail.
-    TEST(OpenFamilies, ShippedOrderControls) {
+    TEST(MurEdgeCornerFamilies, ShippedOrderControls) {
         familyCase({1., 1., 1.}, 1., false, 0, true);
         familyCase({1., 1., 1.}, 1., false, 8, true);
     }

@@ -1,7 +1,5 @@
 /** @file test_convergence.cpp
  * @brief Check refinement of the source-free and sourced Lorenz-wave families.
- *
- * TODO: REVIEW.
  */
 #include <complex>
 

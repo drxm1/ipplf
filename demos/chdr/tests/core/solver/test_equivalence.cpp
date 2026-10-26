@@ -9,8 +9,6 @@
  * contraction settings; the run record retains their actual compile commands.
  * The material comparison requires the unit-permittivity update to reproduce
  * the owner-free vacuum solver's potential histories and E/B fields exactly.
- *
- * TODO: REVIEW.
  */
 #include <bit>
 #include <cstdint>
@@ -33,7 +31,7 @@ namespace {
 
     /** @brief Produce R2's extra scalar history while retaining the common vector slots.
      * @details prime.step() fills scratch A_np1 without shifting its histories or
-     * increasing the shell counter. Only scalar components are copied into R2;
+     * increasing the solve counter of ChdrSolver. Only scalar components are copied into R2;
      * both solvers therefore keep identical A histories and consistently shifted
      * phi histories. Copied owned values receive true-copy halos before any solve.
      */

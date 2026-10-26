@@ -17,8 +17,6 @@
  * Centered differences have nonconstant null modes: vanishing derivative-based
  * residuals alone do not exclude grid-scale vector potentials (deduction from
  * [trefethen1996FiniteDifferenceSpectral, section 5.3, p. 203]).
- *
- * TODO: REVIEW these gauss-law defect monitors more carefully.
  */
 #pragma once
 
@@ -81,7 +79,7 @@ namespace chdr::solver {
         /** @brief Borrow the three potential histories needed by the Gauss formula.
          * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic,
          * as required by ChdrSolver, which supplies the history and level interface.
-         * @param solver Shell immediately after the monitored solve.
+         * @param solver The ChdrSolver immediately after the monitored solve.
          * @param oldestA Independent A_nm1 snapshot captured before that solve.
          * @pre All three potential histories have valid halos on the same layout.
          */
@@ -194,7 +192,8 @@ namespace chdr::solver {
 
     /** @brief Compare the measured Gauss defect with its reconstruction-specific prediction.
      * @tparam SolverType Solver exposing ChdrSolver potential histories, fields and stencil.
-     * @param solver Shell immediately after the monitored solve; its electric halo may be filled.
+     * @param solver The ChdrSolver immediately after the monitored solve; its electric halo may
+     * be filled.
      * @param oldestA Four-component A_nm1 snapshot from before the monitored solve;
      * component zero is scalar potential and the remaining components are vector potential.
      * @param consumedSource Retained source used by that solve, with charge density in
