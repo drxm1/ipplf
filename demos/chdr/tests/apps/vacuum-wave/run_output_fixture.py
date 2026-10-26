@@ -51,7 +51,7 @@ def source_hashes():
     """Identify the local fixture, reader, orchestration and writer source revision."""
     files = (HERE / "output_fixture.cpp", HERE / "read_output_fixture.py",
              HERE / "run_output_fixture.py",
-             HERE.parent.parent / "core" / "output" / "FieldOutput.h")
+             HERE.parents[2] / "core" / "output" / "FieldOutput.h")  # parents[2] is demos/chdr
     return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
 
 

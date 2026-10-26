@@ -1,9 +1,8 @@
-# Include from the vacuum tests/CMakeLists.txt while BUILD_TESTING is enabled.
+# Included from this directory's CMakeLists.txt while BUILD_TESTING is enabled.
 add_executable(test-chdr-vacuum-output output_fixture.cpp)
 target_compile_features(test-chdr-vacuum-output PRIVATE cxx_std_20)
 # The fixture includes the core writer by its path from the demos/chdr root.
-target_include_directories(test-chdr-vacuum-output PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.."
-                                                           "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+target_include_directories(test-chdr-vacuum-output PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
 target_link_libraries(test-chdr-vacuum-output PRIVATE MPI::MPI_CXX Kokkos::kokkos)
 target_compile_options(test-chdr-vacuum-output
                        PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror=sign-compare>)

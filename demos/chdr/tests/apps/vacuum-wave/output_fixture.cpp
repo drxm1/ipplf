@@ -1,6 +1,6 @@
 /** @file output_fixture.cpp
  * @brief Output-only sentinel using the production writer, no Maxwell step.
- * @details The 72-cell dataset is documented in ../ViewingGuide.org.
+ * @details The 72-cell dataset is documented in demos/chdr/apps/vacuum-wave/ViewingGuide.org.
  * Coordinates and vector data are synthetic, not SI or Maxwell-solution claims.
  */
 #include <Kokkos_MathematicalConstants.hpp>

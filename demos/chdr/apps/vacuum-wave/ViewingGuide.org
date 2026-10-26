@@ -36,7 +36,7 @@ interactive GUI walkthrough has already occurred.
 From the IPPL repository root, choose an existing run and a new output path:
 #+begin_src sh
 env -u DISPLAY OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 pvpython --force-offscreen-rendering --disable-registry \
-  demos/chdr/vacuum/render_output.py RUN/wave.pvti.series RUN/view-e-025.png \
+  demos/chdr/apps/vacuum-wave/render_output.py RUN/wave.pvti.series RUN/view-e-025.png \
   --time 0.25 --array E_raw --component X --range -1 1
 #+end_src
 The script fixes resolution, camera, component, range, colors and lighting,

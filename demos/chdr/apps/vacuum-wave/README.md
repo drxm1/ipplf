@@ -20,12 +20,12 @@ OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave --fine > fine.c
 ctest --test-dir build -R '^chdr\.vacuum\.' --no-tests=error --output-on-failure
 ```
 
-See the [IPPL build resources](../../../README.md#resources) for dependencies.
+See the [IPPL build resources](../../../../README.md#resources) for dependencies.
 The existing global unit-test setup requires FFT support and GoogleTest; this
 test main uses the flag API available in GoogleTest 1.12 and newer.
 CHDR also configures the mesh example's Catalyst/Conduit dependency.
 With `IPPL_USE_STANDARD_FOLDERS=OFF`, the executable is under
-`build/demos/chdr/vacuum/` instead of `build/bin/`.
+`build/demos/chdr/apps/vacuum-wave/` instead of `build/bin/`.
 
 | Option | Meaning |
 | --- | --- |
@@ -53,7 +53,7 @@ IPPL processes its options first. Its current initialization can exit with statu
 zero before the benchmark runs, including for help/version and some invalid option
 values; require the expected CSV rows as well as a successful exit. Place `--debug`
 last because IPPL's option scan skips the following token. See
-[`ippl::initialize`](../../../src/Ippl.cpp) for these inherited behaviors.
+[`ippl::initialize`](../../../../src/Ippl.cpp) for these inherited behaviors.
 
 ## Reference, storage and time labels
 
@@ -70,7 +70,7 @@ This is our substitution into Fallahi,
 are “FDTD for Wave Equation” and “Numerical Dispersion in FDTD,” (3.11)–(3.20).
 
 We sample the exact wave at 0 and -dt to supply the two histories required by
-the three-level update. The [Standard solver](../../../src/MaxwellSolvers/StandardFDTDSolver.hpp)
+the three-level update. The [Standard solver](../../../../src/MaxwellSolvers/StandardFDTDSolver.hpp)
 chooses `dt = min(spacing)/2`: 1/128 coarse and 1/256 fine.
 
 | After n completed solves | Physical reference time |
@@ -80,7 +80,7 @@ chooses `dt = min(spacing)/2`: 1/128 coarse and 1/256 fine.
 | Raw E | `(n-1/2)*dt` |
 
 The initial raw E time is therefore negative. These labels follow
-[`FDTDSolverBase::solve/timeShift/evaluate_EB`](../../../src/MaxwellSolvers/FDTDSolverBase.hpp):
+[`FDTDSolverBase::solve/timeShift/evaluate_EB`](../../../../src/MaxwellSolvers/FDTDSolverBase.hpp):
 for this zero-scalar-potential case E differences two histories, while B curls
 the newest history. They use MITHRA's continuum identities (3.8)–(3.9);
 IPPL does not perform the paper's magnetic-field time averaging.
@@ -199,8 +199,8 @@ set `CHDR_VACUUM_TEST_OUTPUT_DIR` to relocate them. The wrapper scripts use
 Start with [the driver](vacuum-wave.cpp) and [shared setup](VacuumSetup.cpp).
 [VacuumDiagnostics.h](VacuumDiagnostics.h) defines measurement and phase state;
 [VacuumChecks.h](VacuumChecks.h) applies the fixed policy.
-[FieldOutput.h](../output/FieldOutput.h) handles synchronous collective file output. The
-[field container](../../fel/FELFieldContainer.hpp) owns mesh/layout and E/B/J
+[FieldOutput.h](../../core/output/FieldOutput.h) handles synchronous collective file output. The
+[field container](../../../fel/FELFieldContainer.hpp) owns mesh/layout and E/B/J
 and must outlive the solver. Tests and source comments document the independent
 references and numerical assumptions.
 

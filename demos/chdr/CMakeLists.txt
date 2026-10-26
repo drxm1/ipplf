@@ -13,7 +13,7 @@ target_include_directories(chdr-fel-headers INTERFACE "${CMAKE_CURRENT_SOURCE_DI
 
 add_subdirectory(core)
 add_subdirectory(mesh)
-add_subdirectory(vacuum)
+add_subdirectory(apps/vacuum-wave)
 add_subdirectory(opt-in/diagnostics)
 add_subdirectory(opt-in/output)
 add_subdirectory(interface)

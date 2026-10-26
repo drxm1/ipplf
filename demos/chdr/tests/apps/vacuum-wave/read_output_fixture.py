@@ -1,8 +1,8 @@
 """Read the independent 72-cell sentinel using installed VTK and ParaView readers.
 
 Expected physical coordinates/data come from the declared fixture, not the writer.
-See ../ViewingGuide.org, output-check section; VTK XML and ParaView
-temporal-file-series official specifications are cited in ../../output/FieldOutput.h.
+See ../../../apps/vacuum-wave/ViewingGuide.org, output-check section; VTK XML and ParaView
+temporal-file-series official specifications are cited in ../../../core/output/FieldOutput.h.
 This verifies reader interoperability, not a GUI viewing walkthrough.
 """
 import json

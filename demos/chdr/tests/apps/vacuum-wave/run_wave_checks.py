@@ -30,8 +30,10 @@ def arguments():
 
 
 def fingerprint(binary):
-    source = Path(__file__).resolve().parent.parent
-    paths = [p for p in source.rglob('*') if p.is_file()
+    """Hash the sources of these tests, of the driver under apps/vacuum-wave, and the binary."""
+    here = Path(__file__).resolve().parent
+    trees = (here, here.parents[2] / 'apps' / 'vacuum-wave')
+    paths = [p for tree in trees for p in tree.rglob('*') if p.is_file()
              and (p.suffix in ('.h', '.cpp', '.py', '.cmake') or p.name == 'CMakeLists.txt')]
     paths.append(binary)
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
