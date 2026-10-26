@@ -4,10 +4,10 @@
 #include <complex>
 #include <gtest/gtest.h>
 
-#include "OuterLayerTest.h"
 #include "RankWitness.h"
 #include "SerialReference.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/src/MaxwellSolvers/OuterLayerTest.h"
 
 namespace chdr::solver::test {
     namespace {

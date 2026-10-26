@@ -1,4 +1,6 @@
 # Tests of the ChDR code, one directory per unit of the code they test.
+add_subdirectory(src) #< src/ holds the tests of the IPPL library changes made for ChDR (per-axis
+                      #< periodic layouts, Mur faces).
 add_subdirectory(core/material)
 add_subdirectory(core/solver)
 add_subdirectory(core/formulation)

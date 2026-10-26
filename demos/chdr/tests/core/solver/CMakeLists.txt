@@ -163,8 +163,6 @@ target_compile_definitions(
   test-chdr-solver
   PRIVATE CHDR_RANDOM_POTENTIAL_HISTORY_FIXTURE_DIR="${randomPotentialHistoryFixtureDirectory}")
 chdr_solver_test(open.shell "OpenShell.*")
-target_include_directories(
-  test-chdr-solver PRIVATE "${PROJECT_SOURCE_DIR}/demos/chdr/boundaries/unit_tests/MaxwellSolvers")
 target_sources(test-chdr-solver PRIVATE test_outer_layer.cpp)
 chdr_solver_test(open.outer-layer "OpenOuterLayer.*")
 target_sources(test-chdr-solver PRIVATE test_open_beam.cpp)

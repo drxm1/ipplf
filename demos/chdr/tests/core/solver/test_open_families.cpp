@@ -4,9 +4,9 @@
 #include <cstring>
 
 #include "OpenRunSupport.h"
-#include "OuterLayerTest.h"
 #include "RankWitness.h"
 #include "ReflectionOracles.h"
+#include "tests/src/MaxwellSolvers/OuterLayerTest.h"
 
 namespace chdr::solver::test {
     namespace {

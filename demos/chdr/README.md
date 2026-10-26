@@ -24,11 +24,10 @@ This directory holds the ChDR code of my master's project:
 | `apps/vacuum-wave/` | `chdr-vacuum-wave`: the vacuum plane wave in a periodic box, the benchmark of the inherited vacuum update | [`apps/vacuum-wave/README.md`](apps/vacuum-wave/README.md), [`ViewingGuide.org`](apps/vacuum-wave/ViewingGuide.org) |
 | `apps/planar-interface/` | `planar-interface`: one planar dielectric in a periodic box; the plane-pulse reflection measurement and the packet cases | [`apps/planar-interface/README.md`](apps/planar-interface/README.md) |
 | `apps/interface-movies/` | `interface-movies`: an open box with Mur faces, ring starts and eight movie cases; `render_movie.py`, which renders the output of both interface programs | [`apps/interface-movies/README.md`](apps/interface-movies/README.md) |
-| `tests/` | One directory per unit of the code it tests: `core/<unit>`, `opt-in/diagnostics`, `apps/<program>`, `1d` | The section Tests below |
+| `tests/` | One directory per unit of the code it tests: `core/<unit>`, `opt-in/diagnostics`, `apps/<program>`, `1d`, and `src/<component>` for the IPPL library changes made for ChDR (per-axis periodic layouts in `src/FieldLayout`, Mur faces in `src/MaxwellSolvers`) | The section Tests below; `tests/src/MaxwellSolvers/HaloOrder.md` and `OpenFaceClosure.md` |
 | `testing/` | Shared test support: the GoogleTest main `TestMain.cpp` and `Util.h`, included as `testing/Util.h` | |
 | `mesh/` | `mesh-1`: the supervisor's distributed mesh and dielectric radiator example with Catalyst output, and its geometry test | [`mesh/README.md`](mesh/README.md), [`mesh/StudentGuide.md`](mesh/StudentGuide.md) |
 | `1d/` | The one-dimensional spectral prototype in Python: the field and radiated spectrum of a point electron near an infinite planar interface, by analytic matching per transverse mode | [`1d/README.md`](1d/README.md) |
-| `boundaries/unit_tests/` | Tests of the IPPL library changes for per-axis periodic layouts and Mur faces (`src/FieldLayout`, `src/MaxwellSolvers`); `demos/CMakeLists.txt` registers them, with entries named after their suites | The test sources |
 | `ideas-lit-reseach/` | The literature review `chdr_literature_review.tex` and reading notes | |
 
 ## Includes and targets
@@ -77,9 +76,10 @@ ranks, one OpenMP thread each):
 | `chdr.vacuum.`, `chdr.interface.` | the three programs; `chdr.interface.movies.*` belong to `interface-movies` | `tests/apps/<program>` |
 | `chdr.mesh.` | the mesh example | `mesh/` |
 | `chdr.1d.` | the one-dimensional prototype (`unittest`; needs a Python with NumPy, SciPy and Matplotlib, `CHDR_1D_PYTHON`) | `tests/1d` |
+| `chdr.src.` | the IPPL library changes made for ChDR: per-axis periodic layouts (`PeriodicAxes`) and the Mur faces (`FDTDBoundary`, `MurSpeed`, `MurDispatch`, `InteriorBounds`, `HaloOrder`, `OpenFaceClosure`, `OpenBoundaryRegression`) | `tests/src/<component>` |
 
 Labels: `long` marks ladders and trajectories above one minute, `record`
 marks entries that only print records, `holdout` marks the disabled holdout
 entries, and `unavailable` marks entries registered as skipped because Python,
-an MPI launcher or ParaView is missing. The boundary tests under
-`boundaries/unit_tests/` carry their suite names without the `chdr.` prefix.
+an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
+so `ctest -L chdr` selects the same set as `ctest -R '^chdr\.'`.
