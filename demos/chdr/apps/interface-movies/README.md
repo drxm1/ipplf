@@ -88,19 +88,14 @@ component offsets, timestep and separate sample times: E is at the half step
 and raw B at the integer step. The renderer uses those times and offsets.
 
 The first line of `energy.csv` records the case parameters. The `time` column
-is the electric-field time, `(k - 1/2) dt`, shared by the discrete vector and
-aligned field energies. The scalar diagnostic is at `k dt`. Its columns contain:
-
-- `vacuum`, `dielectric`, `total`, `scalar`, `absolute`: the existing discrete
-  potential-energy diagnostics; `total` is the vector quantity.
-- `field_energy`: the owned-cell quadrature of electromagnetic energy using
-  reconstructed E and time-aligned B, with harmonic face permittivities.
-
-The discrete vector quantity uses a product of magnetic fields at adjacent
-time levels [Kreiss et al., 2002, section 2; Sakkaplangkul and Bokil, 2021,
-section 4.1]. The field-energy column uses squared, time-aligned fields
-[Ellingson, *Electromagnetics*, volume 2, section 3.1]. These quantities are
-distinct; neither column includes the flux through the open faces.
+is the electric-field time, `(k - 1/2) dt`, shared by the discrete vector
+invariant and the aligned field energy. The scalar invariant is at `k dt`. The
+columns `vacuum`, `dielectric`, `total`, `scalar` and `absolute` belong to the
+potential invariants of `FieldEnergy.h`, and `field_energy` is the aligned
+field energy of `AlignedFieldEnergy.h`; both are defined, with their
+references, in the
+[diagnostics README](../../opt-in/diagnostics/README.md). The two quantities
+are distinct; neither column includes the flux through the open faces.
 
 The renderer needs VTK, NumPy, Matplotlib and FFmpeg; GIF output also needs Pillow.
 It writes `movie.mp4`,

@@ -120,7 +120,7 @@ dispersion relation (3.17) supplying the comparison.
 | Serial/MPI2 global diagnostics | Agree within 1e-11, with exact owned-cell counts |
 
 These are benchmark requirements, not tunable solver parameters or general
-accuracy guarantees. The driver checks each run; the Python benchmark also
+accuracy guarantees. `chdr-vacuum-wave` checks each run; the Python benchmark also
 checks refinement and cross-run agreement. The actual-reader check additionally
 compares every saved E/B component with its reference and compares serial/MPI2
 fields by global cell index within the fixed 1e-11 tolerance.
@@ -177,13 +177,13 @@ Unseeded shuffling uses seed1; explicit nonzero seeds are preserved. All ranks
 must receive matching test-selection/order options. Halo guards remain debug-only;
 the test target explicitly enables them.
 
-Two driver smoke tests use `--steps 1`. The propagation test runs coarse serial,
+Two smoke tests run `chdr-vacuum-wave` with `--steps 1`. The propagation test runs coarse serial,
 fine serial and coarse MPI2 through a full period, checking every CSV row with
 an independent scalar recurrence. The CLI test covers bounded/invalid arguments.
 Python3 and an MPI launcher are needed for these integration checks. Actual-reader
 tests additionally need `pvpython`; CMake discovers it or accepts
-`-DCHDR_VACUUM_PVPYTHON=/path/to/pvpython`. The driver itself does not link VTK or
-ParaView. Unavailable checks are explicitly skipped and do not count as acceptance.
+`-DCHDR_VACUUM_PVPYTHON=/path/to/pvpython`. `chdr-vacuum-wave` itself does not link VTK
+or ParaView. Unavailable checks are explicitly skipped and do not count as acceptance.
 
 Six output tests exercise a distinguishable 4×3×6 fixture and four coordinated
 failure cases. The actual reader checks every component, coordinates, halos and
@@ -192,11 +192,11 @@ Short output-enabled runs also exercise initialization-only and one-step readbac
 
 CTest logs, CSV and JSON manifests default to the test build directory's `runs/`;
 set `CHDR_VACUUM_TEST_OUTPUT_DIR` to relocate them. The wrapper scripts use
-`--results` for this record directory; it is not a driver field-output option.
+`--results` for this record directory; it is not an option of `chdr-vacuum-wave`.
 
 ## Source reading order
 
-Start with [the driver](vacuum-wave.cpp) and [shared setup](VacuumSetup.cpp).
+Start with [`vacuum-wave.cpp`](vacuum-wave.cpp) and the [shared setup](VacuumSetup.cpp).
 [VacuumDiagnostics.h](VacuumDiagnostics.h) defines measurement and phase state;
 [VacuumChecks.h](VacuumChecks.h) applies the fixed policy.
 [FieldOutput.h](../../core/output/FieldOutput.h) handles synchronous collective file output. The
