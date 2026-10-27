@@ -13,7 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
-#include <nlohmann/json.hpp>
+#include <nlohmann/json.hpp>  // IWYU pragma: keep
 #include <string>
 #include <vector>
 

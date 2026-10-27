@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <complex>
+#include <complex>  // IWYU pragma: keep
 #include <cstring>
 #include <gtest/gtest.h>
 #include <iostream>
