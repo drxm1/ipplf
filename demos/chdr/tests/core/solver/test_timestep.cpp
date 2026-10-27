@@ -12,6 +12,7 @@
 #include "MediumOracles.h"
 #include "MonitorTestSupport.h"
 #include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
 
 static_assert(

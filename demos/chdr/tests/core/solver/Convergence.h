@@ -10,14 +10,15 @@
  * interface, including its potential histories, source field and E/B outputs.
  */
 #pragma once
+#include <cmath>
 #include <gtest/gtest.h>
 #include <iostream>
 
 #include "CoreTestSupport.h"
+#include "LorenzWave.h"
 #include "RankRecords.h"
 #include "SerialReference.h"
 #include "WaveNorms.h"
-#include "Waves.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"

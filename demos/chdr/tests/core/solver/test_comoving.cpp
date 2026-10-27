@@ -5,6 +5,7 @@
  * P2 columns contain their leading-order expansions, defined by comovingSymbols().
  */
 #include <algorithm>
+#include <cmath>
 #include <gtest/gtest.h>
 #include <iomanip>
 #include <iostream>
@@ -15,6 +16,7 @@
 #include "MonitorTestSupport.h"
 #include "RankRecords.h"
 #include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 
 static_assert(
     chdr::SpatialDim == 3,

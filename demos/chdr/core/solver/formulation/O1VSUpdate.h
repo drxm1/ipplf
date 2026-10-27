@@ -2,6 +2,7 @@
  * @brief Effective-source O1-VS update through the unchanged Standard kernel.
  */
 #pragma once
+#include "core/solver/formulation/MaterialStepContext.h"
 #include "core/solver/formulation/O1VSOperator.h"
 #include "core/solver/operators/Operators.h"
 

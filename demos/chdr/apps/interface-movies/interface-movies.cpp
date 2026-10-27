@@ -9,7 +9,6 @@
 
 #include "MovieCases.h"
 #include "MovieFaceSolver.h"
-#include "TMAnnulusStart.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/output/FieldRunOutput.h"
 

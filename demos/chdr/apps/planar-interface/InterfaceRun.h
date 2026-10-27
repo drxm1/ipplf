@@ -3,10 +3,12 @@
  */
 #pragma once
 
-#include "core/material/PlanarSlab.h"
 #include "core/simulation/ChDRSimulationManager.h"
 
 namespace chdr::apps::planarInterface {
+    // TODO: This file doesn't really have a point anymore,
+    // we could just use the actual names without these
+    // using declarations.
     using RunBox          = simulation::RunBox;
     using SolverSettings  = simulation::SolverSettings;
     using InterfaceRun    = simulation::ChDRSimulationManager<>;

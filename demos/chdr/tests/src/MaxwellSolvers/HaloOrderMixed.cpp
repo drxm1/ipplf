@@ -1,4 +1,8 @@
+#include <cmath>
+#include <gtest/gtest.h>
+
 #include "HaloOrderTest.h"
+#include "ShippedOrderSolver.h"
 
 namespace fdtd_test {
     /** @brief Set the two prescribed Standard steps without changing its kernel. */

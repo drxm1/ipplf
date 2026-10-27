@@ -1,9 +1,14 @@
 /** @file test_mur_stability.cpp
  * @brief Check long-run potential envelopes from fixed inner-cell random histories.
  */
+#include <gtest/gtest.h>
+
 #include "OpenRunSupport.h"
 #include "RandomPotentialHistoryFixture.h"
+#include "RankRecords.h"
 #include "RankWitness.h"
+#include "SerialReference.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {
     namespace {

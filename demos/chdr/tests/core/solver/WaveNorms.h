@@ -9,11 +9,14 @@
 #pragma once
 #include <array>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
-#include "Waves.h"
+#include "LorenzWave.h"
+#include "MediumOracles.h"
+#include "core/base/FieldContainer.h"
+#include "core/base/LevelContract.h"
 #include "core/base/SpatialDimension.h"
-#include "core/solver/ChdrSolver.h"
 
 static_assert(chdr::SpatialDim == 3,
               "WaveNorms.h requires three spatial dimensions for its Cartesian implementation");

@@ -1,4 +1,8 @@
+#include <gtest/gtest.h>
+#include <limits>
+
 #include "HaloOrderTest.h"
+#include "ShippedOrderSolver.h"
 
 namespace fdtd_test {
     /** @brief Measure the maximum error of the affine-in-step solution.

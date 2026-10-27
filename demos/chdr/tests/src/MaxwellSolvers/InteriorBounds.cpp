@@ -1,3 +1,4 @@
+#include <gtest/gtest.h>
 #include <type_traits>
 
 #include "BoundaryOracles.h"

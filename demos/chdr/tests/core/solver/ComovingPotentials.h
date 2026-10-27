@@ -8,11 +8,13 @@
 #include <cmath>
 #include <complex>
 #include <map>
+#include <stdexcept>
 #include <tuple>
 #include <vector>
 
+#include "core/base/FieldContainer.h"
+#include "core/base/LevelContract.h"
 #include "core/base/SpatialDimension.h"
-#include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
 
 static_assert(

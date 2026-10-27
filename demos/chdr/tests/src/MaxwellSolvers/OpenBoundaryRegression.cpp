@@ -1,7 +1,11 @@
+#include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstring>
+#include <gtest/gtest.h>
 
 #include "HaloOrderTest.h"
+#include "ShippedOrderSolver.h"
 
 namespace fdtd_test {
     /** @brief Assemble owned samples in canonical global order on every rank.

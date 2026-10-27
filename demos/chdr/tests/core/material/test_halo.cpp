@@ -1,6 +1,9 @@
 /** @file test_halo.cpp
  * @brief Exact source-cell checks for faces, edges, corners and physical/inter-rank intersections.
  */
+#include <gtest/gtest.h>
+
+#include "OwnerOracles.h"
 #include "OwnerTestSupport.h"
 
 namespace chdr::material::test {

@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include "BoundaryOracles.h"
 #include "HaloOrderTest.h"
 

@@ -3,7 +3,6 @@
  */
 #include <gtest/gtest.h>
 
-#include "CoreTestSupport.h"
 #include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {

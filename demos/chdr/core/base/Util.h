@@ -8,13 +8,10 @@
 #include <iostream>
 #include <string_view>
 
-#include "Utility/IpplException.h"
-
 namespace chdr::util {
     /** @brief Report rank, context and message, then stop the MPI job.
-     * @details Utility/IpplException.h defines a global exception type independent of
-     * std::exception; callers catch both types explicitly and retain IPPL until this
-     * handler completes. No recovery or MPI synchronization is attempted.
+     * @details Callers catch std::exception and IpplException explicitly and retain IPPL
+     * until this handler completes. No recovery or MPI synchronization is attempted.
      * @return Failure status only if MPI_Abort unexpectedly returns.
      */
     inline int abortFailure(std::string_view where, const char* what) {

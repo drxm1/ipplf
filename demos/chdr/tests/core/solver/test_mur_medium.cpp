@@ -7,6 +7,7 @@
 #include "CoreTestSupport.h"
 #include "OpenRunSupport.h"
 #include "RandomPotentialHistoryFixture.h"
+#include "RankRecords.h"
 #include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {

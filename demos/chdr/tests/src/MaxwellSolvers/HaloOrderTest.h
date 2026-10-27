@@ -3,14 +3,8 @@
 
 #include "Ippl.h"
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
-
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "MaxwellSolvers/StandardFDTDSolver.h"
-#include "ShippedOrderSolver.h"
-#include "gtest/gtest.h"
 
 namespace fdtd_test {
     using Mesh      = ippl::UniformCartesian<double, 3>;

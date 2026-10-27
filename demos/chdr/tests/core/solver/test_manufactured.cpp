@@ -10,6 +10,8 @@
  * shifts charge sampling by half a step.
  */
 #include <Kokkos_MathematicalConstants.hpp>
+#include <algorithm>
+#include <cmath>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <utility>

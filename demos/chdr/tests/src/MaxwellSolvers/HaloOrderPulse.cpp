@@ -1,6 +1,11 @@
+#include <algorithm>
 #include <bit>
+#include <cmath>
+#include <gtest/gtest.h>
+#include <limits>
 
 #include "HaloOrderTest.h"
+#include "ShippedOrderSolver.h"
 
 namespace fdtd_test {
     /** @brief Load a Gaussian intersecting an absorbing face near a rank seam.

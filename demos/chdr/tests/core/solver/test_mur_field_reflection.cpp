@@ -1,7 +1,10 @@
 /** @file test_mur_field_reflection.cpp
  * @brief Check signed electric and magnetic reflection at their declared sample positions.
  */
+#include <gtest/gtest.h>
+
 #include "ReflectionRun.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test::reflection {
     namespace {

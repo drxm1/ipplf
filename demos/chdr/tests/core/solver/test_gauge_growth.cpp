@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
+#include "LorenzWave.h"
 #include "MonitorTestSupport.h"
 #include "RankRecords.h"
 #include "Waves.h"

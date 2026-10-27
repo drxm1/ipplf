@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "InterfaceRun.h"
+#include "core/material/PlanarSlab.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 

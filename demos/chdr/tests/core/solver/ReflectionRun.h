@@ -3,7 +3,9 @@
  */
 #pragma once
 #include "OpenRunSupport.h"
+#include "RankRecords.h"
 #include "TwoWaveState.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test::reflection {
     /** @brief Selected potential and field in global x,y,z order, on rank zero only.

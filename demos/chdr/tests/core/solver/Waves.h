@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <stdexcept>
 
 #include "PeriodicMode.h"
 #include "core/base/LevelContract.h"
@@ -77,5 +76,3 @@ namespace chdr::solver {
         }
     };
 }  // namespace chdr::solver
-
-#include "LorenzWave.h"

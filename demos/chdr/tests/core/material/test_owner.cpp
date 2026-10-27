@@ -1,6 +1,9 @@
 /** @file test_owner.cpp
  * @brief Check rasterization, exact global statistics and unrestricted material storage.
  */
+#include <gtest/gtest.h>
+
+#include "OwnerOracles.h"
 #include "OwnerTestSupport.h"
 
 namespace chdr::material::test {

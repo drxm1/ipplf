@@ -2,7 +2,8 @@
  * @brief Decomposition-independent history and source samples for interface checks.
  */
 #pragma once
-#include "CoreTestSupport.h"
+#include "core/base/FieldContainer.h"
+#include "core/material/MaterialOwner.h"
 
 namespace chdr::solver::test {
     /** @brief Hash global indices, then remove each component's global mean.

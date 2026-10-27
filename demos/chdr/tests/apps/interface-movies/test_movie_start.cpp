@@ -5,7 +5,6 @@
 
 #include "apps/interface-movies/MovieCases.h"
 #include "apps/interface-movies/MovieFaceSolver.h"
-#include "apps/interface-movies/TMAnnulusStart.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/diagnostics/AlignedFieldEnergy.h"
 #include "opt-in/diagnostics/FieldEnergy.h"

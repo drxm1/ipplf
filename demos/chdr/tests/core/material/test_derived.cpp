@@ -1,6 +1,9 @@
 /** @file test_derived.cpp
  * @brief Compare every cached coefficient cell with its independently authored closed form.
  */
+#include <gtest/gtest.h>
+
+#include "OwnerOracles.h"
 #include "OwnerTestSupport.h"
 #include "core/material/O1VSCoefficients.h"
 

@@ -3,7 +3,6 @@
  */
 #pragma once
 #include "CoreTestSupport.h"
-#include "SerialReference.h"
 #include "tests/src/MaxwellSolvers/ShippedOrderSolver.h"
 
 namespace chdr::solver::test {

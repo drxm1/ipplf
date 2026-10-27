@@ -2,7 +2,6 @@
  * @brief Compare the centre-plane discrete reflection with its continuum limit.
  */
 #include <gtest/gtest.h>
-#include <iomanip>
 #include <iostream>
 #include <string_view>
 

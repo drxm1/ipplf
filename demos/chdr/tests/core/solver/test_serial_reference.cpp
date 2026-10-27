@@ -3,9 +3,10 @@
  * @details The separate serial mesh, layout and field storage must reproduce the
  * distributed evolution while each communicator performs its own halo exchanges.
  */
+#include "LorenzWave.h"
 #include "SerialReference.h"
-#include "Waves.h"
 #include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 
 static_assert(
     chdr::SpatialDim == 3,

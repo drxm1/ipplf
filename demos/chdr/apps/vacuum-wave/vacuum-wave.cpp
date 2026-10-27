@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "Utility/IpplException.h"
+
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
 #include "VacuumEnergy.h"

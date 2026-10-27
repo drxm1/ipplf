@@ -5,6 +5,7 @@
  * (1)-(3), p. 3; oskooi2010meep, equation (6)].
  */
 #include <Kokkos_Complex.hpp>
+#include <complex>
 #include <gtest/gtest.h>
 
 #include "CoreTestSupport.h"

@@ -8,9 +8,7 @@
 #pragma once
 #include "Ippl.h"
 
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>

@@ -9,6 +9,7 @@
 #include "InterfaceRun.h"
 #include "PacketStart.h"
 #include "PlanePulse.h"
+#include "core/material/PlanarSlab.h"
 #include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::apps::planarInterface {

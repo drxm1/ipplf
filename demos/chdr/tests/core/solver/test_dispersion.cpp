@@ -7,6 +7,7 @@
  * All potential components share the same scalar update, so the test projects
  * A_x in every direction; field reconstruction is checked by the Convergence suites.
  */
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <gtest/gtest.h>

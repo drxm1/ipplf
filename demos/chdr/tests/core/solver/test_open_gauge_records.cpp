@@ -1,8 +1,11 @@
 /** @file test_open_gauge_records.cpp
  * @brief Record gauge and Gauss residuals after componentwise Mur reflection.
  */
+#include <gtest/gtest.h>
+
 #include "OpenRunSupport.h"
 #include "TwoWaveState.h"
+#include "core/solver/BoxSetup.h"
 
 namespace chdr::solver::test {
     namespace {

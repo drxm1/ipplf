@@ -2,10 +2,7 @@
  * @brief Non-cubic grids and independent host observations of complete material allocations.
  */
 #pragma once
-#include <gtest/gtest.h>
-
 #include "FELFieldContainer.hpp"
-#include "OwnerOracles.h"
 #include "core/material/MaterialOwner.h"
 
 namespace chdr::material::test {

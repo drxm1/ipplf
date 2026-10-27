@@ -8,7 +8,6 @@
  * holdout runs the same harness in record-only mode for this spatial reading.
  */
 #include "Convergence.h"
-#include "core/base/SpatialDimension.h"
 
 namespace chdr::solver::test {
     TEST(StaggeredConvergence, Quick) {

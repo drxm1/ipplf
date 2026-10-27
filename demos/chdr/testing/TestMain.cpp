@@ -9,7 +9,8 @@
 
 #include <exception>
 #include <gtest/gtest.h>
-#include <iostream>
+
+#include "Utility/IpplException.h"
 
 #include "core/base/Util.h"
 

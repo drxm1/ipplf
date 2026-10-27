@@ -18,7 +18,6 @@
 #include <stdexcept>
 
 #include "core/base/SpatialDimension.h"
-#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/MonitorExpressions.h"
 #include "opt-in/diagnostics/MonitorRecords.h"
 

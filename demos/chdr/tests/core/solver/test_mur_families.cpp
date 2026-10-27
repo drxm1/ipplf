@@ -1,11 +1,15 @@
 /** @file test_mur_families.cpp
  * @brief Check local plane-wave compatibility of Mur faces, edges and corners.
  */
-#include <cstring>
+#include <complex>
+#include <gtest/gtest.h>
 
 #include "OpenRunSupport.h"
+#include "RankRecords.h"
 #include "RankWitness.h"
 #include "ReflectionOracles.h"
+#include "SerialReference.h"
+#include "core/solver/BoxSetup.h"
 #include "tests/src/MaxwellSolvers/OuterLayerTest.h"
 
 namespace chdr::solver::test {

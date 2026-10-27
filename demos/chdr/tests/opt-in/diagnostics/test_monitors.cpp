@@ -11,6 +11,7 @@
 
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/Monitors.h"
 #include "tests/core/solver/MonitorTestSupport.h"
 

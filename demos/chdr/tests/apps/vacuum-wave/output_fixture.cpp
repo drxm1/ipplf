@@ -4,7 +4,6 @@
  * Coordinates and vector data are synthetic, not SI or Maxwell-solution claims.
  */
 #include <Kokkos_MathematicalConstants.hpp>
-#include <algorithm>
 
 #include "core/output/FieldOutput.h"
 

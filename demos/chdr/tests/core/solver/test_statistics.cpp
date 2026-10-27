@@ -3,6 +3,7 @@
  */
 #include "SerialReference.h"
 #include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 
 static_assert(
     chdr::SpatialDim == 3,

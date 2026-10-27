@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include "core/material/PlanarSlab.h"
+#include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 #include "tests/core/solver/RandomFields.h"
 #include "tests/core/solver/SerialReference.h"
