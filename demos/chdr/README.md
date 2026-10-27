@@ -97,3 +97,11 @@ marks entries that only print records, `holdout` marks the disabled holdout
 entries, and `unavailable` marks entries registered as skipped because Python,
 an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
 so `ctest -L chdr` selects the same set as `ctest -R '^chdr\.'`.
+
+## Documentation
+
+`doxygen Doxyfile` in this directory writes the HTML reference of `core/`,
+`opt-in/`, `apps/` and `testing/`, with this file and the READMEs as pages, to
+`docs/html/index.html`. It needs Doxygen, Graphviz, and LaTeX with Ghostscript
+for the formulas. The tests are not included; the comment at the top of
+`Doxyfile` says how to add them. `mesh/` has its own `Doxyfile`.

@@ -12,7 +12,11 @@ static_assert(
     "MonitorTestSupport.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
-    using namespace chdr::diagnostics;
+    namespace monitorDetail = diagnostics::monitorDetail;
+    using diagnostics::MonitorReport;
+    using diagnostics::Monitors;
+    using diagnostics::reduceResidual;
+    using diagnostics::ResidualMetrics;
     /** @brief Check divergence of the reconstructed B without advancing time.
      * @details Use the output values with the expanded curl's absolute scale.
      * The outer difference direction follows the centre/face or edge/node

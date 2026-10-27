@@ -1,0 +1,100 @@
+# Doxygen configuration of the ChDR code in this directory.
+#
+# Run `doxygen Doxyfile` here. The HTML reference appears in docs/html/index.html
+# (docs/ is ignored by git). It needs Doxygen, Graphviz for the graphs, and LaTeX
+# with dvips and Ghostscript for the formulas: USE_MATHJAX = NO renders every
+# formula as an image, so a formula that LaTeX rejects is reported as a warning.
+#
+# Input: README.md as the main page; core/, opt-in/, apps/ and testing/ with
+# their READMEs as pages. tests/ is not included, because its support headers and
+# fixtures are not documented yet; to list what is missing, add `tests` to INPUT
+# (about 700 undocumented members on 2026-10-27, against about 370 in the rest).
+# mesh/ keeps its own Doxyfile; 1d/ is Python and ideas-lit-reseach/ is LaTeX.
+# README.md links to mesh/README.md, mesh/StudentGuide.md and 1d/README.md, which
+# are outside this input; Doxygen reports these three links as unresolved. Adding
+# those pages brings the links of the mesh guide and the formulas of the 1d README
+# (plain Markdown, not Doxygen) as further warnings, so they stay out.
+#
+# WARN_AS_ERROR stays off until the undocumented members are documented; the
+# warnings are the backlog. The settings follow demos/fel/Doxyfile.
+
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = "ChDR: Cherenkov diffraction radiation in IPPL"
+PROJECT_BRIEF          = "Potential solver for dielectric media, opt-in diagnostics and the programs"
+OUTPUT_DIRECTORY       = docs
+
+INPUT                  = README.md core opt-in apps testing
+INPUT_ENCODING         = UTF-8
+FILE_PATTERNS          = *.h *.cpp *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+MARKDOWN_SUPPORT       = YES
+TOC_INCLUDE_HEADINGS   = 3
+
+# Paths are shown from this directory, as the includes name them
+# ("core/solver/ChdrSolver.h"); core/base/Util.h and testing/Util.h stay apart.
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = .
+
+EXTRACT_ALL            = NO
+EXTRACT_STATIC         = YES
+EXTRACT_ANON_NSPACES   = YES
+EXTRACT_PRIVATE        = NO
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+JAVADOC_AUTOBRIEF      = YES
+SORT_MEMBER_DOCS       = NO
+SHOW_USED_FILES        = YES
+
+# The diagnostics headers import solver names with using-declarations
+# (`using solver::ChdrSolver;`). Doxygen would show each as a second definition
+# under chdr::diagnostics; these entries hide the copies, not the originals.
+EXCLUDE_SYMBOLS        = chdr::diagnostics::ChdrSolver \
+                         chdr::diagnostics::MaterialFormulation \
+                         chdr::diagnostics::O1VSOperator \
+                         chdr::diagnostics::staggeredCurl \
+                         chdr::diagnostics::Stencil \
+                         chdr::diagnostics::staggeredDifference \
+                         chdr::diagnostics::centeredDifference \
+                         chdr::diagnostics::laplacian
+
+ENABLE_PREPROCESSING   = YES
+SEARCH_INCLUDES        = NO
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = KOKKOS_INLINE_FUNCTION= KOKKOS_FUNCTION= "KOKKOS_LAMBDA=[]"
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_AS_ERROR          = NO
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_COLORSTYLE        = LIGHT
+GENERATE_TREEVIEW      = YES
+SEARCHENGINE           = YES
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+GENERATE_MAN           = NO
+
+USE_MATHJAX            = NO
+EXTRA_PACKAGES         = amsmath
+
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = NO
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+DOT_GRAPH_MAX_NODES    = 30
+DOT_NUM_THREADS        = 2

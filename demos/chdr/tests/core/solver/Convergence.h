@@ -27,7 +27,8 @@ static_assert(chdr::SpatialDim == 3,
               "Convergence.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
-    using namespace chdr::diagnostics;
+    using diagnostics::MonitorReport;
+    using diagnostics::Monitors;
     /** @brief Select one analytic wave and the solver representation used to evolve it.
      * @details epsilon_m equal to zero selects the owner-free vacuum path.
      * For source-free medium waves, direction_m selects axial, face-diagonal or
