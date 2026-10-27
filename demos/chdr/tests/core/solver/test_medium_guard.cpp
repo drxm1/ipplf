@@ -10,6 +10,7 @@
 #include "opt-in/diagnostics/Monitors.h"
 
 namespace chdr::solver::test {
+    using namespace chdr::diagnostics;
     /** @brief Check map-wide validity and the bound without advancing a solver.
      * @details Refused rows exercise the cached-statistics guard directly. Accepted
      * rows also construct the update and compare its physical-step bound with the

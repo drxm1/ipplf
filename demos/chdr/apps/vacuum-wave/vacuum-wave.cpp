@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
 }
 
 namespace {
-    using namespace chdr::vacuum;
+    using namespace chdr::apps::vacuumWave;
 
     /// Bounded choices for the agreed coarse/fine benchmark; no adjustable timestep.
     struct Options {
@@ -117,15 +117,15 @@ namespace {
     }
 
     /// @brief Append the energy columns and end the row; W_E and W_B have different times.
-    void printEnergy(const chdr::vacuum::EnergySample& energy) {
+    void printEnergy(const chdr::apps::vacuumWave::EnergySample& energy) {
         std::cout << ',' << energy.electric_m << ',' << energy.magnetic_m << ',' << energy.total_m
                   << ',' << energy.invariant_m << std::endl;
     }
 
     /// @brief Emit owned-cell diagnostics; field times and undefined initial speed are explicit.
-    void printDiagnostics(const chdr::vacuum::Diagnostics& d,
-                          const chdr::vacuum::PhaseSample& phase,
-                          const chdr::vacuum::EnergySample& energy) {
+    void printDiagnostics(const chdr::apps::vacuumWave::Diagnostics& d,
+                          const chdr::apps::vacuumWave::PhaseSample& phase,
+                          const chdr::apps::vacuumWave::EnergySample& energy) {
         if (ippl::Comm->rank() != 0)
             return;
         if (d.step_m == 0)
@@ -147,7 +147,7 @@ namespace {
 
     /// @brief Publish measured array times and update the series after a complete frame.
     void writeCheckpoint(chdr::output::FieldOutput& output, Fields& fields,
-                         const chdr::vacuum::Diagnostics& d) {
+                         const chdr::apps::vacuumWave::Diagnostics& d) {
         const chdr::output::FrameRecord frame{d.step_m, d.timeA_m, d.timeE_m, d.timeB_m, d.dt_m};
         output.writeFrame(fields.getE(), fields.getB(), frame);
         output.writeSeries();
@@ -157,11 +157,11 @@ namespace {
     void evolve(VacuumSolver& solver, Fields& fields, const Options& options) {
         const int lastStep = numberOfSteps(options, solver.getDt());
         auto output        = makeOutput(fields, options);
-        chdr::vacuum::PhaseTracker phaseTracker;
+        chdr::apps::vacuumWave::PhaseTracker phaseTracker;
         // Observe states 0 through lastStep; perform exactly lastStep advances.
         for (int step = 0; step <= lastStep; ++step) {
-            const auto diagnostic = chdr::vacuum::measure(solver, fields, step);
-            const auto energy     = chdr::vacuum::measureEnergy(solver, fields);
+            const auto diagnostic = chdr::apps::vacuumWave::measure(solver, fields, step);
+            const auto energy     = chdr::apps::vacuumWave::measureEnergy(solver, fields);
             const auto phase      = phaseTracker.update(diagnostic);
             const bool checkpoint = isCheckpoint(step, lastStep, solver.getDt());
             printDiagnostics(diagnostic, phase, energy);

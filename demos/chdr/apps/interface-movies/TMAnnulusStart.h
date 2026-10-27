@@ -4,7 +4,7 @@
 #pragma once
 #include "AnnulusStart.h"
 
-namespace chdr::interface {
+namespace chdr::apps::interfaceMovies {
     /** @brief Initialize in-plane vector potential and out-of-plane magnetic field.
      * @details Sample the radial profile on y-directed edges and form
      * \f$A_x=-D_z^-\psi\f$, \f$A_z=D_x^-\psi\f$ at their natural face positions.
@@ -41,4 +41,4 @@ namespace chdr::interface {
             return 0;
         }
     };
-}  // namespace chdr::interface
+}  // namespace chdr::apps::interfaceMovies

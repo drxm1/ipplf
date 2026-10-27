@@ -25,10 +25,13 @@
 #include "opt-in/diagnostics/MonitorExpressions.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "MonitorRecords.h requires three spatial dimensions for its Cartesian implementation");
 
-namespace chdr::solver {
+namespace chdr::diagnostics {
+    using solver::ChdrSolver;
+    using solver::Stencil;
+
     /// Distinguish the physical Gauss defect from mismatch against its discrete formula.
     struct GaussReport {
         /** @brief Metrics of the measured Gauss-law defect.
@@ -227,4 +230,4 @@ namespace chdr::solver {
         return {reduceResidual(solver.A_n, defect), reduceResidual(solver.A_n, identity)};
     }
 
-}  // namespace chdr::solver
+}  // namespace chdr::diagnostics

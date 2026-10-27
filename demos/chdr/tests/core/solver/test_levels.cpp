@@ -15,11 +15,13 @@
 #include "Waves.h"
 #include "core/base/SpatialDimension.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "test_levels.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
     using namespace chdr::solver::coreTest;
 
     /// @brief Value-only sampling metadata; it never owns or relocates a field container.

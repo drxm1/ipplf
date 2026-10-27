@@ -149,7 +149,7 @@ namespace chdr::solver {
      * @tparam Scheme Spatial stencil, fixed for each kernel specialization.
      * @tparam Absolute Select the absolute arithmetic scale instead of the signed operator.
      * @details Call sites are the Gauss-identity diagnostic (GaussIdentity via
-     * monitorDetail::laplace), manufactured-source forcing, and Fourier stencil
+     * diagnostics::monitorDetail::laplace), manufactured-source forcing, and Fourier stencil
      * tests. This helper does not advance the potential histories: ChdrSolver::solve()
      * calls the inherited StandardFDTDSolver::step() or NonStandardFDTDSolver::step(),
      * which implement their own update kernels. Diagnostics may run after a solve

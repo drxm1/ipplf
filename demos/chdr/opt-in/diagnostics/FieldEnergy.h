@@ -9,10 +9,15 @@
 #include "core/solver/ChdrSolver.h"
 #include "core/solver/formulation/O1VSOperator.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "FieldEnergy.h requires three spatial dimensions for its Cartesian implementation");
 
-namespace chdr::solver {
+namespace chdr::diagnostics {
+    using solver::ChdrSolver;
+    using solver::MaterialFormulation;
+    using solver::O1VSOperator;
+    using solver::staggeredCurl;
+
     /** @brief Whole-domain sums for one discrete potential invariant, not per-cell values.
      * @details vacuum_m and dielectric_m partition the owned cell-centre, face and edge
      * contributions by material region; total() adds both regions. absolute_m is
@@ -169,4 +174,4 @@ namespace chdr::solver {
                 time - dt / 2,
                 time};
     }
-}  // namespace chdr::solver
+}  // namespace chdr::diagnostics

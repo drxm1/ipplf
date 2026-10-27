@@ -2,7 +2,7 @@
 
 The six headers in this directory measure a running `ChdrSolver<Base>` (`core/solver/ChdrSolver.h`).
 They change neither its update nor its potential histories. All names are in namespace
-`chdr::solver`.
+`chdr::diagnostics`.
 
 - `Monitors.h` evaluates residuals of the discrete identities of the vacuum potential update.
 - `MonitorExpressions.h` supplies the residual arithmetic, its normalization and the reductions.
@@ -33,7 +33,7 @@ identities of the vacuum potential update. It checks the discretization and the 
 reconstruction; it is not a physical observable.
 
 ```cpp
-using namespace chdr::solver;
+using namespace chdr::diagnostics;
 Monitors monitors(solver.A_n);                           // all-periodic layout only
 monitors.seedPreviousSource(previous);                   // optional: source of the preceding solve
 const MonitorReport& report = monitors.advance(solver);  // beforeSolve, solve(), afterSolve

@@ -22,10 +22,11 @@
 #include "core/solver/ChdrSolver.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_dispersion.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
+    using namespace chdr::diagnostics;
     struct TravellingMode {
         ippl::Vector<double, SpatialDim> waveNumber_m;
         double omega_m;

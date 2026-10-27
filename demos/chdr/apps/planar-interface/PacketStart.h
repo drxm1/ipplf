@@ -4,7 +4,7 @@
 #pragma once
 #include "core/material/PlanarSlab.h"
 
-namespace chdr::interface {
+namespace chdr::apps::planarInterface {
     /** @brief Sample a Gaussian carrier, or its weighted discrete curl, at two time levels.
      * @details TE uses \f$A_y\f$ in the x-z plane. TM uses the adjoint forward curl of a scalar
      * edge field, divided by the harmonic face permittivity. The backward divergence of this
@@ -58,4 +58,4 @@ namespace chdr::interface {
             return curl * (1 / a + 1 / b) / 2;
         }
     };
-}  // namespace chdr::interface
+}  // namespace chdr::apps::planarInterface

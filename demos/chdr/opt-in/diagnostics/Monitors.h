@@ -22,10 +22,10 @@
 #include "opt-in/diagnostics/MonitorExpressions.h"
 #include "opt-in/diagnostics/MonitorRecords.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "Monitors.h requires three spatial dimensions for its Cartesian implementation");
 
-namespace chdr::solver {
+namespace chdr::diagnostics {
     /** @brief Diagnostics of one completed solve and its retained input source.
      * @details gauss_m measures the formula mismatch; gaussDefect_m measures the
      * physical defect itself. R2Prime's Gauss entries refer to the preceding
@@ -428,4 +428,4 @@ namespace chdr::solver {
         bool explicitlySeeded_m = false;
         bool prepared_m = false, havePreviousSource_m = false;
     };
-}  // namespace chdr::solver
+}  // namespace chdr::diagnostics

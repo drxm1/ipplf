@@ -7,7 +7,7 @@
 
 #include "core/solver/ChdrSolver.h"
 
-namespace chdr::interface {
+namespace chdr::apps::interfaceMovies {
     /** @brief Supply six face speeds to the existing Mur dispatcher for field movies.
      * @details This demo retains the dispatcher's unit-speed edge and corner updates.
      * It is not a validated heterogeneous absorbing boundary. The stored boundary()
@@ -58,4 +58,4 @@ namespace chdr::interface {
     private:
         ippl::Vector<double, 6> speeds_m = {1, 1, 1, 1, 1, 1};
     };
-}  // namespace chdr::interface
+}  // namespace chdr::apps::interfaceMovies

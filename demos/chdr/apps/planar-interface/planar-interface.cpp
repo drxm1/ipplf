@@ -11,7 +11,7 @@
 #include "PlanePulse.h"
 #include "opt-in/output/FieldRunOutput.h"
 
-namespace chdr::interface {
+namespace chdr::apps::planarInterface {
     /// Record the existing packet case in code axis order, with the x-z display plane explicit.
     std::string packetMetadata(const std::string& name, const RunBox& box,
                                const SolverSettings& settings, const material::PlanarSlab& slab,
@@ -100,12 +100,12 @@ namespace chdr::interface {
             output->finish();
         return 0;
     }
-}  // namespace chdr::interface
+}  // namespace chdr::apps::planarInterface
 int main(int argc, char** argv) {
     ippl::initialize(argc, argv);
     int result = 0;
     try {
-        result = chdr::interface::demonstration(argc, argv);
+        result = chdr::apps::planarInterface::demonstration(argc, argv);
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         result = 1;

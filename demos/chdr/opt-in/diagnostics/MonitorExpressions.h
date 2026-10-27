@@ -28,10 +28,15 @@
 #include "core/solver/operators/StaggeredOperators.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "MonitorExpressions.h requires three spatial dimensions for its Cartesian implementation");
 
-namespace chdr::solver {
+namespace chdr::diagnostics {
+    using solver::centeredDifference;
+    using solver::laplacian;
+    using solver::staggeredDifference;
+    using solver::Stencil;
+
     namespace monitorDetail {
         /// Carry the computed expression and its cancellation-free absolute evaluation.
         struct Expression {
@@ -356,4 +361,4 @@ namespace chdr::solver {
     ResidualMetrics reduceResidual(const FieldType& field, ExpressionFormula formula) {
         return monitorDetail::globalizeResidual(field, monitorDetail::reduceOwned(field, formula));
     }
-}  // namespace chdr::solver
+}  // namespace chdr::diagnostics

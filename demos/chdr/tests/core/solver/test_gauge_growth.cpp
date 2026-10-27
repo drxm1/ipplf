@@ -22,10 +22,11 @@
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_gauge_growth.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
+    using namespace chdr::diagnostics;
     struct GaugeEnvelope {
         double first_m = 0, last_m = 0;
         double initial_m = 0;

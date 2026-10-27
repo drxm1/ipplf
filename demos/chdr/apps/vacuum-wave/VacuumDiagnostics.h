@@ -20,7 +20,7 @@
  * These references justify our derived modal oracle below.
  * No field is changed, copied to the host, or halo-exchanged by these checks.
  */
-namespace chdr::vacuum {
+namespace chdr::apps::vacuumWave {
 
     /// @brief Globally reduced diagnostics; finite_m=false invalidates all comparisons.
     struct Diagnostics {
@@ -537,4 +537,4 @@ namespace chdr::vacuum {
         double dt_m            = 0.0;
         double accumulated_m   = 0.0;
     };
-}  // namespace chdr::vacuum
+}  // namespace chdr::apps::vacuumWave

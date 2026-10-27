@@ -35,10 +35,9 @@ namespace chdr::simulation {
      * safetyFactor_m is passed to ChdrSolver::setSafetyFactor before histories are loaded.
      */
     struct SolverSettings {
-        double safetyFactor_m = 0.9;
-        solver::EBReconstructionConvention reconstruction_m =
-            solver::EBReconstructionConvention::R2;
-        solver::SpatialDiscretization spatial_m = solver::SpatialDiscretization::Staggered;
+        double safetyFactor_m                       = 0.9;
+        EBReconstructionConvention reconstruction_m = EBReconstructionConvention::R2;
+        SpatialDiscretization spatial_m             = SpatialDiscretization::Staggered;
         std::optional<solver::FormulationParameters> formulation_m =
             solver::FormulationParameters{solver::MaterialFormulation::O1VS, 1};
         solver::MurSpeed murSpeed_m = solver::MurSpeed::matched();

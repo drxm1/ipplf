@@ -21,7 +21,7 @@
 #include "VacuumSetup.h"
 
 namespace {
-    using namespace chdr::vacuum;
+    using namespace chdr::apps::vacuumWave;
     using PotentialField        = SourceField_t<double, Dim>;
     constexpr double WaveNumber = 2.0 * Kokkos::numbers::pi_v<double>;
 

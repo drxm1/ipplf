@@ -46,7 +46,7 @@
 #include <mpi.h>
 #include <type_traits>
 
-namespace chdr::vacuum {
+namespace chdr::apps::vacuumWave {
     /// @brief Global energies of one measured state; the parts refer to different times.
     struct EnergySample {
         double electric_m  = 0.0;  ///< \f$W_E\f$ at the raw-E time \f$t_n-\Delta t/2\f$.
@@ -159,4 +159,4 @@ namespace chdr::vacuum {
         const double factor = 0.5 * energy_detail::cellVolume(fields.getE());
         return {factor * sums[0], factor * sums[1], factor * (sums[0] + sums[1]), factor * sums[2]};
     }
-}  // namespace chdr::vacuum
+}  // namespace chdr::apps::vacuumWave

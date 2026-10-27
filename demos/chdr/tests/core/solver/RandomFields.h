@@ -4,8 +4,7 @@
 #pragma once
 #include "CoreTestSupport.h"
 
-namespace chdr::interfaceTest {
-    using namespace solver;
+namespace chdr::solver::test {
     /** @brief Hash global indices, then remove each component's global mean.
      * @details Negative seeds select signed-zero data without mean subtraction.
      * Independent seeds excite all three axes, four components and both levels.
@@ -40,4 +39,4 @@ namespace chdr::interfaceTest {
                 KOKKOS_LAMBDA(int i, int j, int k) { v(i, j, k)[c] -= mean; });
         }
     }
-}  // namespace chdr::interfaceTest
+}  // namespace chdr::solver::test

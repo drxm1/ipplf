@@ -11,6 +11,7 @@
 #include "core/solver/operators/StaggeredOperators.h"
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
     struct SampledMode {
         ippl::Vector<double, 3> waveNumber_m, spacing_m;

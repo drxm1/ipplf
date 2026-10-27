@@ -49,6 +49,19 @@ directory as their include root:
 | `chdr-testing` | interface | `testing/`; compiles the GoogleTest main into each test executable |
 | `chdr-vacuum-wave`, `planar-interface`, `interface-movies`, `mesh-1` | executables | The programs |
 
+The namespaces follow the directories. `core/base/` declares its names in
+`chdr` (`Util.h` in `chdr::util`); `core/solver/` with its subdirectories in
+`chdr::solver`; `core/material/` in `chdr::material`; `core/simulation/` in
+`chdr::simulation`; `core/output/` and `opt-in/output/` in `chdr::output`;
+`opt-in/diagnostics/` in `chdr::diagnostics`; the programs in
+`chdr::apps::vacuumWave`, `chdr::apps::planarInterface` and
+`chdr::apps::interfaceMovies`. The test support headers of `tests/core/solver`
+and `tests/core/material` use `chdr::solver::test` and `chdr::material::test`
+(`CoreTestSupport.h` uses `chdr::solver::coreTest`), the tests of a program
+use the program's namespace, `tests/opt-in/diagnostics/test_mur_layer.cpp`
+uses `chdr::diagnostics::test`, and `testing/Util.h` uses
+`chdr::testing::util`.
+
 No file under `core/` includes a file from `apps/`, `opt-in/`, `tests/` or
 `testing/`.
 

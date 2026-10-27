@@ -3,7 +3,7 @@
  */
 #pragma once
 
-namespace chdr::solver {
+namespace chdr {
     /** @brief Signed sample-time offset measured in half timesteps.
      * @details Explicit construction and count() make conversion to and from
      * integer arithmetic deliberate. The type records the unit, not which
@@ -22,4 +22,4 @@ namespace chdr::solver {
     private:
         int count_m;
     };
-}  // namespace chdr::solver
+}  // namespace chdr

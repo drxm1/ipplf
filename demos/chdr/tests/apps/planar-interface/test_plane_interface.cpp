@@ -6,14 +6,14 @@
 #include "InterfaceOracles.h"
 #include "apps/planar-interface/PlanePulse.h"
 
-namespace chdr::interface {
+namespace chdr::apps::planarInterface {
     /** @brief Independently check the invariant's normalization with raw electromagnetic fields.
      * With \f$\Phi=0\f$ and zero gauge residual, the vector invariant equals Yee's electric
      * energy plus the magnetic cross-level product [sakkaplangkul2021YeeDispersiveMedia,
      * section 4.1, Theorem 4.1 and Remark 4.2]. No energy-operator helper enters this sum.
      */
     void checkYee(InterfaceSolver& s, const material::MaterialOwner& owner) {
-        solver::EMFieldsType oldB, newB;
+        EMFieldsType oldB, newB;
         oldB.initialize(s.A_n.get_mesh(), s.A_n.getLayout());
         newB.initialize(s.A_n.get_mesh(), s.A_n.getLayout());
         solver::rawStaggeredMagnetic(s.A_nm1, oldB);
@@ -32,10 +32,10 @@ namespace chdr::interface {
             },
             local);
         MPI_Allreduce(&local, &total, 1, MPI_DOUBLE, MPI_SUM, s.A_n.getLayout().comm);
-        const auto h = s.A_n.get_mesh().getMeshSpacing();
-        const double residual =
-            0.5 * h[0] * h[1] * h[2] * total / solver::potentialEnergy(s, owner).vector_m.total()
-            - 1;
+        const auto h          = s.A_n.get_mesh().getMeshSpacing();
+        const double residual = 0.5 * h[0] * h[1] * h[2] * total
+                                    / diagnostics::potentialEnergy(s, owner).vector_m.total()
+                                - 1;
         if (ippl::Comm->rank() == 0)
             std::cout << std::setprecision(17) << "Y/W_A-1=" << residual << '\n';
         EXPECT_LE(std::abs(residual), 1e-12);
@@ -128,4 +128,4 @@ namespace chdr::interface {
         ASSERT_EQ(ippl::Comm->size(), 2);
         checkPlane(p, 10, 1e-2, p.dielectricCells);
     }
-}  // namespace chdr::interface
+}  // namespace chdr::apps::planarInterface

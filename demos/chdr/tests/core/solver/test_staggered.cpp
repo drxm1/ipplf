@@ -21,11 +21,13 @@
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_staggered.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
     constexpr double TWO_PI = 2.0 * Kokkos::numbers::pi_v<double>;
 
     void fillStaggeredNoise(AJFourFieldsType& field, unsigned seed) {

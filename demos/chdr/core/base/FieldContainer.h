@@ -13,7 +13,7 @@
 #include "FELFieldContainer.hpp"
 #include "core/base/SpatialDimension.h"
 
-namespace chdr::solver {
+namespace chdr {
     /// Caller-owned mesh, layout, source and output storage container.
     using ChDRFieldContainer = FELFieldContainer<double, SpatialDim>;
 
@@ -42,4 +42,4 @@ namespace chdr::solver {
      * Potential histories belong to the solver; evaluate_EB initializes E and B.
      */
     void initializeFieldStorage(ChDRFieldContainer& fields);
-}  // namespace chdr::solver
+}  // namespace chdr

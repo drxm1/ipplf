@@ -42,7 +42,7 @@
 #include "core/solver/operators/Reconstruction.h"
 #include "core/solver/operators/StaggeredReconstruction.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "ChdrSolver.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {

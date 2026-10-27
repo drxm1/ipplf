@@ -4,7 +4,7 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 
-namespace chdr::interface {
+namespace chdr::apps::interfaceMovies {
     /** @brief Sample an annulus in the y component of the vector potential.
      * @details With radial distance \f$r\f$ and \f$s=r-r_0-t\f$, the profile is
      * \f$A_y=a(s/\lambda)\exp[-(\pi s/\lambda)^2]\sqrt{r_0/\max(r,h)}\f$.
@@ -40,4 +40,4 @@ namespace chdr::interface {
                    * Kokkos::sqrt(radius_m / Kokkos::max(r, guard_m));
         }
     };
-}  // namespace chdr::interface
+}  // namespace chdr::apps::interfaceMovies

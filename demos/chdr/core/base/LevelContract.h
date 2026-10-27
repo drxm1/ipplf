@@ -18,7 +18,7 @@
 #include "core/base/HalfStepOffset.h"
 #include "core/base/SpatialDimension.h"
 
-namespace chdr::solver {
+namespace chdr {
     /// Select spatial component placement and its associated discrete operators.
     /// Both choices use IPPL's regular field storage.
     enum class SpatialDiscretization {
@@ -294,4 +294,4 @@ namespace chdr::solver {
                                                                                     : 0.0;
         }
     };
-}  // namespace chdr::solver
+}  // namespace chdr

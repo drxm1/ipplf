@@ -5,7 +5,7 @@
 
 #include "VacuumWave.h"
 
-namespace chdr::vacuum {
+namespace chdr::apps::vacuumWave {
     /** @brief Construct the normalized periodic grid with MPI decomposition along z.
      * @return Owning mesh/layout container; field arrays are not yet allocated.
      * @pre IPPL is initialized; all ranks call this function.
@@ -47,10 +47,10 @@ namespace chdr::vacuum {
             "Vacuum-wave histories", solver.A_n.getFieldRangePolicy(),
             KOKKOS_LAMBDA(const int i, const int j, const int k) {
                 const double z    = originZ + (k + firstZ - ghost + 0.5) * spacingZ;
-                current(i, j, k)  = chdr::vacuum::referencePotential(z, 0.0);
-                previous(i, j, k) = chdr::vacuum::referencePotential(z, -dt);
+                current(i, j, k)  = chdr::apps::vacuumWave::referencePotential(z, 0.0);
+                previous(i, j, k) = chdr::apps::vacuumWave::referencePotential(z, -dt);
             });
         solver.prepareHistories();
     }
 
-}  // namespace chdr::vacuum
+}  // namespace chdr::apps::vacuumWave

@@ -9,7 +9,7 @@
 #include "opt-in/diagnostics/FieldEnergy.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 
-namespace chdr::interface {
+namespace chdr::apps::planarInterface {
     /** @brief Configuration of a normal-incidence example in units of the x cell width.
      * The long layers prevent periodic images from reaching the probes during their gates.
      * Each rectangular gate includes completed states zero through gate-1.
@@ -159,7 +159,7 @@ namespace chdr::interface {
         auto& s = run.solver();
         if (initialCheck)
             initialCheck(s, run.material());
-        const auto channel = tm ? solver::Quantity::Magnetic : solver::Quantity::Electric;
+        const auto channel = tm ? Quantity::Magnetic : Quantity::Electric;
         const std::array<double, 3> kx{p.kx0_m, p.kx0_m - 3 * p.sigmaK_m, p.kx0_m + 3 * p.sigmaK_m};
         PlaneResult result;
         result.omega_m = {p.omega0_m, pulse.frequency(kx[1]), pulse.frequency(kx[2])};
@@ -167,18 +167,18 @@ namespace chdr::interface {
         std::vector<double> frequencies;
         for (double omega : result.omega_m)
             frequencies.push_back(omega * p.dt_m / (2 * Kokkos::numbers::pi));
-        solver::SolverFourierProbe incident(
+        diagnostics::SolverFourierProbe incident(
             s, {{p.incidentProbeIndex_m, 0, 0}, {p.incidentProbeIndex_m, 0, 0}}, {{channel, 2}},
             frequencies, 0, p.gateIncident_m);
-        solver::SolverFourierProbe other(s,
-                                         {{p.otherProbeIndex_m, 0, 0}, {p.otherProbeIndex_m, 0, 0}},
-                                         {{channel, 2}}, frequencies, 0, p.gateOther_m);
+        diagnostics::SolverFourierProbe other(
+            s, {{p.otherProbeIndex_m, 0, 0}, {p.otherProbeIndex_m, 0, 0}}, {{channel, 2}},
+            frequencies, 0, p.gateOther_m);
         double baseline = 0;
         run.advance(p.steps_m, [&](int k, auto& state, const auto& owner) {
             incident.sample();
             other.sample();
             if (k % cadence == 0 || k == p.steps_m) {
-                const auto energy     = solver::potentialEnergy(state, owner);
+                const auto energy     = diagnostics::potentialEnergy(state, owner);
                 result.scalarEnergy_m = energy.scalar_m.total();
                 if (k == 0)
                     baseline = energy.vector_m.total();
@@ -215,4 +215,4 @@ namespace chdr::interface {
         }
         return result;
     }
-}  // namespace chdr::interface
+}  // namespace chdr::apps::planarInterface

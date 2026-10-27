@@ -8,11 +8,13 @@
 #include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "test_probe.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
     constexpr double PI = Kokkos::numbers::pi_v<double>;
 
     /// The periodic 8 by 8 by 16 box of unit spacing 1/8, decomposed along z.

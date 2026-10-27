@@ -13,7 +13,7 @@
 #include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/output/FieldRunOutput.h"
 
-namespace chdr::interface {
+namespace chdr::apps::interfaceMovies {
     /// Movie selection and output location; the optional step count permits extending a run.
     struct MovieOptions {
         std::string name_m, directory_m;
@@ -105,7 +105,7 @@ namespace chdr::interface {
             input.box_m, material::TwoMaterialMap{region, input.epsilon_m, 1.0}, settings);
         if constexpr (std::is_same_v<Solver, MovieFaceSolver>)
             run.solver().setMovieFaceSpeeds(movieFaceSpeeds(input));
-        checkMovieStart(input, run.solver().labelTime(solver::Quantity::VectorPotential, 0));
+        checkMovieStart(input, run.solver().labelTime(Quantity::VectorPotential, 0));
         if (input.tm_m)
             run.load(movieTMStart(input));
         else
@@ -130,13 +130,14 @@ namespace chdr::interface {
             runMovieCase<solver::ChdrSolver<solver::StandardSolverPeriodic>>(options, input,
                                                                              input.region_m);
     }
-}  // namespace chdr::interface
+}  // namespace chdr::apps::interfaceMovies
 
 int main(int argc, char** argv) {
     ippl::initialize(argc, argv);
     int result = 0;
     try {
-        chdr::interface::runMovie(chdr::interface::movieOptions(argc, argv));
+        chdr::apps::interfaceMovies::runMovie(
+            chdr::apps::interfaceMovies::movieOptions(argc, argv));
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         result = 1;

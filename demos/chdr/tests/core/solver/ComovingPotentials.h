@@ -16,7 +16,7 @@
 #include "testing/Util.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "ComovingPotentials.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {

@@ -15,11 +15,13 @@
 #include "tests/core/solver/MonitorTestSupport.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_monitors.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
 
     KOKKOS_INLINE_FUNCTION double noiseValue(unsigned x, unsigned y, unsigned z, unsigned c,
                                              unsigned seed) {

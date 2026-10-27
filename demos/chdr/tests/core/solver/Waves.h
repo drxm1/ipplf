@@ -11,7 +11,7 @@
 #include "core/base/SpatialDimension.h"
 #include "core/solver/operators/Operators.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "Waves.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {

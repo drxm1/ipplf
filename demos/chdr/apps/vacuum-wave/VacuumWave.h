@@ -8,7 +8,7 @@
 
 #include "Types/Vector.h"
 
-namespace chdr::vacuum {
+namespace chdr::apps::vacuumWave {
     /** @brief Four-potential of the chosen +z vacuum wave (c=1, wavelength=1).
      * @param z Cell-center z coordinate in normalized length units.
      * @param time Physical sample time in normalized units.
@@ -22,4 +22,4 @@ namespace chdr::vacuum {
         return ippl::Vector<double, 4>(0.0, Kokkos::sin(WaveNumber * (z - time)) / WaveNumber, 0.0,
                                        0.0);
     }
-}  // namespace chdr::vacuum
+}  // namespace chdr::apps::vacuumWave

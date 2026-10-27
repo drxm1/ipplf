@@ -9,7 +9,9 @@
 
 namespace {
     using namespace chdr;
-    using namespace chdr::interfaceTest;
+    using namespace chdr::solver;
+    using namespace chdr::solver::test;
+    using namespace chdr::diagnostics;
     using Solver             = ChdrSolver<StandardSolverPeriodic>;
     constexpr auto R2        = EBReconstructionConvention::R2;
     constexpr auto Staggered = SpatialDiscretization::Staggered;

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace chdr::solver {
+namespace chdr {
     void checkLocalDomain(const ippl::FieldLayout<SpatialDim>& layout) {
         const auto& local    = layout.getLocalNDIndex();
         const int localValid = std::all_of(local.begin(), local.end(), [](const auto& axis) {
@@ -25,4 +25,4 @@ namespace chdr::solver {
         // Scalar assignment zeros every source component in owned and halo cells.
         fields.getJ() = 0.0;
     }
-}  // namespace chdr::solver
+}  // namespace chdr

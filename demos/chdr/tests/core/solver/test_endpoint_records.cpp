@@ -16,11 +16,13 @@
 #include "testing/Util.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_endpoint_records.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
     using chdr::testing::util::preparePotentialHalo;
 
     /** @brief Fixed spatial mode metadata; all coordinates are global integer indices.

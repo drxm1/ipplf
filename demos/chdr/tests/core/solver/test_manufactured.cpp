@@ -24,10 +24,11 @@
 #include "core/solver/operators/Operators.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_manufactured.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
+    using namespace chdr::diagnostics;
     namespace mmsDetail {
         /// Four-component storage shared by sampled potentials and their manufactured source.
         using FourComponentView = decltype(std::declval<AJFourFieldsType&>().getView());

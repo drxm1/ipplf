@@ -17,11 +17,11 @@
 
 namespace chdr::output {
     /// Record Cartesian component offsets in the writer's E-then-B component order.
-    inline std::array<double, 18> fieldOffsets(const solver::LevelContract& contract) {
+    inline std::array<double, 18> fieldOffsets(const LevelContract& contract) {
         std::array<double, 18> result{};
         for (unsigned c = 0; c < 6; ++c) {
-            const auto offset = contract.positionOffset(
-                c < 3 ? solver::Quantity::Electric : solver::Quantity::RawMagnetic, c % 3);
+            const auto offset =
+                contract.positionOffset(c < 3 ? Quantity::Electric : Quantity::RawMagnetic, c % 3);
             for (unsigned d = 0; d < 3; ++d)
                 result[3 * c + d] = offset[d];
         }
@@ -54,17 +54,17 @@ namespace chdr::output {
         void write(long long step, Solver& state, const material::MaterialOwner& owner) {
             if (step < 0 || step > std::numeric_limits<int>::max())
                 throw std::invalid_argument("The field writer's step index is outside its range");
-            const auto energy    = solver::potentialEnergy(state, owner);
-            const double aligned = solver::alignedFieldEnergy(state, owner);
+            const auto energy    = diagnostics::potentialEnergy(state, owner);
+            const double aligned = diagnostics::alignedFieldEnergy(state, owner);
             if (!std::isfinite(energy.vector_m.total()) || !std::isfinite(aligned))
                 throw std::runtime_error("Nonfinite energy in material movie");
             writeEnergy(step, energy, aligned);
             state.computeRawMagneticField(raw_m);
             writer_m.writeFrame(
                 state.electricField(), raw_m,
-                {static_cast<int>(step), state.labelTime(solver::Quantity::VectorPotential, step),
-                 state.labelTime(solver::Quantity::Electric, step),
-                 state.labelTime(solver::Quantity::RawMagnetic, step), state.getDt()});
+                {static_cast<int>(step), state.labelTime(Quantity::VectorPotential, step),
+                 state.labelTime(Quantity::Electric, step),
+                 state.labelTime(Quantity::RawMagnetic, step), state.getDt()});
         }
 
         /// Complete the VTK series after the last frame.
@@ -87,7 +87,7 @@ namespace chdr::output {
         }
 
         /// Write diagnostics on the rank that owns the stream; other ranks do nothing.
-        void writeEnergy(long long step, const solver::EnergyRecord& record, double aligned) {
+        void writeEnergy(long long step, const diagnostics::EnergyRecord& record, double aligned) {
             if (energy_m.is_open())
                 energy_m << step << ',' << record.vectorTime_m << ',' << record.vector_m.vacuum_m
                          << ',' << record.vector_m.dielectric_m << ',' << record.vector_m.total()
@@ -96,7 +96,7 @@ namespace chdr::output {
         }
 
         FieldOutput writer_m;
-        solver::EMFieldsType raw_m;
+        EMFieldsType raw_m;
         std::ofstream energy_m;
     };
 }  // namespace chdr::output

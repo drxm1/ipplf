@@ -51,8 +51,8 @@ namespace {
         const simulation::RunBox box{{8, 2, 8}, {1, 1, 1}, 0, {false, true, false}, 2};
         const simulation::SolverSettings settings{
             .safetyFactor_m   = 0.7,
-            .reconstruction_m = solver::EBReconstructionConvention::R1,
-            .spatial_m        = solver::SpatialDiscretization::Collocated,
+            .reconstruction_m = EBReconstructionConvention::R1,
+            .spatial_m        = SpatialDiscretization::Collocated,
             .formulation_m =
                 solver::FormulationParameters{solver::MaterialFormulation::Homogeneous, 1}};
         Simulation run(box, UniformMaterial{}, settings);

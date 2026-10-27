@@ -17,11 +17,13 @@
 #include "opt-in/diagnostics/FourierProbe.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_probe_full.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
     using Complex            = std::complex<long double>;
     constexpr long double PI = Kokkos::numbers::pi_v<long double>;
     constexpr double DT      = 0.0625;

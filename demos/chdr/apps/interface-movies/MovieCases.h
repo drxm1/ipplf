@@ -12,7 +12,7 @@
 #include "core/material/RectangleXZ.h"
 #include "core/simulation/SimulationConfig.h"
 
-namespace chdr::interface {
+namespace chdr::apps::interfaceMovies {
     /// Cell-centred upper-left half-plane; ties on the diagonal belong to the dielectric.
     struct DiagonalXZ {
         KOKKOS_INLINE_FUNCTION bool contains(double x, double, double z) const { return x >= z; }
@@ -144,4 +144,4 @@ namespace chdr::interface {
             throw std::invalid_argument(
                 "Both annulus histories must start in vacuum clear of faces");
     }
-}  // namespace chdr::interface
+}  // namespace chdr::apps::interfaceMovies

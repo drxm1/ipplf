@@ -17,10 +17,11 @@
 #include "core/base/SpatialDimension.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_comoving.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
     using namespace chdr::solver::test;
 

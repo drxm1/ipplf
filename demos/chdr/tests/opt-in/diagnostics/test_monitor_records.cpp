@@ -13,11 +13,13 @@
 #include "opt-in/diagnostics/Monitors.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_monitor_records.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
 
     void fillRecordData(AJFourFieldsType& field, double phase) {
         const auto view  = field.getView();

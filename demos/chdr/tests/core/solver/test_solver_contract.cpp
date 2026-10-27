@@ -14,10 +14,11 @@
 #include "core/solver/BoxSetup.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_solver_contract.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
 
     // Unit conversions must remain explicit at the label API boundary.

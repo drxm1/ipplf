@@ -21,13 +21,13 @@
 #include "VacuumSetup.h"
 
 namespace {
-    using chdr::vacuum::checkLocalDomain;
-    using chdr::vacuum::Dim;
-    using chdr::vacuum::Fields;
-    using chdr::vacuum::initializeFieldStorage;
-    using chdr::vacuum::initializePotentials;
-    using chdr::vacuum::makePeriodicFieldContainer;
-    using chdr::vacuum::VacuumSolver;
+    using chdr::apps::vacuumWave::checkLocalDomain;
+    using chdr::apps::vacuumWave::Dim;
+    using chdr::apps::vacuumWave::Fields;
+    using chdr::apps::vacuumWave::initializeFieldStorage;
+    using chdr::apps::vacuumWave::initializePotentials;
+    using chdr::apps::vacuumWave::makePeriodicFieldContainer;
+    using chdr::apps::vacuumWave::VacuumSolver;
     constexpr double WaveNumber = 2.0 * Kokkos::numbers::pi_v<double>;
     using Potential             = ippl::Vector<double, 4>;
     using FieldValue            = ippl::Vector<double, Dim>;

@@ -10,7 +10,7 @@
 
 #include "VacuumDiagnostics.h"
 
-namespace chdr::vacuum {
+namespace chdr::apps::vacuumWave {
     // Fixed benchmark gates documented in README.md; these do not tune the solver.
     constexpr double DiscreteTolerance     = 1e-10;
     constexpr double ZeroTolerance         = 1e-12;
@@ -20,8 +20,8 @@ namespace chdr::vacuum {
     constexpr double FineFieldTolerance    = 0.003;
 
     /// @brief Apply the benchmark's amplitude, direction and mean-speed policy.
-    inline bool acceptedPhase(const chdr::vacuum::Diagnostics& d,
-                              const chdr::vacuum::PhaseSample& phase) {
+    inline bool acceptedPhase(const chdr::apps::vacuumWave::Diagnostics& d,
+                              const chdr::apps::vacuumWave::PhaseSample& phase) {
         if (!phase.valid_m || !(phase.amplitude_m > MinimumPhaseAmplitude)
             || phase.hasSpeed_m != (d.step_m > 0))
             return false;
@@ -31,8 +31,9 @@ namespace chdr::vacuum {
     }
 
     /// @brief Enforce the fixed acceptance contract documented in README.md.
-    inline void validateStep(const chdr::vacuum::Diagnostics& d,
-                             const chdr::vacuum::PhaseSample& phase, bool checkpoint, bool fine) {
+    inline void validateStep(const chdr::apps::vacuumWave::Diagnostics& d,
+                             const chdr::apps::vacuumWave::PhaseSample& phase, bool checkpoint,
+                             bool fine) {
         if (!d.finite_m || d.discreteError_m > DiscreteTolerance || d.zeroError_m > ZeroTolerance
             || !acceptedPhase(d, phase))
             throw std::runtime_error("Discrete, finite-value, zero-channel or phase check failed");
@@ -41,4 +42,4 @@ namespace chdr::vacuum {
             throw std::runtime_error("Continuum field error exceeded its fixed tolerance");
     }
 
-}  // namespace chdr::vacuum
+}  // namespace chdr::apps::vacuumWave

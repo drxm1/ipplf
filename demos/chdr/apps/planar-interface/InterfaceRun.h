@@ -6,9 +6,9 @@
 #include "core/material/PlanarSlab.h"
 #include "core/simulation/ChDRSimulationManager.h"
 
-namespace chdr::interface {
+namespace chdr::apps::planarInterface {
     using RunBox          = simulation::RunBox;
     using SolverSettings  = simulation::SolverSettings;
     using InterfaceRun    = simulation::ChDRSimulationManager<>;
     using InterfaceSolver = InterfaceRun::Solver;
-}  // namespace chdr::interface
+}  // namespace chdr::apps::planarInterface

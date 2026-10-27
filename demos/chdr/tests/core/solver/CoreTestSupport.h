@@ -10,7 +10,7 @@
 #include "core/solver/ChdrSolver.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "CoreTestSupport.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::coreTest {

@@ -40,7 +40,7 @@ namespace chdr::simulation {
             : fields_m(solver::makeBoxFieldContainer(box.cells_m, box.lengths(), box.splitAxis_m,
                                                      box.periodic_m)) {
             applyPartitionSeam(box);
-            solver::initializeFieldStorage(fields_m);
+            initializeFieldStorage(fields_m);
             owner_m  = std::make_unique<material::MaterialOwner>(fields_m.getMesh(),
                                                                  fields_m.getFL(), map);
             solver_m = makeSolver(settings);
@@ -139,7 +139,7 @@ namespace chdr::simulation {
                                             settings.murSpeed_m);
         }
 
-        solver::ChDRFieldContainer fields_m;
+        ChDRFieldContainer fields_m;
         std::unique_ptr<material::MaterialOwner> owner_m;
         std::unique_ptr<Solver> solver_m;
         Observer observer_m;

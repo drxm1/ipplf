@@ -15,11 +15,13 @@
 #include "testing/Util.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "test_timestep.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
+    using namespace chdr::diagnostics;
     using namespace chdr::solver::coreTest;
     using chdr::testing::util::preparePotentialHalo;
 

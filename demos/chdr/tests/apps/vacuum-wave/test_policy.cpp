@@ -13,7 +13,7 @@
 #include "VacuumChecks.h"
 
 namespace {
-    using namespace chdr::vacuum;
+    using namespace chdr::apps::vacuumWave;
 
     Diagnostics validDiagnostics(int step = 1) {
         Diagnostics value;

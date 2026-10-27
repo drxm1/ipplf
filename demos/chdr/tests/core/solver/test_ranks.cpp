@@ -14,10 +14,11 @@
 #include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/Monitors.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "test_ranks.cpp requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver::test {
+    using namespace chdr::diagnostics;
     /// Reproducible data varying in all directions, with substantial short-scale content.
     struct RoughData {
         bool nyquist_m = false;

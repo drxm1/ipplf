@@ -13,6 +13,7 @@
 #include "testing/Util.h"
 
 namespace {
+    using namespace chdr;
     using namespace chdr::solver;
     using chdr::testing::util::preparePotentialHalo;
 

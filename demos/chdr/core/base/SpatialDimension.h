@@ -3,8 +3,8 @@
  */
 #pragma once
 
-namespace chdr::solver {
+namespace chdr {
     /// Dimension of a cauchy slice.
     /// Must match the amount of components that \f$\vec{E}, \vec{B}, \vec{A}, \vec{J}\f$ have.
     constexpr unsigned SpatialDim = 3;
-}  // namespace chdr::solver
+}  // namespace chdr

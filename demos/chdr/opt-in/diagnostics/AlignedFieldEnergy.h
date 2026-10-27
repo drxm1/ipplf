@@ -9,10 +9,12 @@
 #include "core/solver/ChdrSolver.h"
 
 static_assert(
-    chdr::solver::SpatialDim == 3,
+    chdr::SpatialDim == 3,
     "AlignedFieldEnergy.h requires three spatial dimensions for its Cartesian implementation");
 
-namespace chdr::solver {
+namespace chdr::diagnostics {
+    using solver::ChdrSolver;
+
     namespace alignedEnergyDetail {
         /// Sum field squares at their staggered locations on the field execution space.
         struct Reduction {
@@ -70,4 +72,4 @@ namespace chdr::solver {
         const auto h = state.A_n.get_mesh().getMeshSpacing();
         return 0.5 * h[0] * h[1] * h[2] * total;
     }
-}  // namespace chdr::solver
+}  // namespace chdr::diagnostics

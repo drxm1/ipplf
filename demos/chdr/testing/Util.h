@@ -17,14 +17,14 @@ namespace chdr::testing::util {
      * Production code prepares both histories of a solver with
      * FDTDSolverBase::prepareHistories(); tests use this helper for one field at a time.
      */
-    inline void preparePotentialHalo(solver::AJFourFieldsType& potential) {
+    inline void preparePotentialHalo(AJFourFieldsType& potential) {
         Kokkos::fence();
 #ifndef NDEBUG
         if (!potential.getView().data())
             throw std::logic_error("Potential storage must be allocated before halo preparation");
         if (potential.getNghost() != 1 || !potential.getLayout().isAllPeriodic_m)
             throw std::logic_error("Expected one-cell halos on a periodic layout");
-        for (unsigned face = 0; face < 2 * solver::SpatialDim; ++face) {
+        for (unsigned face = 0; face < 2 * SpatialDim; ++face) {
             const auto& bc = potential.getFieldBC()[face];
             if (!bc || bc->getBCType() != ippl::PERIODIC_FACE || bc->getFace() != face)
                 throw std::logic_error("Expected a matching periodic condition on every face");

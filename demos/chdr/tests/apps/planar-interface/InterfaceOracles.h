@@ -23,7 +23,7 @@
 #include <complex>
 #include <numbers>
 
-namespace chdr::interface {
+namespace chdr::apps::planarInterface {
     using Complex = std::complex<double>;
     using Vec3    = std::array<double, 3>;
     enum class Polarization {
@@ -238,4 +238,4 @@ namespace chdr::interface {
         r.omega0 = r.ky / (std::sqrt(3.4) * std::sin(std::numbers::pi / 10));
         return completeRun(r);
     }
-}  // namespace chdr::interface
+}  // namespace chdr::apps::planarInterface

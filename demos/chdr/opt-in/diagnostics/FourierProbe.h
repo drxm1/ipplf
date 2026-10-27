@@ -31,10 +31,10 @@
 #include "core/base/LevelContract.h"
 #include "core/base/SpatialDimension.h"
 
-static_assert(chdr::solver::SpatialDim == 3,
+static_assert(chdr::SpatialDim == 3,
               "FourierProbe.h requires three spatial dimensions for its Cartesian implementation");
 
-namespace chdr::solver {
+namespace chdr::diagnostics {
 
     /// Inclusive global-index box: a point, line, plane or slab uses the same storage.
     struct ProbeBox {
@@ -629,4 +629,4 @@ namespace chdr::solver {
         FourierProbe probe_m;
         std::optional<EMFieldsType> raw_m;
     };
-}  // namespace chdr::solver
+}  // namespace chdr::diagnostics

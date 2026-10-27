@@ -18,7 +18,7 @@
 #include "VacuumSetup.h"
 
 namespace {
-    using namespace chdr::vacuum;
+    using namespace chdr::apps::vacuumWave;
     using Potential             = ippl::Vector<double, 4>;
     using FieldValue            = ippl::Vector<double, 3>;
     using Solver                = VacuumSolver;
@@ -111,7 +111,7 @@ namespace {
 
     void checkInitial(Solver& solver, Fields& fields) {
         seed(solver, fields, 0);
-        const auto result = chdr::vacuum::measure(solver, fields, 0);
+        const auto result = chdr::apps::vacuumWave::measure(solver, fields, 0);
         const double x    = WaveNumber * solver.getDt() / 2.0;
         const double q    = WaveNumber * fields.getMesh().getMeshSpacing()[2];
         EXPECT_TRUE(result.finite_m && result.count_m == 4096) << "initial validity/count";
@@ -130,7 +130,7 @@ namespace {
     void checkSourceDefect(Solver& solver, Fields& fields) {
         seed(solver, fields, 0);
         defectOnLastRank(fields.getJ(), 2, 1e-5);
-        const auto result = chdr::vacuum::measure(solver, fields, 0);
+        const auto result = chdr::apps::vacuumWave::measure(solver, fields, 0);
         EXPECT_TRUE(result.finite_m && result.sourceError_m == 1e-5 && result.zeroError_m == 1e-5)
             << "source fault";
     }
@@ -140,7 +140,7 @@ namespace {
                            bool inactive) {
         seed(solver, fields, 0);
         defectOnLastRank(target, component, 0.4);
-        const auto result = chdr::vacuum::measure(solver, fields, 0);
+        const auto result = chdr::apps::vacuumWave::measure(solver, fields, 0);
         EXPECT_TRUE(result.finite_m && result.discreteError_m > 1e-10)
             << "finite field/history fault";
         EXPECT_TRUE(inactive ? result.zeroError_m > 1e-12 : result.zeroError_m == 0.0)
@@ -165,7 +165,7 @@ namespace {
     void checkNonfinite(Solver& solver, Fields& fields, Field& target, int component) {
         seed(solver, fields, 0);
         defectOnLastRank(target, component, std::numeric_limits<double>::quiet_NaN());
-        EXPECT_TRUE(!chdr::vacuum::measure(solver, fields, 0).finite_m)
+        EXPECT_TRUE(!chdr::apps::vacuumWave::measure(solver, fields, 0).finite_m)
             << "non-root NaN propagation";
     }
 
@@ -184,14 +184,15 @@ namespace {
         const auto& comm    = fields.getFL().comm;
         if (comm.rank() == comm.size() - 1)
             solver.A_np1.resize(original.extent(0) + 1, original.extent(1), original.extent(2));
-        const auto result = chdr::vacuum::measure(solver, fields, 0);
+        const auto result = chdr::apps::vacuumWave::measure(solver, fields, 0);
         EXPECT_TRUE(!result.finite_m && result.count_m == 0)
             << "collective storage mismatch preflight";
         solver.A_np1.getView() = original;
     }
 
-    void checkMeasuredPhase(const chdr::vacuum::Diagnostics& result,
-                            const chdr::vacuum::PhaseSample& sample, double& accumulated) {
+    void checkMeasuredPhase(const chdr::apps::vacuumWave::Diagnostics& result,
+                            const chdr::apps::vacuumWave::PhaseSample& sample,
+                            double& accumulated) {
         const auto [current, previous] = scalarState(result.dt_m, 1.0 / 64.0, result.step_m);
         const Complex expected         = Complex(0.0, -1.0) * current;
         EXPECT_TRUE(std::abs(result.phaseReal_m - expected.real()) < 1e-12)
@@ -212,11 +213,11 @@ namespace {
     }
 
     void checkSteps(Solver& solver, Fields& fields) {
-        chdr::vacuum::PhaseTracker phase;
+        chdr::apps::vacuumWave::PhaseTracker phase;
         double expectedPhase = 0.0;
         for (int step = 0; step <= 128; ++step) {
             seed(solver, fields, step);
-            const auto result = chdr::vacuum::measure(solver, fields, step);
+            const auto result = chdr::apps::vacuumWave::measure(solver, fields, step);
             EXPECT_TRUE(result.finite_m && result.discreteError_m <= 1e-10)
                 << "independent recurrence oracle";
             const auto sample = phase.update(result);
@@ -224,8 +225,8 @@ namespace {
         }
     }
 
-    chdr::vacuum::Diagnostics phaseInput(chdr::vacuum::Diagnostics sample, int step, double speed,
-                                         double amplitude) {
+    chdr::apps::vacuumWave::Diagnostics phaseInput(chdr::apps::vacuumWave::Diagnostics sample,
+                                                   int step, double speed, double amplitude) {
         sample.step_m      = step;
         sample.timeA_m     = step * sample.dt_m;
         const double angle = WaveNumber * speed * sample.timeA_m;
@@ -234,16 +235,16 @@ namespace {
         return sample;
     }
 
-    chdr::vacuum::PhaseSample trackOne(const chdr::vacuum::Diagnostics& initial, double speed,
-                                       double amplitude) {
-        chdr::vacuum::PhaseTracker phase;
+    chdr::apps::vacuumWave::PhaseSample trackOne(const chdr::apps::vacuumWave::Diagnostics& initial,
+                                                 double speed, double amplitude) {
+        chdr::apps::vacuumWave::PhaseTracker phase;
         const auto first = phase.update(phaseInput(initial, 0, speed, amplitude));
         EXPECT_TRUE(first.valid_m && !first.hasSpeed_m && first.speed_m == 0.0)
             << "initial speed skipped";
         return phase.update(phaseInput(initial, 1, speed, amplitude));
     }
 
-    void checkPhasePolicySeparation(const chdr::vacuum::Diagnostics& initial) {
+    void checkPhasePolicySeparation(const chdr::apps::vacuumWave::Diagnostics& initial) {
         const auto slow = trackOne(initial, 0.9, 1.0);
         EXPECT_TRUE(slow.valid_m && slow.increment_m < 0.0) << "valid direction at wrong speed";
         EXPECT_TRUE(std::abs(slow.speed_m - 0.9) < 1e-12) << "wrong speed measured accurately";
@@ -259,8 +260,8 @@ namespace {
             << "tiny amplitude phase measurement";
     }
 
-    void checkPhaseStructure(const chdr::vacuum::Diagnostics& initial) {
-        chdr::vacuum::PhaseTracker phase;
+    void checkPhaseStructure(const chdr::apps::vacuumWave::Diagnostics& initial) {
+        chdr::apps::vacuumWave::PhaseTracker phase;
         EXPECT_TRUE(phase.update(initial).valid_m) << "initial phase accepted";
         EXPECT_TRUE(!phase.update(initial).valid_m) << "repeated step rejected";
         EXPECT_TRUE(!phase.update(phaseInput(initial, 2, 1.0, 1.0)).valid_m)
@@ -280,10 +281,11 @@ namespace {
 
     void checkPhaseFailures(Solver& solver, Fields& fields) {
         seed(solver, fields, 0);
-        const auto result = chdr::vacuum::measure(solver, fields, 0);
+        const auto result = chdr::apps::vacuumWave::measure(solver, fields, 0);
         checkPhasePolicySeparation(result);
         checkPhaseStructure(result);
-        EXPECT_TRUE(!chdr::vacuum::measure(solver, fields, -1).finite_m) << "negative step";
+        EXPECT_TRUE(!chdr::apps::vacuumWave::measure(solver, fields, -1).finite_m)
+            << "negative step";
     }
 
     /** @brief Synthetic owned data isolate diagnostic behavior from solver evolution.
