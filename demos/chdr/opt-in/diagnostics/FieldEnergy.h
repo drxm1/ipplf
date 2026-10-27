@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "core/base/SpatialDimension.h"
-#include "core/formulation/O1VSOperator.h"
 #include "core/solver/ChdrSolver.h"
+#include "core/solver/formulation/O1VSOperator.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "FieldEnergy.h requires three spatial dimensions for its Cartesian implementation");

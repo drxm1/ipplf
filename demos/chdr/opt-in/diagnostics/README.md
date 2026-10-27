@@ -128,7 +128,7 @@ decomposition; the last bits of `l2_m` and `scaleL2_m` can (deduction).
   [chew2014generalizedgauge, Eqs. (15), (18)] becomes
   \f$\nabla\cdot\mathbf A+\alpha\partial_t\phi=0\f$, and the O1-VS update adds
   \f$-(1-1/\alpha)D_d^+(D^-\cdot\mathbf A)\f$ to the effective source of vector component \f$d\f$
-  (deduction from `O1VSOperator::curlCorrection` and `core/formulation/O1VSUpdate.h`). With
+  (deduction from `O1VSOperator::curlCorrection` and `core/solver/formulation/O1VSUpdate.h`). With
   \f$\varepsilon=1\f$ and \f$\alpha=1\f$ these forms reduce to the vacuum forms, so such a
   material solver is accepted; `O1VS.VacuumBits` shows that
   the O1-VS update then reproduces the vacuum potentials and fields bit for bit. The refusal
@@ -458,7 +458,7 @@ Other tests use the diagnostics with the solver:
   identities on the last step.
 - `RankCases` (`chdr.solver.rank_cases.*`) and `LongGaugeGrowth`
   (`chdr.solver.long.GaugeGrowth.*`): residuals of seam cases, gauge norm over ten periods.
-- `MediumGuard` (`chdr.solver.medium.Guard.*`) and `O1VS.Refusals` (`chdr.formulation.o1vs.*`):
+- `MediumGuard` (`chdr.solver.medium.Guard.*`) and `O1VS.Refusals` (`chdr.solver.formulation.o1vs.*`):
   monitor acceptance at \f$\varepsilon=1\f$, \f$\alpha=1\f$ and refusal otherwise.
 - `PlaneInterface.Normal` (`chdr.interface.normal`): \f$W_A\f$ against an independent Yee sum.
 - `Movies.InitialFields` (`chdr.interface.movies.unit.*`): \f$W_h\ge W_A\f$ for a TE start state.

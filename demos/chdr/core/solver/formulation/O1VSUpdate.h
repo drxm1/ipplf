@@ -2,8 +2,8 @@
  * @brief Effective-source O1-VS update through the unchanged Standard kernel.
  */
 #pragma once
-#include "core/formulation/O1VSOperator.h"
-#include "core/operators/Operators.h"
+#include "core/solver/formulation/O1VSOperator.h"
+#include "core/solver/operators/Operators.h"
 
 namespace chdr::solver {
     /** @brief Add variable-material terms before the physical-time Standard step.

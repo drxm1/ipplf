@@ -191,9 +191,9 @@ namespace {
             runConfigured(parseOptions(argc, argv));
             return 0;
         } catch (const IpplException& error) {
-            return chdr::core::util::abortFailure(error.where(), error.what());
+            return chdr::util::abortFailure(error.where(), error.what());
         } catch (const std::exception& error) {
-            return chdr::core::util::abortFailure("runVacuumWave", error.what());
+            return chdr::util::abortFailure("runVacuumWave", error.what());
         }
     }
 }  // namespace

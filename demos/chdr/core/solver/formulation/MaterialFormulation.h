@@ -11,11 +11,11 @@
 #include <memory>
 
 #include "core/base/LevelContract.h"
-#include "core/formulation/HomogeneousUpdate.h"
-#include "core/formulation/MaterialStepContext.h"
-#include "core/formulation/O1VSUpdate.h"
 #include "core/material/MaterialOwner.h"
-#include "core/operators/Operators.h"
+#include "core/solver/formulation/HomogeneousUpdate.h"
+#include "core/solver/formulation/MaterialStepContext.h"
+#include "core/solver/formulation/O1VSUpdate.h"
+#include "core/solver/operators/Operators.h"
 
 namespace chdr::solver {
     /// Available material equations; each formulation owns its validity rule.

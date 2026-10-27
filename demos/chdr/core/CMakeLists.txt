@@ -1,7 +1,7 @@
-# The ChDR core: field types, material owner, operators, formulations, the potential solver, the
-# simulation manager and the generic writer. Nothing experiment-, test- or opt-in-related lives
-# here. Consumers include core headers by their path from demos/chdr, e.g.
-# "core/solver/ChdrSolver.h".
+# The ChDR core: the base types shared by everything, the potential solver with its operators and
+# formulations, the material owner, the simulation manager and the generic writer. Nothing
+# experiment-, test- or opt-in-related lives here. Consumers include core headers by their path from
+# demos/chdr, e.g. "core/solver/ChdrSolver.h".
 add_subdirectory(material)
 
 add_library(chdr-core STATIC base/FieldContainer.cpp solver/BoxSetup.cpp)

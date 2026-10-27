@@ -7,8 +7,8 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "core/operators/StaggeredOperators.h"
 #include "core/solver/BoxSetup.h"
+#include "core/solver/operators/StaggeredOperators.h"
 
 namespace {
     using namespace chdr::solver;

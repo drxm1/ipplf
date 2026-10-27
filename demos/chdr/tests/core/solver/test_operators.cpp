@@ -7,8 +7,8 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "core/operators/Operators.h"
 #include "core/solver/BoxSetup.h"
+#include "core/solver/operators/Operators.h"
 #include "testing/Util.h"
 
 namespace {

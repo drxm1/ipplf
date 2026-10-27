@@ -10,7 +10,7 @@
 
 #include "Utility/IpplException.h"
 
-namespace chdr::core::util {
+namespace chdr::util {
     /** @brief Report rank, context and message, then stop the MPI job.
      * @details Utility/IpplException.h defines a global exception type independent of
      * std::exception; callers catch both types explicitly and retain IPPL until this
@@ -22,4 +22,4 @@ namespace chdr::core::util {
         ippl::Comm->abort(1);
         return 1;
     }
-}  // namespace chdr::core::util
+}  // namespace chdr::util

@@ -36,11 +36,11 @@
 #include "core/base/FieldContainer.h"
 #include "core/base/LevelContract.h"
 #include "core/base/SpatialDimension.h"
-#include "core/formulation/MaterialFormulation.h"
-#include "core/formulation/MaterialStepContext.h"
-#include "core/operators/Operators.h"
-#include "core/operators/Reconstruction.h"
-#include "core/operators/StaggeredReconstruction.h"
+#include "core/solver/formulation/MaterialFormulation.h"
+#include "core/solver/formulation/MaterialStepContext.h"
+#include "core/solver/operators/Operators.h"
+#include "core/solver/operators/Reconstruction.h"
+#include "core/solver/operators/StaggeredReconstruction.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
               "ChdrSolver.h requires three spatial dimensions for its Cartesian implementation");

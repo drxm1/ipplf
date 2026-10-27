@@ -24,9 +24,9 @@ int main(int argc, char* argv[]) {
             GTEST_FLAG_SET(random_seed, 1);
         result = RUN_ALL_TESTS();
     } catch (const IpplException& error) {
-        result = chdr::core::util::abortFailure(error.where(), error.what());
+        result = chdr::util::abortFailure(error.where(), error.what());
     } catch (const std::exception& error) {
-        result = chdr::core::util::abortFailure("RUN_ALL_TESTS", error.what());
+        result = chdr::util::abortFailure("RUN_ALL_TESTS", error.what());
     }
     MPI_Allreduce(MPI_IN_PLACE, &result, 1, MPI_INT, MPI_MAX, *ippl::Comm);
     ippl::finalize();

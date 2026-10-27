@@ -9,7 +9,7 @@
 #pragma once
 
 #include "core/base/SpatialDimension.h"
-#include "core/operators/Operators.h"
+#include "core/solver/operators/Operators.h"
 
 namespace chdr::solver {
     /** @brief Reconstruct the collocated R2 electric field from two potential histories.

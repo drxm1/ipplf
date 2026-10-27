@@ -15,18 +15,20 @@ not compile.
 
 | Unit | Headers | Content | Tests |
 |---|---|---|---|
-| `base/` | `FieldContainer`, `SpatialDimension`, `HalfStepOffset`, `LevelContract`, `Util` | The field container shared with the FEL demo, its ownership check and storage allocation; the spatial dimension; the space and time sampling contract of every solver quantity; the abort helper `chdr::core::util::abortFailure` | `Levels`, `LevelEquivalence` in `tests/core/solver` |
+| `base/` | `FieldContainer`, `SpatialDimension`, `LevelContract`, `HalfStepOffset`, `Util` | What everything in ChDR shares: the field container of the FEL demo with its ownership check and storage allocation; the spatial dimension; the space and time sampling contract of every field quantity, which the solver defines and the diagnostics, the output and the programs read; the abort helper `chdr::util::abortFailure` | `Levels`, `LevelEquivalence` in `tests/core/solver` |
+| `solver/` | `ChdrSolver`, `BoxSetup` | The potential solver over IPPL's Standard and NonStandard FDTD solvers with periodic or Mur faces, and the constructor of a box field container with selectable periodic axes together with the loaders of analytic histories and sources. Its two subdirectories are the solver's own parts | `tests/core/solver` |
+| `solver/operators/` | `Operators`, `StaggeredOperators`, `Reconstruction`, `StaggeredReconstruction` | Collocated and staggered differences, and the reconstruction of E and B from the potential histories in each reading | `Operators`, `CompactOperators`, `ChdrStaggered` in `tests/core/solver` |
+| `solver/formulation/` | `MaterialFormulation`, `MaterialStepContext`, `HomogeneousUpdate`, `O1VSOperator`, `O1VSUpdate` | The material update that the solver selects: the homogeneous rescaling of IPPL's vacuum kernel and the O1-VS variable-scalar gauge | `tests/core/solver/formulation` |
 | `material/` | `MaterialOwner`, `O1VSCoefficients`, `PlanarSlab`, `RectangleXZ` | The distributed cell permittivity with its derived face coefficients, and the two material regions | `tests/core/material` |
-| `operators/` | `Operators`, `StaggeredOperators`, `Reconstruction`, `StaggeredReconstruction` | Collocated and staggered differences, and the reconstruction of E and B from the potential histories in each reading | `Operators`, `CompactOperators`, `ChdrStaggered` in `tests/core/solver` |
-| `formulation/` | `MaterialFormulation`, `MaterialStepContext`, `HomogeneousUpdate`, `O1VSOperator`, `O1VSUpdate` | The material update that the solver selects: the homogeneous rescaling of IPPL's vacuum kernel and the O1-VS variable-scalar gauge | `tests/core/formulation` |
-| `solver/` | `ChdrSolver`, `BoxSetup` | The potential solver over IPPL's Standard and NonStandard FDTD solvers with periodic or Mur faces, and the constructor of a box field container with selectable periodic axes | `tests/core/solver` |
 | `simulation/` | `ChDRSimulationManager`, `SimulationConfig` | One lifecycle for a run: box, material map, solver settings, stepping with observers | `tests/core/simulation` |
 | `output/` | `FieldOutput` | Synchronous owned-cell VTI/PVTI output of fields and material | The output fixture and reader checks in `tests/apps/vacuum-wave` |
 
 Both spatial readings, collocated and staggered, are kept on purpose; they are
 two discretizations, not two copies of one. `ChDRSimulationManager` builds its
 field container with `solver::makeBoxFieldContainer`, so the box constructor is
-the one place that defines mesh and MPI ownership.
+the one place that defines mesh and MPI ownership. The diagnostics under
+`../opt-in/diagnostics` borrow the difference operators and the O1-VS operator
+of `solver/operators` and `solver/formulation`; nothing in `core/` depends on them.
 
 [`solver/README.md`](solver/README.md) documents the solver in detail: the
 readings and time labels, the homogeneous material, the periodic and Mur faces,

@@ -19,9 +19,9 @@
 #include "MonitorTestSupport.h"
 #include "RankRecords.h"
 #include "core/base/SpatialDimension.h"
-#include "core/operators/Operators.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
+#include "core/solver/operators/Operators.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,

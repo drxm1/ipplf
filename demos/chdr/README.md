@@ -18,7 +18,7 @@ This directory holds the ChDR code of my master's project:
 
 | Directory | Content | Documentation |
 |---|---|---|
-| `core/` | The code that no experiment, test or optional measurement owns, one unit per directory: the field container and sampling contract (`base/`), the material description (`material/`), the discrete operators (`operators/`), the material formulations (`formulation/`), the potential solver `ChdrSolver` and the box constructor (`solver/`), the simulation manager (`simulation/`) and the field writer (`output/`) | [`core/README.md`](core/README.md), [`core/solver/README.md`](core/solver/README.md) |
+| `core/` | The code that no experiment, test or optional measurement owns, one unit per directory: the base shared by everything, the field container, the sampling contract and the abort helper (`base/`); the potential solver `ChdrSolver` with the box constructor and its own parts, the discrete operators (`solver/operators/`) and the material formulations (`solver/formulation/`); the material description (`material/`); the simulation manager (`simulation/`); the field writer (`output/`) | [`core/README.md`](core/README.md), [`core/solver/README.md`](core/solver/README.md) |
 | `opt-in/diagnostics/` | The residual monitors, the Gauss formula check, the Fourier probe and the two field energies; nothing in `core/` depends on them | [`opt-in/diagnostics/README.md`](opt-in/diagnostics/README.md) |
 | `opt-in/output/` | `FieldRunOutput.h`: frames, material and `energy.csv` for a run of the simulation manager | The header |
 | `apps/vacuum-wave/` | `chdr-vacuum-wave`: the vacuum plane wave in a periodic box, the benchmark of the inherited vacuum update | [`apps/vacuum-wave/README.md`](apps/vacuum-wave/README.md), [`ViewingGuide.org`](apps/vacuum-wave/ViewingGuide.org) |
@@ -71,7 +71,8 @@ ranks, one OpenMP thread each):
 | Prefix | Tests of | Directory |
 |---|---|---|
 | `chdr.solver.` | the potential solver, the operators and the sampling contract | `tests/core/solver` |
-| `chdr.material.`, `chdr.formulation.`, `chdr.simulation.` | the material owner, the O1-VS formulation, the simulation manager | `tests/core/<unit>` |
+| `chdr.solver.formulation.` | the O1-VS formulation | `tests/core/solver/formulation` |
+| `chdr.material.`, `chdr.simulation.` | the material owner, the simulation manager | `tests/core/<unit>` |
 | `chdr.diagnostics.` | the opt-in diagnostics | `tests/opt-in/diagnostics` |
 | `chdr.vacuum.`, `chdr.interface.` | the three programs; `chdr.interface.movies.*` belong to `interface-movies` | `tests/apps/<program>` |
 | `chdr.mesh.` | the mesh example | `mesh/` |

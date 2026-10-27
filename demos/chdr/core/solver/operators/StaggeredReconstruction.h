@@ -9,7 +9,7 @@
 #pragma once
 
 #include "core/base/SpatialDimension.h"
-#include "core/operators/StaggeredOperators.h"
+#include "core/solver/operators/StaggeredOperators.h"
 
 static_assert(
     chdr::solver::SpatialDim == 3,
