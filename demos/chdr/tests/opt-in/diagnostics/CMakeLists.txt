@@ -1,12 +1,8 @@
 include(AddIpplTest)
-# test_probe.cpp and test_probe_full.cpp build their periodic fields with the vacuum-wave setup, as
-# test_solver_contract.cpp of the solver tests does. VacuumSetup.cpp stays an app file until that
-# setup moves onto BoxSetup.
 add_ippl_test(
   test-chdr-diagnostics
   COMPILE_ONLY
   SOURCES
-  ../../../apps/vacuum-wave/VacuumSetup.cpp
   test_interface_energy.cpp
   test_monitors.cpp
   test_monitor_records.cpp

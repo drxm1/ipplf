@@ -5,12 +5,11 @@
  * regression checks the field bindings of ChdrSolver and its solve counting; the vacuum-wave
  * tests separately establish the physical wave reference.
  */
+#include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>
 #include <limits>
 #include <type_traits>
 
-#include "VacuumSetup.h"
-#include "VacuumWave.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 
@@ -48,14 +47,22 @@ namespace {
         return error;
     }
 
-    /** @brief Load the vacuum demo's reference samples into a configured solver.
-     * The demo initializer takes the fixed-periodic specialization. Reuse its wave
-     * evaluator and sample times here, without changing that independent demo API.
-     * Both histories use collocated cell centres, as in vacuum::initializePotentials.
+    /// The periodic box of the vacuum plane wave: 8 by 8 by 64 cells on [0, 1/8]^2 x [0, 1].
+    ChDRFieldContainer makeVacuumWaveBox() {
+        return makeBoxFieldContainer({8, 8, 64}, {0.125, 0.125, 1.0}, 2);
+    }
+
+    /** @brief Load the +z vacuum plane wave into both histories of a configured solver.
+     * @details The four-potential is \f$A_x=\sin(2\pi(z-t))/(2\pi)\f$ with the other
+     * components zero, a solution of the vacuum wave equation for the potentials
+     * [fallahi2020mithra20fullwavesimulation, Eqs. (3.6)-(3.9)] in units \f$c=1\f$ with
+     * wavelength one. Both histories are sampled at collocated cell centres, at times 0
+     * and \f$-\Delta t\f$.
      */
     void initializeVacuumHistories(StandardSolverPeriodic& solver) {
         const auto sample = KOKKOS_LAMBDA(double, double, double z, double t, unsigned component) {
-            return chdr::vacuum::referencePotential(z, t)[component];
+            constexpr double WAVE_NUMBER = 2.0 * Kokkos::numbers::pi_v<double>;
+            return component == 1 ? Kokkos::sin(WAVE_NUMBER * (z - t)) / WAVE_NUMBER : 0.0;
         };
         const double dt = solver.getDt();
         writeSamples(solver.A_n, sample, {0, 0, 0, 0});
@@ -80,10 +87,10 @@ namespace {
     }
 
     TEST(ChdrSolverContract, MatchesBaseSolverOnTheVacuumWave) {
-        auto baseFields = chdr::vacuum::makePeriodicFieldContainer();
-        auto chdrFields = chdr::vacuum::makePeriodicFieldContainer();
-        chdr::vacuum::initializeFieldStorage(baseFields);
-        chdr::vacuum::initializeFieldStorage(chdrFields);
+        auto baseFields = makeVacuumWaveBox();
+        auto chdrFields = makeVacuumWaveBox();
+        initializeFieldStorage(baseFields);
+        initializeFieldStorage(chdrFields);
         StandardSolverPeriodic base(baseFields.getJ(), baseFields.getE(), baseFields.getB(),
                                     ippl::FDTDBoundary::fromLayout(baseFields.getFL()));
         ChdrSolver<StandardSolverPeriodic> chdrSolver(chdrFields.getJ(), chdrFields.getE(),
@@ -103,8 +110,8 @@ namespace {
     }
 
     TEST(ChdrSolverContract, RefusesUnsupportedHaloWidth) {
-        auto fields = chdr::vacuum::makePeriodicFieldContainer();
-        chdr::vacuum::initializeFieldStorage(fields);
+        auto fields = makeVacuumWaveBox();
+        initializeFieldStorage(fields);
         EMFieldsType wrong;
         wrong.initialize(fields.getMesh(), fields.getFL(), 2);
         EXPECT_THROW((ChdrSolver<StandardSolverPeriodic>(fields.getJ(), wrong, fields.getB(),

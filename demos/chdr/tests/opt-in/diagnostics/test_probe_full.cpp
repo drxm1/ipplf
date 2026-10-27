@@ -11,7 +11,6 @@
 #include <memory>
 #include <string>
 
-#include "apps/vacuum-wave/VacuumSetup.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
@@ -46,10 +45,9 @@ namespace {
         return {40.0 / 4096.0, 40.5 / 4096.0, 97.37 / 4096.0, 61.5 / 4096.0, 0.16, 1.0 / 4096.0};
     }
 
-    chdr::vacuum::Fields makeFields() {
-        ippl::Vector<double, SpatialDim> origin(0.0), upper(1.0, 1.0, 2.0), spacing(0.125);
-        ippl::NDIndex<SpatialDim> domain(ippl::Index(8), ippl::Index(8), ippl::Index(16));
-        return {spacing, origin, upper, {false, false, true}, domain, origin, true};
+    /// The periodic 8 by 8 by 16 box of unit spacing 1/8, decomposed along z.
+    ChDRFieldContainer makeFields() {
+        return makeBoxFieldContainer({8, 8, 16}, {1.0, 1.0, 2.0}, 2);
     }
 
     Complex cycle(long double frequency, long double index) {
@@ -182,7 +180,7 @@ namespace {
         };
 
     public:
-        SignalWriter(chdr::vacuum::Fields& fields, EMFieldsType& raw, LevelContract levels)
+        SignalWriter(ChDRFieldContainer& fields, EMFieldsType& raw, LevelContract levels)
             : fields_m(fields)
             , raw_m(raw)
             , levels_m(levels) {
@@ -260,7 +258,7 @@ namespace {
                 }
             Kokkos::deep_copy(temporal_m, temporalHost_m);
         }
-        chdr::vacuum::Fields& fields_m;
+        ChDRFieldContainer& fields_m;
         EMFieldsType& raw_m;
         LevelContract levels_m;
         std::size_t total_m = 0;
@@ -346,7 +344,7 @@ namespace {
      * exercise accumulated rounding; short gates late in the run retain a large
      * absolute step index without averaging over the entire preceding signal.
      */
-    ProbeList frozenProbes(chdr::vacuum::Fields& fields, LevelContract levels) {
+    ProbeList frozenProbes(ChDRFieldContainer& fields, LevelContract levels) {
         ProbeList probes;
         const ProbeBox plane{{3, 0, 0}, {3, 7, 15}};
         for (auto window : {ProbeWindow::Rectangle, ProbeWindow::Hann})
@@ -360,7 +358,7 @@ namespace {
         return probes;
     }
 
-    void sampleFrozenGates(chdr::vacuum::Fields& fields, EMFieldsType& raw, SignalWriter& signal,
+    void sampleFrozenGates(ChDRFieldContainer& fields, EMFieldsType& raw, SignalWriter& signal,
                            ProbeList& probes) {
         for (int step = 0; step < 100000; ++step) {
             signal.write(step, step >= 101 && step < 4197);
@@ -464,11 +462,8 @@ namespace {
     }
 
     /// Preserve the same two-unit axial box with a NonStandard-compatible aspect ratio.
-    chdr::vacuum::Fields nonStandardLiveFields() {
-        ippl::Vector<double, SpatialDim> origin(0.0), upper(1.0, 1.0, 2.0),
-            spacing(0.125, 0.125, 0.0625);
-        ippl::NDIndex<SpatialDim> domain(ippl::Index(8), ippl::Index(8), ippl::Index(32));
-        return {spacing, origin, upper, {false, false, true}, domain, origin, true};
+    ChDRFieldContainer nonStandardLiveFields() {
+        return makeBoxFieldContainer({8, 8, 32}, {1.0, 1.0, 2.0}, 2);
     }
 
     /** @brief Sample an evolved mode through the bound probe in either stencil family.
@@ -517,7 +512,7 @@ namespace {
 
     TEST(FourierProbeSpectra, FrozenGatesAndNaNGhosts) {
         auto fields = makeFields();
-        chdr::vacuum::initializeFieldStorage(fields);
+        initializeFieldStorage(fields);
         EMFieldsType raw;
         raw.initialize(fields.getMesh(), fields.getFL());
         const LevelContract levels{EBReconstructionConvention::R2};
@@ -530,7 +525,7 @@ namespace {
     /// A separately labelled raw B channel carries the label-shift factor for identical data.
     TEST(FourierProbeSpectra, IdenticalSamplesGiveTheLabelShiftFactor) {
         auto fields = makeFields();
-        chdr::vacuum::initializeFieldStorage(fields);
+        initializeFieldStorage(fields);
         FourierProbe probe(fields.getE(), {EBReconstructionConvention::R2}, DT,
                            {{0, 0, 7}, {0, 0, 7}},
                            {{Quantity::Magnetic, 0}, {Quantity::RawMagnetic, 0}}, {0.125}, 9, 64);
@@ -581,7 +576,7 @@ namespace {
     void checkSolverChannelWiring(EBReconstructionConvention ebReconstructionConvention,
                                   SpatialDiscretization spatialDiscretization) {
         auto fields = makeFields();
-        chdr::vacuum::initializeFieldStorage(fields);
+        initializeFieldStorage(fields);
         ChdrSolver<StandardSolverPeriodic> solver(fields.getJ(), fields.getE(), fields.getB(),
                                                   ebReconstructionConvention,
                                                   spatialDiscretization);
@@ -614,7 +609,7 @@ namespace {
     /// Exercise the same accumulation kernel with the Standard staggered channel positions.
     TEST(FourierProbeSpectra, StaggeredPlaneClosedForm) {
         auto fields = makeFields();
-        chdr::vacuum::initializeFieldStorage(fields);
+        initializeFieldStorage(fields);
         EMFieldsType raw;
         raw.initialize(fields.getMesh(), fields.getFL());
         const LevelContract levels{EBReconstructionConvention::R2,

@@ -413,9 +413,8 @@ electric-field time \f$(k-1/2)\Delta t\f$ of \f$W_A\f$ and \f$W_h\f$. `vacuum`, 
 ## Tests
 
 `tests/opt-in/diagnostics` builds the executable `test-chdr-diagnostics` when `IPPL_ENABLE_CHDR`,
-`BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS` are on. It also compiles
-`apps/vacuum-wave/VacuumSetup.cpp` and includes support headers from `tests/core/solver`. Configure
-the build as in `core/solver/README.md`, then:
+`BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS` are on. It includes support headers from
+`tests/core/solver`. Configure the build as in `core/solver/README.md`, then:
 
 ```sh
 cmake --build build --parallel 2 --target test-chdr-diagnostics

@@ -1,12 +1,5 @@
 include(AddIpplTest)
-add_ippl_test(
-  test-chdr-solver
-  COMPILE_ONLY
-  SOURCES
-  ../../../apps/vacuum-wave/VacuumSetup.cpp
-  test_solver_contract.cpp
-  INCLUDE_DIRS
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../../apps/vacuum-wave")
+add_ippl_test(test-chdr-solver COMPILE_ONLY SOURCES test_solver_contract.cpp)
 target_link_libraries(test-chdr-solver PRIVATE chdr-core chdr-diagnostics chdr-testing)
 target_compile_options(test-chdr-solver PRIVATE -UNDEBUG)
 target_link_libraries(test-chdr-solver PRIVATE nlohmann_json::nlohmann_json)

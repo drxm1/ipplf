@@ -4,8 +4,8 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "apps/vacuum-wave/VacuumSetup.h"
 #include "core/base/SpatialDimension.h"
+#include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/FourierProbe.h"
 
 static_assert(chdr::solver::SpatialDim == 3,
@@ -15,10 +15,9 @@ namespace {
     using namespace chdr::solver;
     constexpr double PI = Kokkos::numbers::pi_v<double>;
 
-    chdr::vacuum::Fields probeGrid() {
-        ippl::Vector<double, SpatialDim> lower(0.0), upper(1.0, 1.0, 2.0), spacing(0.125);
-        ippl::NDIndex<SpatialDim> domain(ippl::Index(8), ippl::Index(8), ippl::Index(16));
-        return {spacing, lower, upper, {false, false, true}, domain, lower, true};
+    /// The periodic 8 by 8 by 16 box of unit spacing 1/8, decomposed along z.
+    ChDRFieldContainer probeGrid() {
+        return makeBoxFieldContainer({8, 8, 16}, {1.0, 1.0, 2.0}, 2);
     }
 
     constexpr double DT = 0.0625;
@@ -28,8 +27,8 @@ namespace {
 
     /// Keep the allocated field owner at its original address throughout each interface test.
     struct ProbeFixture {
-        chdr::vacuum::Fields fields_m = probeGrid();
-        ProbeFixture() { chdr::vacuum::initializeFieldStorage(fields_m); }
+        ChDRFieldContainer fields_m = probeGrid();
+        ProbeFixture() { initializeFieldStorage(fields_m); }
         FourierProbe make(LevelContract levels, ProbeBox box, ProbeChannel channel,
                           double frequency, std::int64_t first, std::int64_t count,
                           bool phiIsZero = false) {

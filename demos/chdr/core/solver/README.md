@@ -374,7 +374,7 @@ with the run log.
 | `TimeStep`, `TimeStepLong`, `TimeStepRecords` | Permitted range, effective safety factor, bounded/growing histories and endpoint records |
 | `ComovingT7` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
 | `RankGather`, `RankCases`, `SerialReference`, `StableStatistics` | Owned fields and well-conditioned reductions across rank layouts |
-| `ChdrSolverContract` | Construction contract of `ChdrSolver`, and its evolution against IPPL's Standard solver on the vacuum-wave setup |
+| `ChdrSolverContract` | Construction contract of `ChdrSolver`, and its evolution against IPPL's Standard solver on the vacuum plane wave |
 | `Operators`, `CompactOperators`, `BoxSetup` | Difference symbols, periodic halos and geometry |
 | `ChdrStaggered` | Staggered difference composition, component positions and the Standard staggered R2 reconstruction |
 
