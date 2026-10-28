@@ -33,6 +33,28 @@
 - Write READMEs and comments in precise scientific language and keep sentences well readable (in the spirit of ASD-STE100).
 - The pre-commit hook runs clang-format and cmake-format; keep every file clean under both.
 
+## Typst manual authorship
+
+- The user authors the Typst manual. Treat `manual.typ`, its module-local chapter
+  files, and the authored files under `docs/manual/` (including the preamble and
+  bibliography) as user-owned. Do not create, rewrite, reformat or otherwise edit
+  them unless the user explicitly requests the particular manual or template edit.
+  A general research, implementation or documentation-upkeep request does not grant
+  permission to edit the manual. Reading, compiling and reviewing it are allowed.
+- When work adds or changes a derivation, formulation, implementation contract,
+  validation result or known limitation relevant to the manual, notify the user
+  and suggest the content to add or revise. Name the chapter or topic, explain the
+  proposed change and its assumptions, and link the scientific sources, code
+  symbols and supporting evidence. Distinguish proposals from implemented behavior
+  and measured results. Suggest corrections to the user's text rather than applying them.
+- Keep these suggestions in the conversation and the existing task notes when
+  available, not in the manual itself. Summarize outstanding suggestions alongside
+  final validation results. The handoff is the agent's responsibility; the user's
+  writing does not block implementation completion. Do not claim a suggestion was
+  incorporated unless the user confirms it or the corresponding text exists.
+- Continue to maintain code comments, Doxygen and operational READMEs as the task
+  requires; they have a separate role from the user-authored manual.
+
 # Naming Conventions
 - Variables should use camel casing
 - Compile time constants should use capital casing
