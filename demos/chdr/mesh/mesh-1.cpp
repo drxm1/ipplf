@@ -35,9 +35,9 @@
 #include "BrickGeometry.h"
 #include "ChdrMeshConfig.h"
 #include "FELFieldContainer.hpp"
-#include "MaterialOwner.h"
 #include "MaterialViewer.h"
 #include "PrismGeometry.h"
+#include "core/material/MaterialOwner.h"
 
 #ifndef CHDR_DEFAULT_CONFIG
 /// Default YAML path; CMake normally supplies an absolute path in the build tree.

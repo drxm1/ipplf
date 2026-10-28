@@ -1,0 +1,2 @@
+add_ippl_test(PeriodicAxes COMPILE_ONLY)
+chdr_src_test(PeriodicAxes)
