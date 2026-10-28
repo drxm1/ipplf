@@ -1,2 +1,6 @@
 # Generated Doxygen HTML
 /docs/html/
+
+# Compiled Typst documents
+/manual.pdf
+/core/solver/formulation/formulations.pdf

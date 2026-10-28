@@ -98,7 +98,35 @@ entries, and `unavailable` marks entries registered as skipped because Python,
 an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
 so `ctest -L chdr` selects the same set as `ctest -R '^chdr\.'`.
 
-## Documentation
+## Documentation / Manual
+
+The Typst manual starts at [manual.typ](manual.typ). Its shared
+[docs/manual/preamble.typ](docs/manual/preamble.typ) provides
+typography, equation and section numbering, bibliography handling, and the
+notation from `@preview/physica:0.9.8`. The entry point assembles module-local
+chapter bodies. The bibliography is the regular, self-contained file
+[docs/manual/references.bib](docs/manual/references.bib).
+
+Install typst cli https://github.com/typst/typst#installation to build.
+Build the manual or a chapter from the IPPL repository root with Typst 0.14 or newer:
+
+```sh
+typst compile --root demos/chdr demos/chdr/manual.typ
+typst compile --root demos/chdr demos/chdr/core/solver/formulation/formulations.typ
+```
+
+Typst writes each PDF beside its source file. These document outputs are listed
+explicitly in `.gitignore`; add the matching PDF path when adding a new chapter
+so PDF figures remain trackable. Use `typst watch` in place of `typst compile`
+for live rebuilding. Use `--root demos/chdr` for nested chapter builds, or a wider
+root containing the manual. Imports and the bibliography path are relative to
+their source files, so editor previews can also use the enclosing repository root.
+Each chapter imports the preamble by its relative path, exports a `chapter`
+content block, and calls `standalone` after that definition. The root imports the
+block rather than including the standalone
+rendering. Start each chapter body with its level-one heading; the standalone
+wrapper adds no duplicate title. The root's optional `contents: true` enables an
+outline. Cross-chapter references require the referenced content in that build.
 
 `doxygen Doxyfile` in this directory writes the HTML reference of `core/`,
 `opt-in/`, `apps/` and `testing/`, with this file and the READMEs as pages, to
