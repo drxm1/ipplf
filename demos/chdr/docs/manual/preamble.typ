@@ -1,9 +1,15 @@
 // One import provides the manual helpers and all physica notation.
 #import "@preview/physica:0.9.8": *
+#import "@preview/equate:0.3.3": equate
 
 // Shared typography for the full manual and standalone chapters.
 #let manual-typography(body) = {
-  set text(font: "Libertinus Serif", size: 11pt, lang: "en", fill: rgb("202428"))
+  set text(
+    font: "Libertinus Serif",
+    size: 11pt,
+    lang: "en",
+    fill: rgb("202428"),
+  )
   set par(justify: true, leading: 0.6em)
   set heading(numbering: "1.1", supplement: [Section])
   set math.equation(numbering: "(1)")

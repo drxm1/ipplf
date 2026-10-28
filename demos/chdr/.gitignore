@@ -3,4 +3,7 @@
 
 # Compiled Typst documents
 /manual.pdf
+/docs/manual/SimplifyingAssumptions.pdf
+/docs/manual/Units.pdf
+/docs/manual/preamble.pdf
 /core/solver/formulation/formulations.pdf
