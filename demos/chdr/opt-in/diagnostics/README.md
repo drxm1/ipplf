@@ -422,8 +422,10 @@ ctest --test-dir build --no-tests=error -R '^chdr\.diagnostics\.' --output-on-fa
 ```
 
 Each suite has a `.serial` entry and, with an MPI launcher, a `.mpi2` entry on two ranks. All
-entries use one OpenMP thread per rank, a 60 s timeout and the labels `chdr;diagnostics;unit`,
-plus `mpi` for two ranks and `probe;mpi` for `chdr.diagnostics.probe.ranks`. The suites print
+entries use one OpenMP thread per rank and the labels `chdr;diagnostics;unit`, plus `mpi` for two
+ranks and `probe;mpi` for `chdr.diagnostics.probe.ranks`. The timeout is 60 s, except for
+`chdr.diagnostics.probe.ranks`, which runs the probe suite on one rank and on two ranks in two
+subprocesses of 60 s each under a 150 s limit. The suites print
 their measured maxima; `ctest -V` shows them.
 
 | CTest entry | Test file and filter | Main checks |

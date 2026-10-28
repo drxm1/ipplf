@@ -334,7 +334,7 @@ configuring. For an existing configured build, enable the relevant modules with:
 cmake -S . -B build -DBUILD_TESTING=ON -DIPPL_ENABLE_UNIT_TESTS=ON \
   -DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_FEL=ON \
   -DIPPL_ENABLE_FFT=ON -DIPPL_ENABLE_SOLVERS=ON
-cmake --build build --parallel 2 --target test-chdr-solver
+cmake --build build --parallel 2 --target test-chdr-solver test-chdr-formulation
 ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
   -LE 'long|record' --output-on-failure -j1
 ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \

@@ -26,7 +26,9 @@ not compile.
 Both spatial readings, collocated and staggered, are kept on purpose; they are
 two discretizations, not two copies of one. `ChDRSimulationManager` builds its
 field container with `solver::makeBoxFieldContainer`, so the box constructor is
-the one place that defines mesh and MPI ownership. The diagnostics under
+the one place that defines mesh and MPI ownership for the runs of the manager;
+`chdr-vacuum-wave`, the benchmark of the inherited vacuum update, keeps its own
+periodic box and runs IPPL's Standard solver directly. The diagnostics under
 `../opt-in/diagnostics` borrow the difference operators and the O1-VS operator
 of `solver/operators` and `solver/formulation`; nothing in `core/` depends on them.
 
