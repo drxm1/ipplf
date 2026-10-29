@@ -1,5 +1,16 @@
 #import "../../../docs/manual/preamble.typ": *
 
-#let chapter = []
+#let chapter = [
+  #show: equate.with(sub-numbering: false)
 
-#standalone(title: "Formulations", chapter)
+  = Material formulations
+
+  #include "./docs/scTablePossibleOptionsMaterialTreatment.typ"
+
+  #include "./docs/scChewsGaugeDecouplingAndRewrite.typ"
+]
+
+#standalone(
+  title: "Material formulations",
+  chapter,
+)
