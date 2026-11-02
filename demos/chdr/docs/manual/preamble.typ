@@ -3,7 +3,7 @@
 #import "@preview/equate:0.3.3": equate
 #import "@preview/simple-todo:0.1.0": list-todos, todo
 
-// Shared typography for the full manual and standalone chapters.
+// Shared typography for the manual.
 #let manual-typography(body) = {
   set text(
     font: "Libertinus Serif",
@@ -44,11 +44,29 @@
 // Always register the bibliography so @key references can resolve. Only its
 // heading is conditional; an unused bibliography contributes no visible text.
 #let manual-references() = context {
+  // Temporary review markup for the added bibliography entries.
+  let proposed = cite.where(key: <xxxx>).or(cite.where(key: <yyyy>))
   bibliography(
     "references.bib",
     style: "ieee",
     title: if query(cite).len() > 0 [References] else { none },
   )
+  if query(proposed).len() > 0 {
+    block(
+      width: 100%,
+      inset: 10pt,
+      stroke: 0.7pt + rgb("315f86"),
+      fill: rgb("f4f8fc"),
+    )[
+      #set text(fill: rgb("234e70"))
+      #bibliography(
+        "references.bib",
+        style: "ieee",
+        title: none,
+        target: proposed,
+      )
+    ]
+  }
 }
 
 // The root controls chapter order. Enable the outline once it is useful.
@@ -57,15 +75,6 @@
 )[
   #manual-title(title)
   #if contents { outline(title: [Contents], depth: 2) }
-  #body
-  #manual-references()
-]
-
-// A chapter supplies its own headings. Its standalone rendering is discarded
-// when the root imports only the exported chapter content.
-#let standalone(body, title: "ChDR Manual") = manual-layout(
-  title: title,
-)[
   #body
   #manual-references()
 ]

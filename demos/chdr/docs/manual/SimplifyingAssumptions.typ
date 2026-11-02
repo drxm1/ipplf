@@ -17,5 +17,3 @@
 
   We impose no additional free surface charge or current at the dielectric interface, but bound polarization charge and current can occur as a response to the moving charge's field.
 ]
-
-#standalone(title: "Simplifying Assumptions", chapter)

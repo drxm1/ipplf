@@ -13,8 +13,5 @@
   #maxwellsEqsForOurMaterialModel.chapter
   #theVacuumUpdateInIPPL.chapter
   #theLevelContract.chapter
-  #theLevelContract.chapter
   #formulations.chapter
 ]
-
-// RECOMP

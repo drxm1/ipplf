@@ -31,5 +31,3 @@
   $
 
 ]
-
-#standalone(title: "Maxwell's equations for our material model", chapter)

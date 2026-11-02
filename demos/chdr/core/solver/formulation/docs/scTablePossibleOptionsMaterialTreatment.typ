@@ -11,7 +11,6 @@ With no free surface sources: $[E_t] = 0, thick [epsilon E_n] = 0, thick [vb(B)]
   stroke: none,
 
   [#text(
-    // fill: PSIblue,
     weight: "bold",
   )[O0 #h(2pt) Scale by $epsilon$\
     #text(size: 8pt, fill: black)[but stay in lorentz gauge]]],
@@ -25,22 +24,18 @@ With no free surface sources: $[E_t] = 0, thick [epsilon E_n] = 0, thick [vb(B)]
 
   table.hline(stroke: 0.4pt + luma(85%)),
   [#text(
-      // fill: PSIblue,
       weight: "bold",
     )[O1 #h(2pt) Chew's gauge]
   ],
   [
     $ div (epsilon vb(A)) = -epsilon^2 partial_t phi $
-    // #text(size: 7.5pt)[Generalized Lorenz gauge, $alpha = 1$.]
   ],
   [Modify the $(phi, vb(A))$ update to support this more general gauge. Elegant solution.],
 
   table.hline(stroke: 0.4pt + luma(85%)),
   [#text(
-      // fill: PSIblue,
       weight: "bold",
     )[O4 #h(2pt) Polarization]// \
-    // Charge + current
   ],
   [
     $ vb(P) = (epsilon - 1) vb(E) $
@@ -50,10 +45,8 @@ With no free surface sources: $[E_t] = 0, thick [epsilon E_n] = 0, thick [vb(B)]
 
   table.hline(stroke: 0.4pt + luma(85%)),
   [#text(
-      // fill: PSIblue,
       weight: "bold",
     )[O3 #h(2pt) Yee]// \
-    // Update $vb(E), vb(B)$
   ],
   [
     $

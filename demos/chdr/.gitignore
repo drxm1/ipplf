@@ -1,9 +1,15 @@
 # Generated Doxygen HTML
 /docs/html/
 
-# Compiled Typst documents
+# Compiled Typst manual
 /manual.pdf
+
+# vscode typst compiler artifact
+tinymist.lock
+
+# Chapter previews (legacy)
 /docs/manual/SimplifyingAssumptions.pdf
 /docs/manual/Units.pdf
 /docs/manual/preamble.pdf
 /core/solver/formulation/formulations.pdf
+/docs/manual/theVacuumUpdateInIPPL.pdf

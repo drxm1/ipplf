@@ -11,8 +11,3 @@
   #include "./docs/spacialPlacementConventionsCollocatedStaggered.typ"
 
 ]
-
-#standalone(
-  title: "The level contract: Conventions for placement of field components in time and space",
-  chapter,
-)

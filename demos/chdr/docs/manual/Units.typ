@@ -45,5 +45,3 @@
 
 
 ]
-
-#standalone(title: "Units", chapter)

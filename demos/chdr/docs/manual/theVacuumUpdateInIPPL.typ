@@ -33,6 +33,9 @@
     cal(A)^(n+1) = 2 cal(A)^n - cal(A)^(n-1) + h_t^2 (L_vb(h)[cal(A)^n] + cal(S)^n).
   $
   where $n$ is a step label, $cal(A) := (phi, vb(A))$, $cal(S) := (rho, vb(J))$ and
+  $(i,j,k)$ in the kernel stencils below are integer array indices.
+  When these kernels are used for staggered components, as in O1-VS,
+  the spatial locations follow @sec-spatial-placement.
   - $(L_vb(h)^"Standard"u) = (D_"xx"+D_"yy"+D_"zz") u, quad quad h_x^2 (D_"xx"u)_(i j k) = u_(i+1,j k) - 2 u_(i j k) + u_(i-1,j k)$
   - $(L_vb(h)^"NS"u)_(i j k) =
     (D_"zz" u)_(i j k) +
@@ -42,5 +45,3 @@
 
 
 ]
-
-#standalone(title: "The vacuum update in IPPL's existing FDTD Solvers", chapter)

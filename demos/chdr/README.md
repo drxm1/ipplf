@@ -107,26 +107,39 @@ notation from `@preview/physica:0.9.8`. The entry point assembles module-local
 chapter bodies. The bibliography is the regular, self-contained file
 [docs/manual/references.bib](docs/manual/references.bib).
 
-Install typst cli https://github.com/typst/typst#installation to build.
-Build the manual or a chapter from the IPPL repository root with Typst 0.14 or newer:
+Install the [Typst CLI](https://github.com/typst/typst#installation) to build.
+Use Typst 0.15 or newer. Build the manual from the IPPL repository root:
 
 ```sh
 typst compile --root demos/chdr demos/chdr/manual.typ
-typst compile --root demos/chdr demos/chdr/core/solver/formulation/formulations.typ
+typst watch --root demos/chdr demos/chdr/manual.typ
 ```
 
-Typst writes each PDF beside its source file. These document outputs are listed
-explicitly in `.gitignore`; add the matching PDF path when adding a new chapter
-so PDF figures remain trackable. Use `typst watch` in place of `typst compile`
-for live rebuilding. Use `--root demos/chdr` for nested chapter builds, or a wider
-root containing the manual. Imports and the bibliography path are relative to
-their source files, so editor previews can also use the enclosing repository root.
-Each chapter imports the preamble by its relative path, exports a `chapter`
-content block, and calls `standalone` after that definition. The root imports the
-block rather than including the standalone
-rendering. Start each chapter body with its level-one heading; the standalone
-wrapper adds no duplicate title. The root's optional `contents: true` enables an
-outline. Cross-chapter references require the referenced content in that build.
+`manual.typ` is the only compilation entry point. The first command writes
+`demos/chdr/manual.pdf`; the second rebuilds it as the sources change. From
+`demos/chdr`, the corresponding watch command is `typst watch manual.typ`.
+Configure editor previews to compile `manual.typ`, including when editing a
+chapter file.
+
+For Tinymist, set `tinymist.projectResolution` to `lockDatabase` in the editor
+settings. The local `tinymist.lock` identifies `manual.typ` as the entry point.
+After adding a chapter to the manual, or on a new machine, refresh Tinymist's
+dependency cache from `demos/chdr`:
+
+```sh
+tinymist compile --save-lock --when never --root . manual.typ
+```
+
+This associates imported chapter files with the manual. The `--when never`
+option leaves automatic PDF export to the existing `typst watch` process.
+
+Each chapter imports the preamble by its relative path and exports a `chapter`
+content block, starting with its level-one heading. The root imports these
+blocks in reading order, so references to equations in other chapters resolve
+within the complete document. Use ordinary `@label` references. The root's
+optional `contents: true` enables an outline. Generated manual and legacy chapter
+PDFs are ignored by explicit paths in `.gitignore`, so PDF figures remain
+trackable.
 
 `doxygen Doxyfile` in this directory writes the HTML reference of `core/`,
 `opt-in/`, `apps/` and `testing/`, with this file and the READMEs as pages, to

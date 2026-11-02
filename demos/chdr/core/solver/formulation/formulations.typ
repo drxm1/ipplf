@@ -11,8 +11,3 @@
 
   #include "./docs/scO1VSImplementation.typ"
 ]
-
-#standalone(
-  title: "Material formulations",
-  chapter,
-)
