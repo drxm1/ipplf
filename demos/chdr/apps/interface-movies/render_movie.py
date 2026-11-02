@@ -79,7 +79,7 @@ def display_geometry(grid, field, plane):
     return centres, extent, shifted
 
 
-def draw_field(ax, values, grid, epsilon, field, plane, limit):
+def draw_field(ax, values, grid, epsilon, field, plane, limit, length_unit=""):
     """Draw one field slice and material outline in physical coordinate order."""
     horizontal, vertical, component = plane_info(plane)
     centres, extent, shifted = display_geometry(grid, field, plane)
@@ -89,21 +89,25 @@ def draw_field(ax, values, grid, epsilon, field, plane, limit):
         ax.contour(*centres, epsilon[:, :, 0],
                    levels=[(epsilon.min() + epsilon.max()) / 2],
                    colors="black", linewidths=0.8)
-    ax.set(xlabel="xyz"[horizontal], ylabel="xyz"[vertical],
+    ax.set(xlabel="xyz"[horizontal] + length_unit, ylabel="xyz"[vertical] + length_unit,
            xlim=extent[:2], ylim=extent[2:])
     return artist
 
 
 def energy_scale(energy):
-    """Prefer the initial discrete total; zero-start datasets use their peak instead."""
-    initial = abs(float(energy["total"][0]))
-    if initial > 0:
-        return initial, "initial discrete total"
+    """Prefer the first saved discrete total; a zero first sample uses the saved peak."""
+    first = abs(float(energy["total"][0]))
+    if first > 0:
+        return first, "first saved discrete total"
     return max(float(np.abs(energy["total"]).max()), 1e-30), "peak discrete total"
 
 
-def draw_energy(ax, energy, contact):
+def draw_energy(ax, energy, contact, time_unit="c = 1"):
     """Distinguish the cross-level discrete diagnostic from the aligned field-energy sum."""
+    if energy.size == 0:
+        ax.set(xlabel=f"time ({time_unit})", ylabel="energy")
+        ax.text(0.5, 0.5, "No energy samples saved", transform=ax.transAxes, ha="center")
+        return
     scale, label = energy_scale(energy)
     curves = (("vacuum", "discrete: vacuum", "-", 0.5),
               ("dielectric", "discrete: dielectric", "-", 0.5),
@@ -114,15 +118,24 @@ def draw_energy(ax, energy, contact):
             ax.plot(energy["time"], energy[name] / scale, style, label=title, alpha=alpha)
     if contact is not None:
         ax.axvline(contact, color="gray", linestyle=":", label="boundary signal: 1% of peak")
-    ax.set(xlabel="time (c = 1)", ylabel=f"energy / {label}")
+    ax.set(xlabel=f"time ({time_unit})", ylabel=f"energy / {label}")
     ax.legend(loc="best", ncols=2, fontsize=7)
 
 
 def read_metadata(directory):
-    """Read the simple key=value run record; legacy outputs have no plane declaration."""
+    """Read the CSV case metadata; legacy outputs have no plane declaration."""
     with (directory / "energy.csv").open() as stream:
         line = stream.readline()
     return dict(token.split("=", 1) for token in line.split() if "=" in token)
+
+
+def output_units(directory, field):
+    """Use the common record for SI labels; older saved runs use normalized units."""
+    path = directory / "run.json"
+    system = json.loads(path.read_text())["output_factors"]["system"] if path.exists() else "normalized"
+    if system == "si":
+        return "s", "V/m" if field == "E_raw" else "T", " (m)"
+    return "c = 1", "normalized units", ""
 
 
 class MovieRenderer:
@@ -133,6 +146,7 @@ class MovieRenderer:
         metadata = read_metadata(args.directory)
         if self.field is None:
             self.field = "B_raw" if metadata.get("polarization") == "TM" else "E_raw"
+        self.time_unit, self.field_unit, self.length_unit = output_units(self.directory, self.field)
         self.plane = args.plane or metadata.get("plane", "xy")
         if metadata.get("polarization") == "TM":
             self.caveat = "Preliminary: nonzero Gauss residual under Mur"
@@ -163,10 +177,12 @@ class MovieRenderer:
         self.fig, (self.field_ax, energy_ax) = plt.subplots(
             2, 1, figsize=(7, 8), height_ratios=(3, 1))
         self.artist = draw_field(self.field_ax, values, grid, self.epsilon,
-                                 self.field, self.plane, self.limit)
-        self.fig.colorbar(self.artist, ax=self.field_ax, label=f"{self.label} (normalized units)")
-        draw_energy(energy_ax, self.energy, self.contact)
-        self.marker = energy_ax.axvline(self.energy["time"][0], color="black", linestyle="-",
+                                 self.field, self.plane, self.limit, self.length_unit)
+        self.fig.colorbar(self.artist, ax=self.field_ax, label=f"{self.label} ({self.field_unit})")
+        draw_energy(energy_ax, self.energy, self.contact, self.time_unit)
+        if self.energy.size == 0 and len(self.frames) > 1:
+            energy_ax.set_xlim(self.frames[0]["time"], self.frames[-1]["time"])
+        self.marker = energy_ax.axvline(field_time(grid, self.field), color="black", linestyle="-",
                                         linewidth=1, label="current frame")
         energy_ax.legend(loc="best", ncols=2, fontsize=7)
         self.fig.suptitle(self.caveat)
@@ -177,7 +193,8 @@ class MovieRenderer:
         values, grid = self.frame(index)
         self.artist.set_data(values[:, :, plane_info(self.plane)[2]])
         time = field_time(grid, self.field)
-        self.field_ax.set_title(f"{self.label} at t = {time:.3f}; black line: dielectric face")
+        self.field_ax.set_title(
+            f"{self.label} at t = {time:.3g} ({self.time_unit}); black line: dielectric face")
         self.marker.set_xdata([time, time])
         return self.artist, self.marker
 
@@ -192,7 +209,7 @@ class MovieRenderer:
         plt.close(self.fig)
         self.save_overview(output)
         fig, ax = plt.subplots(figsize=(7, 3))
-        draw_energy(ax, self.energy, self.contact)
+        draw_energy(ax, self.energy, self.contact, self.time_unit)
         fig.tight_layout()
         fig.savefig(output.with_name(output.stem + "-energy.png"), dpi=160)
         plt.close(fig)
@@ -205,9 +222,9 @@ class MovieRenderer:
         for ax, index in zip(axes, indices):
             values, grid = self.frame(index)
             artist = draw_field(ax, values, grid, self.epsilon,
-                                self.field, self.plane, self.limit)
-            ax.set_title(f"t = {field_time(grid, self.field):.2f}")
-        fig.colorbar(artist, ax=list(axes), label=self.label, shrink=0.8)
+                                self.field, self.plane, self.limit, self.length_unit)
+            ax.set_title(f"t = {field_time(grid, self.field):.3g} ({self.time_unit})")
+        fig.colorbar(artist, ax=list(axes), label=f"{self.label} ({self.field_unit})", shrink=0.8)
         fig.savefig(output.with_name(output.stem + "-overview.png"), dpi=140)
         plt.close(fig)
 

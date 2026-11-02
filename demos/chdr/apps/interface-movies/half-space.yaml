@@ -1,0 +1,13 @@
+schema_version: 1
+case: half-space
+units:
+  system: normalized
+output:
+  directory: open-half-space
+observations:
+  fields:
+    every: 8
+    include_final: true
+  diagnostics:
+    every: 8
+    include_final: true

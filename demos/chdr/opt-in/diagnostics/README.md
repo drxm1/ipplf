@@ -402,7 +402,7 @@ plain-sum reduction and one `MPI_Allreduce` and returns the same value on every 
 summation order is not fixed, so the last bits can depend on the decomposition (deduction from
 [mpi2023Standard41, section 6.9.1]).
 
-`FieldRunOutput::write` (`opt-in/output/FieldRunOutput.h`) calls both energy functions, and rank
+`FieldRunOutput::writeDiagnostics` (`opt-in/output/FieldRunOutput.h`) calls both energy functions, and rank
 zero appends one row to `energy.csv`. The first line is `# ` and the case metadata; the header is
 `step,time,vacuum,dielectric,total,scalar,absolute,field_energy`. `time` is `vectorTime_m`, the
 electric-field time \f$(k-1/2)\Delta t\f$ of \f$W_A\f$ and \f$W_h\f$. `vacuum`, `dielectric`,

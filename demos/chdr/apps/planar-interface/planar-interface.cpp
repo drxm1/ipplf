@@ -1,116 +1,198 @@
 /** @file planar-interface.cpp
- * @brief Periodic dielectric packet demonstrations and a plane-wave reflection measurement.
+ * @brief Existing periodic interface cases using common input, observations and run records.
  */
+#include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <memory>
+#include <optional>
 #include <sstream>
+#include <vector>
 
-#include "InterfaceRun.h"
-#include "PacketStart.h"
-#include "PlanePulse.h"
-#include "core/material/PlanarSlab.h"
+#include "apps/planar-interface/InterfaceRun.h"
+#include "apps/planar-interface/PacketCase.h"
+#include "apps/planar-interface/PlanePulse.h"
+#include "core/input/Application.h"
+#include "core/input/RunInput.h"
+#include "core/output/RunRecord.h"
 #include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::apps::planarInterface {
-    /// Record the existing packet case in code axis order, with the x-z display plane explicit.
-    std::string packetMetadata(const std::string& name, const RunBox& box,
-                               const SolverSettings& settings, const material::PlanarSlab& slab,
-                               const PacketStart& packet, int steps) {
+    /// Translate the existing command line into the same input used by YAML runs.
+    input::RunInput legacyInput(const std::vector<std::string>& arguments) {
+        if (arguments.empty())
+            throw std::invalid_argument("Use CASE [--smoke] [--output DIRECTORY]");
+        input::RunInput result;
+        result.caseName_m = arguments.front();
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            if (arguments[i] == "--smoke")
+                result.parameters_m["smoke"] = "true";
+            else if (arguments[i] == "--output" && i + 1 < arguments.size())
+                result.outputDirectory_m = arguments[++i];
+            else
+                throw std::invalid_argument("Use CASE [--smoke] [--output DIRECTORY]");
+        }
+        if (result.caseName_m == "plane" && arguments.size() != 1)
+            throw std::invalid_argument("The legacy plane command accepts no additional options");
+        return result;
+    }
+
+    /// Preserve renderer metadata and explicitly identify the existing packet's effective data.
+    std::string packetMetadata(const PacketCase& selected) {
+        const auto& box    = selected.box_m;
+        const auto& packet = selected.start_m;
         std::ostringstream text;
-        text << std::setprecision(17) << "case=" << name << " plane=zx cells=" << box.cells_m[0]
-             << ',' << box.cells_m[1] << ',' << box.cells_m[2] << " steps=" << steps
-             << " h=" << box.spacing_m[0] << ',' << box.spacing_m[1] << ',' << box.spacing_m[2]
-             << " S=" << settings.safetyFactor_m << " epsilon=2.13 slab=" << slab.lower_m << ','
-             << slab.upper_m << " centre=" << packet.centreX_m << ',' << packet.centreZ_m
+        text << std::setprecision(17) << "case=" << selected.name_m
+             << " plane=zx cells=" << box.cells_m[0] << ',' << box.cells_m[1] << ','
+             << box.cells_m[2] << " steps=" << selected.steps_m << " h=" << box.spacing_m[0] << ','
+             << box.spacing_m[1] << ',' << box.spacing_m[2]
+             << " S=" << selected.solver_m.safetyFactor_m
+             << " epsilon=2.13 slab=" << selected.slab_m.lower_m << ',' << selected.slab_m.upper_m
+             << " centre=" << packet.centreX_m << ',' << packet.centreZ_m
              << " widths=" << packet.width_m << ',' << packet.transverseWidth_m
              << " k=" << packet.waveNumber_m << " direction=" << packet.directionX_m << ','
              << packet.directionZ_m << " TM=" << packet.tm_m;
         return text.str();
     }
 
-    /** @brief Run one named, reproducible input; --smoke selects a small four-step box. */
-    int demonstration(int argc, char** argv) {
-        if (argc < 2)
-            throw std::invalid_argument(
-                "A case name is required: plane, half-space, slab, brewster-te, brewster-tm");
-        const std::string name = argv[1];
-        bool smoke             = false;
-        std::string directory;
-        for (int i = 2; i < argc; ++i) {
-            const std::string arg = argv[i];
-            if (arg == "--smoke")
-                smoke = true;
-            else if (arg == "--output" && i + 1 < argc)
-                directory = argv[++i];
-            else
-                throw std::invalid_argument("Use CASE [--smoke] [--output NEW_DIRECTORY]");
+    /// Save actual solver settings and resolved measurement schedules after successful output.
+    void recordPacket(const input::RunInput& request, const PacketCase& selected, InterfaceRun& run,
+                      const std::string& metadata, const output::FieldRunSettings& observations) {
+        auto description = output::describeRun("planar-interface", selected.box_m, run.solver(),
+                                               selected.steps_m, metadata);
+        output::recordFieldRunOutput(description, request, observations);
+        output::writeRunRecord(request.outputDirectory_m, request, description,
+                               run.solver().A_n.getLayout().comm);
+    }
+
+    /// Keep output sampling in the manager callback and complete files after successful evolution.
+    void runPacketOutput(const input::RunInput& request, const PacketCase& selected,
+                         InterfaceRun& run) {
+        if (request.outputDirectory_m.empty()) {
+            run.advance(selected.steps_m, InterfaceRun::Observer{});
+            return;
         }
-        if (name == "plane") {
-            if (smoke || !directory.empty())
-                throw std::invalid_argument("plane accepts no --smoke or --output option");
-            const NormalPlane p;
-            const auto result = measurePlane(p, false);
-            if (ippl::Comm->rank() == 0) {
-                const double n = std::sqrt(p.epsilon_m), r = (1 - n) / (1 + n);
-                const double kt = 2 * std::asin(n * std::sin(p.omega0_m * p.dt_m / 2) / p.dt_m);
-                // Sine matching at the two adjacent cell centres gives the exact TE lattice
-                // coefficients [yee1966MaxwellIsotropicMedia, Eqs. (5)-(6); deduction].
-                std::cout << std::setprecision(17) << "r=" << result.r_m[0]
-                          << " t=" << result.t_m[0] << " Fresnel=" << r << "," << 1 + r
-                          << " lattice="
-                          << std::sin((p.kx0_m - kt) / 2) / std::sin((p.kx0_m + kt) / 2) << ","
-                          << std::sin(p.kx0_m) / std::sin((p.kx0_m + kt) / 2)
-                          << " energy drift=" << result.drift_m << '\n';
-            }
-            return 0;
-        }
-        if (name != "half-space" && name != "slab" && name != "brewster-te"
-            && name != "brewster-tm")
-            throw std::invalid_argument("Cases: plane, half-space, slab, brewster-te, brewster-tm");
-        const bool brewster = name.starts_with("brewster");
-        const int n = smoke ? 32 : 512, steps = smoke ? 4 : brewster ? 1000 : 560;
-        const double scale = n / 512.0;
-        const material::PlanarSlab slab{0, name == "slab" ? 156 * scale : 0, 230 * scale};
-        const RunBox box{{n, 2, n}, {1, 1, 1}};
-        const SolverSettings settings;
-        InterfaceRun run(box, material::TwoMaterialMap{slab, 2.13, 1.0}, settings);
-        PacketStart packet;
-        packet.slab_m            = slab;
-        packet.centreX_m         = 371 * scale;
-        packet.centreZ_m         = n / (brewster ? 4.0 : 2.0);
-        packet.length_m          = n;
-        packet.width_m           = 29 * scale;
-        packet.transverseWidth_m = 45 * scale;
-        packet.tm_m              = name == "brewster-tm";
-        if (brewster) {
-            packet.directionX_m = -1 / std::sqrt(3.13);
-            packet.directionZ_m = std::sqrt(2.13 / 3.13);
-        }
-        run.load(packet);
-        std::unique_ptr<chdr::output::FieldRunOutput> output;
-        if (!directory.empty())
-            output = std::make_unique<chdr::output::FieldRunOutput>(
-                directory, box, run.solver(), run.material(),
-                packetMetadata(name, box, settings, slab, packet, steps));
-        run.advance(steps, [&](long long k, auto& state, const auto& owner) {
-            if (output && (k % 10 == 0 || k == steps))
-                output->write(k, state, owner);
+        const auto observations = output::fieldRunSettings(request, selected.frameEvery_m);
+        const auto metadata     = packetMetadata(selected);
+        output::FieldRunOutput writer(request.outputDirectory_m, selected.box_m, run.solver(),
+                                      run.material(), metadata, request.units_m);
+        run.advance(selected.steps_m, [&](long long k, auto& state, const auto& owner) {
+            writer.observe(k, state, owner, selected.steps_m, observations);
         });
-        if (output)
-            output->finish();
-        return 0;
+        writer.finish();
+        recordPacket(request, selected, run, metadata, observations);
+    }
+
+    /// Execute a packet preset without introducing a second initialization or stepping path.
+    void runPacket(const input::RunInput& request) {
+        auto selected =
+            packetCase(request.caseName_m, input::booleanParameter(request, "smoke", false));
+        InterfaceRun run(selected.box_m, material::TwoMaterialMap{selected.slab_m, 2.13, 1.0},
+                         selected.solver_m);
+        selected.steps_m = input::resolvedSteps(request, run.solver().getDt(), selected.steps_m);
+        run.load(selected.start_m);
+        runPacketOutput(request, selected, run);
+    }
+
+    /// Preserve the fixed probe gates and reference case while accepting its full duration in SI.
+    int checkPlaneInput(const input::RunInput& request, const NormalPlane& p) {
+        input::validateObservationNames(request, {"fourier", "diagnostics"});
+        if (input::booleanParameter(request, "smoke", false)
+            || input::resolvedSteps(request, p.dt_m, p.steps_m) != p.steps_m)
+            throw std::invalid_argument(
+                "plane requires its existing mesh and complete probe gates");
+        const auto fourier = input::observationSchedule(request, "fourier", {});
+        const auto energy =
+            input::observationSchedule(request, "diagnostics", {.includeFinal_m = true});
+        if (!input::observationEnabled(request, "fourier") || fourier.every_m != 1
+            || fourier.first_m != 0 || fourier.last_m != -1)
+            throw std::invalid_argument("plane requires Fourier sampling at every completed step");
+        if (!input::observationEnabled(request, "diagnostics") || energy.first_m != 0
+            || energy.last_m != -1 || !energy.includeFinal_m)
+            throw std::invalid_argument(
+                "plane requires diagnostics from its initial through final state");
+        return energy.every_m;
+    }
+
+    /// Preserve the existing dimensionless comparison printed by the plane case.
+    void printPlaneResult(const NormalPlane& p, const PlaneResult& result) {
+        if (ippl::Comm->rank() != 0)
+            return;
+        const double n = std::sqrt(p.epsilon_m), r = (1 - n) / (1 + n);
+        const double kt = 2 * std::asin(n * std::sin(p.omega0_m * p.dt_m / 2) / p.dt_m);
+        // Sine matching at the two adjacent cell centres gives the exact TE lattice
+        // coefficients [yee1966MaxwellIsotropicMedia, Eqs. (5)-(6); deduction].
+        std::cout << std::setprecision(17) << "r=" << result.r_m[0] << " t=" << result.t_m[0]
+                  << " Fresnel=" << r << ',' << 1 + r
+                  << " lattice=" << std::sin((p.kx0_m - kt) / 2) / std::sin((p.kx0_m + kt) / 2)
+                  << ',' << std::sin(p.kx0_m) / std::sin((p.kx0_m + kt) / 2)
+                  << " energy drift=" << result.drift_m << '\n';
+        if (!std::cout)
+            throw std::runtime_error("Failed to write plane comparison");
+    }
+
+    /// Save existing complex amplitudes; only their frequency coordinate has physical units.
+    void writePlaneResult(const input::RunInput& request, const PlaneResult& result) {
+        if (request.outputDirectory_m.empty() || ippl::Comm->rank() != 0)
+            return;
+        std::ofstream file(request.outputDirectory_m + "/spectra.csv");
+        file << std::setprecision(17)
+             << (request.units_m.isSI() ? "angular_frequency_rad_per_s" : "angular_frequency")
+             << ",r_real,r_imag,t_real,t_imag\n";
+        for (std::size_t f = 0; f < result.omega_m.size(); ++f)
+            file << result.omega_m[f] * request.units_m.frequencyFactor() << ','
+                 << result.r_m[f].real() << ',' << result.r_m[f].imag() << ','
+                 << result.t_m[f].real() << ',' << result.t_m[f].imag() << '\n';
+        file.close();
+        if (!file)
+            throw std::runtime_error("Failed to write plane spectra");
+    }
+
+    /// Describe the measured case while its manager still owns the solver and its layout.
+    output::RunRecordDescription describePlane(const NormalPlane& p, InterfaceSolver& solver,
+                                               const input::RunInput& request, int cadence) {
+        const simulation::RunBox box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m};
+        auto result = output::describeRun("planar-interface", box, solver, p.steps_m,
+                                          "case=plane polarization=TE epsilon=2.13");
+        output::recordObservation(result, "fourier", {});
+        output::recordObservation(result, "diagnostics",
+                                  {.every_m = cadence, .includeFinal_m = true});
+        result.effective_m["output/spectra/amplitudes_units"] = "dimensionless";
+        result.effective_m["output/spectra/angular_frequency_units"] =
+            request.units_m.isSI() ? "rad/s" : "normalized";
+        return result;
+    }
+
+    /// Run the existing plane measurement and save its result through the common record writer.
+    void runPlane(const input::RunInput& request) {
+        const NormalPlane p;
+        const int cadence = checkPlaneInput(request, p);
+        output::prepareRunDirectory(request.outputDirectory_m, ippl::Comm->getCommunicator());
+        std::optional<output::RunRecordDescription> description;
+        const auto result = measurePlane(p, false, cadence, 0, {}, [&](auto& solver, const auto&) {
+            description = describePlane(p, solver, request, cadence);
+        });
+        printPlaneResult(p, result);
+        writePlaneResult(request, result);
+        output::writeRunRecord(request.outputDirectory_m, request, *description,
+                               ippl::Comm->getCommunicator());
+    }
+
+    /// Validate case-specific keys before constructing any distributed field state.
+    void runConfigured(const input::RunInput& request) {
+        input::validateParameters(request, {"smoke"});
+        if (request.caseName_m == "plane")
+            return runPlane(request);
+        input::validateObservationNames(request, {"fields", "diagnostics"});
+        if (request.outputDirectory_m.empty())
+            for (const auto& [name, options] : request.observations_m)
+                if (input::observationEnabled(request, name))
+                    throw std::invalid_argument("Packet observation '" + name
+                                                + "' requires an output directory");
+        runPacket(request);
     }
 }  // namespace chdr::apps::planarInterface
+
 int main(int argc, char** argv) {
-    ippl::initialize(argc, argv);
-    int result = 0;
-    try {
-        result = chdr::apps::planarInterface::demonstration(argc, argv);
-    } catch (const std::exception& error) {
-        std::cerr << error.what() << '\n';
-        result = 1;
-    }
-    ippl::finalize();
-    return result;
+    return chdr::input::runApplication(argc, argv, chdr::apps::planarInterface::legacyInput,
+                                       chdr::apps::planarInterface::runConfigured);
 }
