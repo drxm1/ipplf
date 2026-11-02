@@ -12,7 +12,6 @@
 #include <complex>
 #include <gtest/gtest.h>
 #include <limits>
-#include <memory>
 
 #include "VacuumDiagnostics.h"
 #include "VacuumSetup.h"
@@ -295,13 +294,9 @@ namespace {
      */
     class VacuumDiagnosticsTest : public ::testing::Test {
     protected:
-        void SetUp() override {
-            checkLocalDomain(fields_m.getFL());
-            initializeFieldStorage(fields_m);
-            solver_m = std::make_unique<Solver>(fields_m.getJ(), fields_m.getE(), fields_m.getB());
-        }
-        Fields fields_m = makePeriodicFieldContainer();
-        std::unique_ptr<Solver> solver_m;
+        VacuumSimulation run_m{vacuumBox(), VacuumMaterial{}, vacuumSettings(vacuumBox())};
+        Fields& fields_m = run_m.fields();
+        Solver* solver_m = &run_m.solver();
     };
 
     TEST_F(VacuumDiagnosticsTest, MatchesInitialReferenceAndOwnership) {

@@ -1,7 +1,9 @@
 # Periodic Standard vacuum wave
 
 This source-free laboratory-frame benchmark advances a periodic sinusoid for one
-full period with IPPL's existing Standard solver. It reports diagnostic CSV on
+full period with IPPL's existing Standard update through `ChDRSimulationManager`.
+Its case settings retain the owner-free update, collocated R1 reconstruction and
+the original timestep. It reports diagnostic CSV on
 rank zero and fails with nonzero status when a fixed acceptance check fails.
 Optional VTK snapshots preserve the raw E/B arrays and their distinct timestamps;
 companion checks read them with actual VTK/ParaView readers.
@@ -33,21 +35,71 @@ With `IPPL_USE_STANDARD_FOLDERS=OFF`, the executable is under
 | `--fine` | 16 × 16 × 128 cells; 256 steps to newest-potential time 1 |
 | `--steps N` | Partial run with 0 ≤ N ≤ the chosen grid's full-period step count |
 | `--output DIRECTORY` | Save owned E/B fields at quarter periods and the final state |
+| `--input FILE` | Read the common strict YAML schema; cannot be combined with the legacy case options |
 
 `--steps 0` measures initialization; `--steps 1` checks one update.
-The timestep comes from the solver. There is no adjustable CFL option.
+The case selects the original `min(spacing)/2` timestep explicitly; the manager
+checks it against the Standard bound. There is no adjustable CFL option.
 
-Omitting `--output` keeps the run CSV-only. The output directory must be new or
-empty, shared by all MPI ranks, and supplied identically on each rank. For example:
+The legacy arguments and YAML input configure the same run routine. For example,
+[`coarse.yaml`](coarse.yaml) selects a one-step coarse run with normalized output:
+
+```sh
+build/bin/chdr-vacuum-wave --input demos/chdr/apps/vacuum-wave/coarse.yaml > wave.csv
+```
+
+The supported cases are `coarse` and `fine`; `parameters` must be empty. Both
+retain the existing benchmark checks. `observations.fields` accepts the common
+`every`, `first`, `last`, `include_final` and `enabled` settings. Its default is
+quarter-period output including the final state. `diagnostics` must remain enabled
+on every state because phase tracking requires consecutive samples. Field output
+cadence does not change the diagnostic checkpoints or acceptance checks.
+An explicitly enabled `fields` observation requires an output directory;
+`fields: {enabled: false}` is also valid without one.
+
+For SI input and output, replace the example's units with:
+
+```yaml
+units:
+  system: si
+  length_m: 0.001
+  charge_density_C_m3: 0.000001
+```
+
+The length scale is the physical wavelength of this fixed normalized case. The
+common [unit conversion](../../core/input/UnitSystem.h) supplies the field and
+time scales. `run.duration` may replace `run.steps`; it is in seconds for SI
+input and must correspond to an integer number of the case's time steps, at most
+one period. The numerical state and acceptance checks stay in solver units.
+Conversion occurs when writing CSV and VTK. In SI output, the time columns are
+seconds, `phaseSpeed` is metres per second, and `energyE`, `energyB` and `energy`
+are joules. An SI-only `#` line before the CSV header states these units and the
+supplied length and charge-density scales, including for stdout-only runs.
+The errors, normalized modal coefficient (`phaseReal`, `phaseImag`,
+`phaseAmplitude`), phase increment and count remain dimensionless. The energy
+invariant remains normalized, as defined in [VacuumEnergy.h](VacuumEnergy.h),
+and is not identified with physical field energy.
+The raw electric and magnetic energies still belong to different times.
+
+Without an output directory, the run writes CSV to stdout. Field output requires
+a new or empty directory, shared by all MPI ranks and supplied identically on
+each rank. For example:
 
 ```sh
 OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave --output wave-run > wave.csv
 ```
 
+A successful run with an output directory also writes `run.json`, including the
+input, resolved observation schedules, actual timestep, solver conventions and
+unit scales. `effective/output/stdout_csv` records the CSV's units. Disabling field
+output still permits this record to be written; the directory must remain new or
+empty and is checked before time stepping. An existing `run.json` is not overwritten.
+
 Open `wave-run/wave.pvti.series` in ParaView; [ViewingGuide.org](ViewingGuide.org)
 explains array selection, timestamps, camera orientation and the optional headless
-rendering script. A full run saves five frames. `--steps 0` saves initialization;
-`--steps 1` saves initialization and the final one-step state.
+rendering script. With the default field schedule, a full run saves five frames,
+`--steps 0` saves initialization and `--steps 1` saves initialization and the final
+one-step state.
 
 IPPL processes its options first. Its current initialization can exit with status
 zero before the benchmark runs, including for help/version and some invalid option
@@ -71,7 +123,8 @@ are “FDTD for Wave Equation” and “Numerical Dispersion in FDTD,” (3.11)�
 
 We sample the exact wave at 0 and -dt to supply the two histories required by
 the three-level update. The [Standard solver](../../../../src/MaxwellSolvers/StandardFDTDSolver.hpp)
-chooses `dt = min(spacing)/2`: 1/128 coarse and 1/256 fine.
+originally chose `dt = min(spacing)/2`: 1/128 coarse and 1/256 fine. The shared
+manager now receives that same value explicitly from the vacuum case settings.
 
 | After n completed solves | Physical reference time |
 | --- | --- |
@@ -135,7 +188,9 @@ uses the fields' actual global origin, spacing and owned extents.
 
 Field Data records `potential_time`, `E_time`, `B_time`, `dt`, `step` and
 `normalization`. Code 1 denotes the dimensionless convention above, with no SI
-scale assigned. ASCII doubles use round-trip precision and the classic locale.
+scale assigned. Code 0 denotes SI output: geometry in metres, times in seconds,
+E in volts per metre and B in tesla. ASCII doubles use round-trip precision and
+the classic locale.
 These choices follow [VTK XML formats](https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html),
 [VTK time metadata](https://docs.vtk.org/en/latest/design_documents/IOXMLTimeInFieldData.html)
 and [ParaView temporal series](https://docs.paraview.org/en/latest/UsersGuide/dataIngestion.html#handling-temporal-file-series).
@@ -159,7 +214,7 @@ There is one row for every measured state, including step zero:
 | `phaseIncrement,phaseSpeed` | Signed increment in radians and cumulative speed |
 | `count` | Global owned-cell count: 4096 coarse, 32768 fine |
 | `energyE,energyB,energy` | Field energies `0.5*hx*hy*hz*sum(abs(E)^2)`, `0.5*hx*hy*hz*sum(abs(B)^2)` over owned cells, and their sum; diagnostic only, no acceptance check |
-| `energyInvariant` | Cross-level energy of the newest two potential histories, labelled `timeE`; conserved by the source-free periodic update; diagnostic only |
+| `energyInvariant` | Normalized cross-level energy of the newest two potential histories, labelled `timeE`; conserved by the source-free periodic update; diagnostic only, also unscaled for SI output |
 
 E and B are summed at their own raw times (`timeE`, `timeB`), so `energy` adds two
 different times and is not conserved exactly. `energyInvariant` is the conserved
@@ -200,8 +255,11 @@ Start with [`vacuum-wave.cpp`](vacuum-wave.cpp) and the [shared setup](VacuumSet
 [VacuumDiagnostics.h](VacuumDiagnostics.h) defines measurement and phase state;
 [VacuumChecks.h](VacuumChecks.h) applies the fixed policy.
 [FieldOutput.h](../../core/output/FieldOutput.h) handles synchronous collective file output. The
-[field container](../../../fel/FELFieldContainer.hpp) owns mesh/layout and E/B/J
-and must outlive the solver. Tests and source comments document the independent
+[simulation manager](../../core/simulation/ChDRSimulationManager.h) owns the field
+container, material and solver. Its `advance(steps, callback)` observes the initial
+state and each completed solve. That callback runs the existing diagnostics and
+uses the shared schedule predicate to select field frames. Each frame publishes
+the VTK series. Tests and source comments document the independent
 references and numerical assumptions.
 
 ## Writer extensions
