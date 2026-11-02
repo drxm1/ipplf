@@ -1,7 +1,7 @@
 # Open-box dielectric interface movies
 
 Build `interface-movies` with `IPPL_ENABLE_CHDR=ON`.
-Lengths use cell units; the speed of light, vacuum permittivity and vacuum
+By default lengths use cell units; the speed of light, vacuum permittivity and vacuum
 permeability are one. Movie plots use z horizontally, x vertically and y out
 of plane. The two y cells are periodic. The packet cases of
 [planar-interface](../planar-interface/README.md) write the same output format
@@ -10,6 +10,7 @@ and are rendered with the `render_movie.py` described here.
 ## Open-box annulus movies
 
 ```sh
+OMP_NUM_THREADS=1 interface-movies --input half-space.yaml
 OMP_NUM_THREADS=1 interface-movies half-space --output open-half-space
 OMP_NUM_THREADS=1 interface-movies brick --output open-brick
 OMP_NUM_THREADS=1 interface-movies slab --output open-slab
@@ -27,6 +28,20 @@ The output directory must be new or empty. Add `--smoke` for a 64 by 2 by
 64 mesh and four steps. `--steps N` overrides the case's duration. Full cases
 use a 600 by 2 by 600 mesh with unit spacing and a frame every eight steps.
 Two-rank runs can use `mpiexec --bind-to none -n 2 interface-movies ...`.
+
+`--input FILE` uses the [common YAML schema](../../core/input/README.md).
+[half-space.yaml](half-space.yaml) selects the existing full half-space case.
+The historical commands are translated into the same input and use the same
+setup and execution path. YAML cannot be combined with legacy case overrides.
+
+All eight cases accept `parameters: {smoke: true}`, optional `run.steps` or
+`run.duration`, and observations named `fields` and `diagnostics`. The output
+directory is required. Both observations default to every eight completed
+steps, including state zero and the final state. Their schedules can be changed
+independently with `first`, `every`, `last`, `include_final` and `enabled`.
+`diagnostics` selects the existing energy calculations; `fields` selects VTK
+frames. Disabling diagnostics still permits field rendering. Disabling fields
+leaves no frames for the renderer.
 
 The relative permittivity is 2.13 inside the following rectangles and one
 outside. Each rectangle is uniform along y; all open x/z faces remain in vacuum.
@@ -75,8 +90,13 @@ constraint preservation by the later Mur update. `measure_tm_constraints.py`
 records the weighted electric divergence at every saved time, separately in
 the interior and boundary band, in `constraints.csv`. It excludes the lowest
 x/z cell layers because their backward stencils need exterior E samples that
-are not stored. Its dimensionless residual uses the initial displacement-field
-peak and the smaller x/z spacing as a fixed normalization.
+are not stored. Its dimensionless residual uses the first saved peak of
+relative permittivity times E and the smaller x/z spacing as a fixed normalization.
+For SI data, a comment in `constraints.csv` states the column units: seconds for
+`electric_time`, V/m² for the divergence columns and V/m for `displacement_peak`.
+The latter column contains relative permittivity times E, without vacuum
+permittivity. `div_scaled_initial` remains dimensionless and uses the first saved
+frame even when the field schedule omits state zero.
 The TM movie carries a visible warning about its nonzero Gauss residual under
 Mur; the recorded residual is a limitation of this demonstration, not evidence
 of a constraint-preserving open boundary.
@@ -86,6 +106,18 @@ of a constraint-preserving open boundary.
 ParaView can open `wave.pvti.series` and `material.pvti`. Field metadata records
 component offsets, timestep and separate sample times: E is at the half step
 and raw B at the integer step. The renderer uses those times and offsets.
+After successful output finalization, `run.json` records the input, effective
+solver settings, resolved observation schedules, unit factors and build/execution
+information. Case parameters in the CSV comment and the record's `effective`
+section retain normalized values.
+
+SI input/output requires `units: {system: si, length_m: ..., charge_density_C_m3: ...}`;
+both scales must be positive. These scales set the physical interpretation of
+the existing normalized preset. `run.duration` is then in seconds and must equal
+an integer number of solver steps. Saved coordinates are in metres, times in
+seconds, electric fields in V/m and magnetic fields in teslas. See the
+[common input documentation](../../core/input/README.md#normalized-values-and-si)
+for the conversion definitions.
 
 The first line of `energy.csv` records the case parameters. The `time` column
 is the electric-field time, `(k - 1/2) dt`, shared by the discrete vector
@@ -96,6 +128,13 @@ field energy of `AlignedFieldEnergy.h`; both are defined, with their
 references, in the
 [diagnostics README](../../opt-in/diagnostics/README.md). The two quantities
 are distinct; neither column includes the flux through the open faces.
+These existing energy columns retain their normalized values in both unit modes.
+SI output appends `field_energy_J`, the physical aligned field energy in joules;
+it does not assign joules to the potential invariants. The CSV `time` column
+uses the selected output units. The renderer reads the unit selection from
+`run.json`, labels the fields and coordinates accordingly, and retains the
+dimensionless energy ratios in its plots. Older outputs without `run.json`
+retain normalized labels.
 
 The renderer needs VTK, NumPy, Matplotlib and FFmpeg; GIF output also needs Pillow.
 It writes `movie.mp4`,

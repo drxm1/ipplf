@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/simulation/ChDRSimulationManager.h"
+#include "core/simulation/ObservationSchedule.h"
 
 namespace {
     using namespace chdr;
@@ -76,5 +77,48 @@ namespace {
         run.run(1);
         EXPECT_EQ(run.solver().completedSolves(), 1);
         EXPECT_THROW((Simulation{box, UniformMaterial{2.13}, settings}), std::invalid_argument);
+    }
+
+    /** @brief Reject collectively when either rank owns a one-cell partition.
+     * @details The automatic two-by-two split is valid. Moving its seam makes only one
+     * rank invalid, so validation must follow repartitioning and communicate the failure.
+     * The expected runtime_error identifies the pre-allocation field-container guard;
+     * the later MaterialOwner validation uses invalid_argument.
+     */
+    TEST(Simulation, RejectsThinSeamCollectively) {
+        if (ippl::Comm->size() != 2)
+            GTEST_SKIP() << "The asymmetric seam check requires two ranks";
+        for (int seam : {1, 3}) {
+            const simulation::RunBox box{{4, 2, 2}, {1, 1, 1}, seam};
+            EXPECT_THROW((Simulation{box, UniformMaterial{}}), std::runtime_error);
+        }
+    }
+
+    TEST(Simulation, ExplicitStep) {
+        const simulation::RunBox box{{8, 2, 8}, {1, 1, 1}};
+        simulation::SolverSettings settings{.formulation_m = std::nullopt, .timeStep_m = 0.5};
+        Simulation run(box, UniformMaterial{}, settings);
+        EXPECT_DOUBLE_EQ(run.solver().getDt(), 0.5);
+        EXPECT_EQ(&run.fields().getE(), &run.solver().electricField());
+        settings.timeStep_m = run.solver().maxStableTimeStep();
+        EXPECT_THROW((Simulation{box, UniformMaterial{}, settings}), std::invalid_argument);
+        settings.timeStep_m = -1;
+        EXPECT_THROW((Simulation{box, UniformMaterial{}, settings}), std::invalid_argument);
+    }
+
+    TEST(Simulation, IndependentObservationSchedules) {
+        Simulation run({{8, 2, 8}, {1, 1, 1}}, UniformMaterial{});
+        run.load(ZeroPotential{});
+        const simulation::ObservationSchedule fields{.every_m = 2, .includeFinal_m = true};
+        const simulation::ObservationSchedule diagnostics{.first_m = 1, .last_m = 4};
+        std::vector<long long> frames, samples;
+        run.advance(5, [&](long long k, auto&, const auto&) {
+            if (fields.selects(k, 5))
+                frames.push_back(k);
+            if (diagnostics.selects(k, 5))
+                samples.push_back(k);
+        });
+        EXPECT_EQ(frames, (std::vector<long long>{0, 2, 4, 5}));
+        EXPECT_EQ(samples, (std::vector<long long>{1, 2, 3, 4}));
     }
 }  // namespace

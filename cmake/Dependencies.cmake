@@ -636,10 +636,10 @@ if(IPPL_ENABLE_BENCHMARK)
 endif()
 
 # ------------------------------------------------------------------------------
-# FEL module header-only dependencies (nlohmann/json for config parsing, stb_image_write for the
-# Poynting-flux visualization).
+# nlohmann/json for FEL configuration and ChDR run records. stb_image_write for Maxwell-test
+# visualization is configured in test/maxwell/CMakeLists.txt.
 # ------------------------------------------------------------------------------
-if(IPPL_ENABLE_FEL)
+if(IPPL_ENABLE_FEL OR IPPL_ENABLE_CHDR)
   # Fetch the CMake package instead of downloading the release header directly.  CMake's
   # file(DOWNLOAD) does not fail by default and can leave a zero-byte json.hpp behind when a
   # release-asset host is unavailable, which only surfaces later as a confusing compile error.
@@ -648,5 +648,5 @@ if(IPPL_ENABLE_FEL)
                        GIT_TAG v3.11.3 GIT_SHALLOW ON)
   FetchContent_MakeAvailable(nlohmann_json)
 
-  message(STATUS "✅ nlohmann/json loaded for the FEL module.")
+  message(STATUS "✅ nlohmann/json loaded for FEL or ChDR.")
 endif()

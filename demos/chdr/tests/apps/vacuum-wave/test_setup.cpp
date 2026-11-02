@@ -149,13 +149,10 @@ namespace {
      * Current-history faces feed the stencils; previous-history faces are checked
      * as an additional storage invariant, although those stencils do not consume them.
      */
-    void expectInitialization(Fields& fields) {
-        checkLocalDomain(fields.getFL());
-        initializeFieldStorage(fields);
-        VacuumSolver solver(fields.getJ(), fields.getE(), fields.getB());
+    void expectInitialization(VacuumSolver& solver, Fields& fields) {
         solver.A_n   = std::numeric_limits<double>::quiet_NaN();
         solver.A_nm1 = std::numeric_limits<double>::quiet_NaN();
-        initializePotentials(solver);
+        chdr::solver::loadHistory(solver, VacuumPotential{});
         double errors[3] = {historyError(solver.A_n, 0.0),
                             historyError(solver.A_nm1, -solver.getDt()),
                             scratchError(solver.A_np1)};
@@ -167,14 +164,18 @@ namespace {
 
     /// @brief Check the actual coarse demo, including inter-rank and periodic face values.
     TEST(VacuumInitialization, FillsOwnedCellsAndBothHistoryFaceHalos) {
-        auto fields = makePeriodicFieldContainer();
-        expectInitialization(fields);
+        VacuumSimulation run(vacuumBox(), VacuumMaterial{}, vacuumSettings(vacuumBox()));
+        expectInitialization(run.solver(), run.fields());
     }
 
     /// @brief Check shifted coordinates, unequal spacings and the constructor-selected timestep.
     TEST(VacuumInitialization, UsesOriginSpacingAndActualSolverTimestep) {
         auto fields = shiftedGrid();
-        expectInitialization(fields);
+        checkLocalDomain(fields.getFL());
+        initializeFieldStorage(fields);
+        VacuumSolver solver(fields.getJ(), fields.getE(), fields.getB(),
+                            chdr::EBReconstructionConvention::R1);
+        expectInitialization(solver, fields);
     }
 
 }  // namespace

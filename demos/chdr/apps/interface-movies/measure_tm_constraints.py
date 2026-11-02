@@ -39,12 +39,22 @@ def residual(electric, faces, spacing):
     return values, max(float(np.abs(dx).max()), float(np.abs(dz).max()))
 
 
+def write_units(directory, stream):
+    """Label SI columns; epsilon is relative, so epsilon E is not the SI displacement D."""
+    record = directory / "run.json"
+    if record.exists() and json.loads(record.read_text())["output_factors"]["system"] == "si":
+        stream.write("# units=si electric_time=s div_valid_max=V/m^2 "
+                     "div_interior_max=V/m^2 div_boundary_max=V/m^2 "
+                     "displacement_peak=V/m div_scaled_initial=dimensionless "
+                     "displacement_quantity=epsilon_r*E normalization=first_saved_frame\n")
+
+
 def measure(directory, output):
     """Write all saved-time residuals, separating the interior from the boundary band.
 
     The lowest x/z cell layers are omitted: their backward stencils need unsaved
     exterior E. The interior excludes two cells on all open faces. Other valid
-    samples form the boundary band. Scale by initial max|epsilon E| / min(h_x,h_z),
+    samples form the boundary band. Scale by first saved max|epsilon E| / min(h_x,h_z),
     so the dimensionless column does not grow merely because the late pulse decays.
     """
     metadata = read_metadata(directory)
@@ -54,6 +64,7 @@ def measure(directory, output):
     faces = [face_permittivity(epsilon[:, :, 0], axis) for axis in (0, 1)]
     frames = json.loads((directory / "wave.pvti.series").read_text())["files"]
     with output.open("w") as stream:
+        write_units(directory, stream)
         writer = csv.writer(stream)
         writer.writerow(["frame", "electric_time", "div_valid_max", "div_interior_max",
                          "div_boundary_max", "displacement_peak", "div_scaled_initial"])

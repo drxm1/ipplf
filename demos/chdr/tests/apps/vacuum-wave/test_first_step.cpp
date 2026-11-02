@@ -16,17 +16,17 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
-#include <memory>
 
 #include "VacuumSetup.h"
 
 namespace {
-    using chdr::apps::vacuumWave::checkLocalDomain;
     using chdr::apps::vacuumWave::Dim;
     using chdr::apps::vacuumWave::Fields;
-    using chdr::apps::vacuumWave::initializeFieldStorage;
-    using chdr::apps::vacuumWave::initializePotentials;
-    using chdr::apps::vacuumWave::makePeriodicFieldContainer;
+    using chdr::apps::vacuumWave::vacuumBox;
+    using chdr::apps::vacuumWave::VacuumMaterial;
+    using chdr::apps::vacuumWave::VacuumPotential;
+    using chdr::apps::vacuumWave::vacuumSettings;
+    using chdr::apps::vacuumWave::VacuumSimulation;
     using chdr::apps::vacuumWave::VacuumSolver;
     constexpr double WaveNumber = 2.0 * Kokkos::numbers::pi_v<double>;
     using Potential             = ippl::Vector<double, 4>;
@@ -286,20 +286,16 @@ namespace {
     class VacuumFirstStepTest : public ::testing::Test {
     protected:
         void SetUp() override {
-            checkLocalDomain(fields_m.getFL());
-            initializeFieldStorage(fields_m);
-            solver_m =
-                std::make_unique<VacuumSolver>(fields_m.getJ(), fields_m.getE(), fields_m.getB());
             solver_m->A_n   = std::numeric_limits<double>::quiet_NaN();
             solver_m->A_nm1 = std::numeric_limits<double>::quiet_NaN();
-            initializePotentials(*solver_m);
             fields_m.getE() = std::numeric_limits<double>::quiet_NaN();
             fields_m.getB() = std::numeric_limits<double>::quiet_NaN();
-            solver_m->evaluate_EB();
+            run_m.load(VacuumPotential{});
         }
 
-        Fields fields_m = makePeriodicFieldContainer();
-        std::unique_ptr<VacuumSolver> solver_m;
+        VacuumSimulation run_m{vacuumBox(), VacuumMaterial{}, vacuumSettings(vacuumBox())};
+        Fields& fields_m       = run_m.fields();
+        VacuumSolver* solver_m = &run_m.solver();
     };
 
     /// @brief Verify both initial histories, zero scratch/source and initial raw E/B.
@@ -313,7 +309,7 @@ namespace {
     /// @brief Verify one real solve, including exact history shift and E/B reconstruction.
     TEST_F(VacuumFirstStepTest, AdvancesOneStep) {
         const auto initial = copyToHost(solver_m->A_n);
-        solver_m->solve();
+        run_m.advance();
         const auto state = snapshot(*solver_m, fields_m);
         const auto local = compareOwned(*solver_m, fields_m, state, initial, 1);
         expectErrors(globalErrors(local, fields_m));

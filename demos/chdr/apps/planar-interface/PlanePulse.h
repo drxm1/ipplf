@@ -5,7 +5,7 @@
 #include <complex>
 #include <functional>
 
-#include "InterfaceRun.h"
+#include "apps/planar-interface/InterfaceRun.h"
 #include "core/material/PlanarSlab.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 #include "opt-in/diagnostics/FourierProbe.h"
@@ -137,6 +137,8 @@ namespace chdr::apps::planarInterface {
      * moves both amplitudes to the face [schneider2010UnderstandingFdtd, section 5.8.2;
      * oskooi2013sources, sections 4.2.2-4.3]. Complex amplitudes exist on rank zero only.
      * The centre and two band records use the same gates; only the centre is asserted.
+     * Optional initial and final checks run while the manager still owns its solver.
+     * The final check follows the Fourier gathers and permits recording actual run settings.
      *
      * TODO: Too long, needs refactoring.
      *
@@ -149,7 +151,10 @@ namespace chdr::apps::planarInterface {
     template <class Parameters>
     PlaneResult measurePlane(
         const Parameters& p, bool tm, int cadence = 1, int seam = 0,
-        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> initialCheck = {}) {
+        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> initialCheck = {},
+        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> finalCheck   = {}) {
+        if (cadence <= 0)
+            throw std::invalid_argument("Plane diagnostics need a positive cadence");
         InterfaceRun run(
             {{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m, seam},
             material::TwoMaterialMap{material::PlanarSlab{0, 0, p.dielectricCells_m * p.h_m[0]},
@@ -175,7 +180,7 @@ namespace chdr::apps::planarInterface {
             s, {{p.otherProbeIndex_m, 0, 0}, {p.otherProbeIndex_m, 0, 0}}, {{channel, 2}},
             frequencies, 0, p.gateOther_m);
         double baseline = 0;
-        run.advance(p.steps_m, [&](int k, auto& state, const auto& owner) {
+        run.advance(p.steps_m, [&](long long k, auto& state, const auto& owner) {
             incident.sample();
             other.sample();
             if (k % cadence == 0 || k == p.steps_m) {
@@ -214,6 +219,8 @@ namespace chdr::apps::planarInterface {
                         0, kt * (face - p.otherProbe_m) - ki * (face - p.incidentProbe_m)));
             }
         }
+        if (finalCheck)
+            finalCheck(s, run.material());
         return result;
     }
 }  // namespace chdr::apps::planarInterface

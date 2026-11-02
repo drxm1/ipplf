@@ -55,6 +55,15 @@ def metadata(image):
     return result
 
 
+def field_units(values, array):
+    """Use the writer's normalization flag to identify the stored field units."""
+    if values['normalization'] == 1:
+        return 'normalized'
+    if values['normalization'] == 0:
+        return 'V/m' if array == 'E_raw' else 'T'
+    raise ValueError('Unknown field normalization code')
+
+
 def configure_view(view, image):
     """Set an orthographic +y viewpoint: +x upward and +z rightward."""
     bounds = image.GetBounds()
@@ -73,7 +82,7 @@ def configure_view(view, image):
     view.CameraParallelScale = 0.7 * max(lengths[0], lengths[2] / (960 / 360))
 
 
-def color_surface(reader, view, options):
+def color_surface(reader, view, options, values):
     """Fix component, range and blue/white/red colors instead of automatic rescaling."""
     display = Show(reader, view)
     display.Representation = "Surface"
@@ -86,13 +95,13 @@ def color_surface(reader, view, options):
     lookup.ColorSpace = "RGB"
     lookup.RescaleTransferFunction(low, high)
     display.SetScalarBarVisibility(view, True)
-    configure_legend(lookup, view, options)
+    configure_legend(lookup, view, options, values)
 
 
-def configure_legend(lookup, view, options):
+def configure_legend(lookup, view, options, values):
     """Keep the fixed signed-color legend below the field without clipping its title."""
     legend = GetScalarBar(lookup, view)
-    legend.Title = f"{options.array}.{options.component} (normalized)"
+    legend.Title = f"{options.array}.{options.component} ({field_units(values, options.array)})"
     legend.ComponentTitle = ""
     legend.TitleColor, legend.LabelColor = [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]
     legend.Orientation = "Horizontal"
@@ -105,10 +114,13 @@ def configure_legend(lookup, view, options):
 
 def annotate(view, values):
     """Show actual array-time labels and the orientation convention in the image."""
+    time_unit = ' s' if values['normalization'] == 0 else ''
+    convention = 'raw SI fields; coordinates in m' if time_unit else 'raw normalized fields'
     label = Text()
-    label.Text = (f"potential time {values['potential_time']:.8g}; "
-                  f"E time {values['E_time']:.8g}; B time {values['B_time']:.8g}\n"
-                  "+x upward; +z rightward; raw normalized fields")
+    label.Text = (f"potential time {values['potential_time']:.8g}{time_unit}; "
+                  f"E time {values['E_time']:.8g}{time_unit}; "
+                  f"B time {values['B_time']:.8g}{time_unit}\n"
+                  f"+x upward; +z rightward; {convention}")
     display = Show(label, view)
     display.WindowLocation = "Upper Left Corner"
     display.FontSize = 12
@@ -123,6 +135,8 @@ def render_provenance(options, values, view):
     if not (matrix.GetElement(0, 2) > 0.999 and matrix.GetElement(1, 0) > 0.999):
         raise RuntimeError("Camera must have +x upward and +z rightward")
     record = dict(values, array=options.array, component=options.component, limits=options.limits,
+                  field_units=field_units(values, options.array),
+                  time_units='s' if values['normalization'] == 0 else 'normalized',
                   vtk=vtkVersion.GetVTKVersion(), paraview=str(GetParaViewVersion()),
                   series=str(options.series.resolve()), gui_walkthrough=False,
                   render_window=window.GetClassName(), camera_position=list(view.CameraPosition),
@@ -141,7 +155,7 @@ def main():
     values = metadata(image)
     view = CreateView("RenderView")
     view.ViewTime = options.time
-    color_surface(reader, view, options)
+    color_surface(reader, view, options, values)
     configure_view(view, image)
     annotate(view, values)
     Render(view)

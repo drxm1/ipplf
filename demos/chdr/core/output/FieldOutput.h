@@ -9,8 +9,9 @@
  * Logical x-fastest traversal follows VTK 9.5.2 vtkStructuredData::ComputeCellId
  * and GetLinearIndex (vtkStructuredData.h, lines 280-283 and 329-333):
  * https://github.com/Kitware/VTK/blob/v9.5.2/Common/DataModel/vtkStructuredData.h .
- * Caller-supplied timestamps are serialized unchanged; this writer derives no
- * physical array times from potential time or dt. No GPU validation is claimed.
+ * Caller-supplied timestamps retain their distinct labels, with optional unit
+ * conversion; this writer derives no array times from potential time or dt.
+ * No GPU validation is claimed.
  */
 #ifndef CHDR_FIELD_OUTPUT_H
 #define CHDR_FIELD_OUTPUT_H
@@ -53,6 +54,31 @@ namespace chdr::output {
         double dt_m;             ///< Actual positive solver timestep.
     };
 
+    /** @brief Multiplicative conversions applied only to serialized output.
+     * @details Factors convert the supplied solver quantities to the selected output units.
+     * Geometry and times use their own factors; E and B are converted independently.
+     * Component offsets remain dimensionless fractions of mesh spacing. No solver array
+     * is changed. si_m labels SI output; default factors preserve normalized output.
+     */
+    struct OutputScales {
+        double lengthFactor_m = 1, timeFactor_m = 1, electricFactor_m = 1, magneticFactor_m = 1;
+        bool si_m = false;
+
+        /// Reject unusable scales before writing any output file.
+        void validate() const {
+            for (double scale : {lengthFactor_m, timeFactor_m, electricFactor_m, magneticFactor_m})
+                if (!std::isfinite(scale) || scale <= 0)
+                    throw std::invalid_argument("Output scale must be finite and positive");
+        }
+    };
+
+    /// Obtain output factors from a unit convention without making the writer own input parsing.
+    template <class UnitSystem>
+    OutputScales fieldOutputScales(const UnitSystem& units) {
+        return {units.lengthFactor(), units.timeFactor(), units.electricFactor(),
+                units.magneticFactor(), units.isSI()};
+    }
+
     namespace output_detail {
         using Extent = std::array<int, 6>;  ///< Global point ranges, inclusive at both ends.
         static_assert(sizeof(Extent) == 6 * sizeof(int),
@@ -92,10 +118,12 @@ namespace chdr::output {
                 << "\" NumberOfTuples=\"1\" format=\"ascii\">" << value << "</DataArray>\n";
         }
 
-        /** @brief Explicit array times; normalization code 1 means dimensionless c=1, no SI scales.
+        /** @brief Explicit array times and conversions; normalization is 1 for solver units, 0 for
+         * SI.
          */
         inline void metadata(std::ostream& out, const FrameRecord& frame,
-                             const std::optional<std::array<double, 18>>& offsets = std::nullopt) {
+                             const std::optional<std::array<double, 18>>& offsets = std::nullopt,
+                             OutputScales scales                                  = {}) {
             out << "<FieldData>\n";
             scalar(out, "TimeValue", "Float64", frame.potentialTime_m);
             scalar(out, "potential_time", "Float64", frame.potentialTime_m);
@@ -103,7 +131,11 @@ namespace chdr::output {
             scalar(out, "B_time", "Float64", frame.magneticTime_m);
             scalar(out, "dt", "Float64", frame.dt_m);
             scalar(out, "step", "Int64", frame.step_m);
-            scalar(out, "normalization", "Int32", 1);
+            scalar(out, "normalization", "Int32", scales.si_m ? 0 : 1);
+            scalar(out, "length_scale_from_solver", "Float64", scales.lengthFactor_m);
+            scalar(out, "time_scale_from_solver", "Float64", scales.timeFactor_m);
+            scalar(out, "E_scale_from_solver", "Float64", scales.electricFactor_m);
+            scalar(out, "B_scale_from_solver", "Float64", scales.magneticFactor_m);
             if (offsets)
                 out << "<DataArray type=\"Float64\" Name=\"component_offsets\" "
                        "NumberOfComponents=\"3\" "
@@ -119,6 +151,24 @@ namespace chdr::output {
                     || !std::isfinite(geometry.spacing_m[d]) || geometry.spacing_m[d] <= 0)
                     throw std::runtime_error("Invalid output geometry");
             }
+        }
+
+        /// Convert geometry while retaining the global cell counts and ownership indices.
+        inline OutputGeometry scaledGeometry(OutputGeometry geometry, OutputScales scales) {
+            for (unsigned d = 0; d < 3; ++d) {
+                geometry.origin_m[d] *= scales.lengthFactor_m;
+                geometry.spacing_m[d] *= scales.lengthFactor_m;
+            }
+            return geometry;
+        }
+
+        /// Convert every explicit time label independently, without changing the solver step.
+        inline FrameRecord scaledFrame(FrameRecord frame, OutputScales scales) {
+            frame.potentialTime_m *= scales.timeFactor_m;
+            frame.electricTime_m *= scales.timeFactor_m;
+            frame.magneticTime_m *= scales.timeFactor_m;
+            frame.dt_m *= scales.timeFactor_m;
+            return frame;
         }
 
         /** @brief Convert inclusive IPPL owned cell ranges to VTK point extents. */
@@ -167,7 +217,7 @@ namespace chdr::output {
         /** @brief Write only owned vector tuples, x fastest; reject nonfinite components. */
         template <class View>
         void vectors(std::ostream& out, const char* name, const View& view, const Extent& e,
-                     int ghost) {
+                     int ghost, double scale = 1) {
             out << "<DataArray type=\"Float64\" Name=\"" << name
                 << "\" NumberOfComponents=\"3\" format=\"ascii\">\n";
             for (int k = 0; k < e[5] - e[4]; ++k)
@@ -175,9 +225,10 @@ namespace chdr::output {
                     for (int i = 0; i < e[1] - e[0]; ++i) {
                         const auto value = view(i + ghost, j + ghost, k + ghost);
                         for (int c = 0; c < 3; ++c) {
-                            if (!std::isfinite(value[c]))
+                            const double converted = value[c] * scale;
+                            if (!std::isfinite(converted))
                                 throw std::runtime_error("Nonfinite output field");
-                            out << value[c] << (c == 2 ? '\n' : ' ');
+                            out << converted << (c == 2 ? '\n' : ' ');
                         }
                     }
             out << "</DataArray>\n";
@@ -205,14 +256,15 @@ namespace chdr::output {
          * Logical x-fastest traversal excludes halos and preserves the ASCII tuple order.
          */
         template <class View>
-        void binaryVectors(std::ostream& out, const View& view, const Extent& e, int ghost) {
+        void binaryVectors(std::ostream& out, const View& view, const Extent& e, int ghost,
+                           double scale = 1) {
             std::vector<double> values;
             values.reserve(3ULL * (e[1] - e[0]) * (e[3] - e[2]) * (e[5] - e[4]));
             for (int k = 0; k < e[5] - e[4]; ++k)
                 for (int j = 0; j < e[3] - e[2]; ++j)
                     for (int i = 0; i < e[1] - e[0]; ++i)
                         for (int c = 0; c < 3; ++c) {
-                            const double value = view(i + ghost, j + ghost, k + ghost)[c];
+                            const double value = scale * view(i + ghost, j + ghost, k + ghost)[c];
                             if (!std::isfinite(value))
                                 throw std::runtime_error("Nonfinite output field");
                             values.push_back(value);
@@ -228,13 +280,13 @@ namespace chdr::output {
                    const EView& electric, const BView& magnetic, int ghost,
                    const FrameRecord& frame,
                    const std::optional<std::array<double, 18>>& offsets = std::nullopt,
-                   bool binary                                          = false) {
+                   bool binary = false, OutputScales scales = {}) {
             out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"ImageData\" version=\"1.0\" "
                    "byte_order=\"LittleEndian\" header_type=\"UInt64\">\n"
                 << "<ImageData WholeExtent=\"" << arrayText(e) << "\" Origin=\""
                 << arrayText(geometry.origin_m) << "\" Spacing=\"" << arrayText(geometry.spacing_m)
                 << "\">\n";
-            metadata(out, frame, offsets);
+            metadata(out, frame, offsets, scales);
             out << "<Piece Extent=\"" << arrayText(e) << "\"><CellData Vectors=\"E_raw\">\n";
             if (binary) {
                 const std::uint64_t stride =
@@ -244,14 +296,14 @@ namespace chdr::output {
                         << "\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << c * stride
                         << "\"/>\n";
             } else {
-                vectors(out, "E_raw", electric, e, ghost);
-                vectors(out, "B_raw", magnetic, e, ghost);
+                vectors(out, "E_raw", electric, e, ghost, scales.electricFactor_m);
+                vectors(out, "B_raw", magnetic, e, ghost, scales.magneticFactor_m);
             }
             out << "</CellData><PointData/></Piece>\n</ImageData>\n";
             if (binary) {
                 out << "<AppendedData encoding=\"raw\">_";
-                binaryVectors(out, electric, e, ghost);
-                binaryVectors(out, magnetic, e, ghost);
+                binaryVectors(out, electric, e, ghost, scales.electricFactor_m);
+                binaryVectors(out, magnetic, e, ghost, scales.magneticFactor_m);
                 out << "</AppendedData>\n";
             }
             out << "</VTKFile>\n";
@@ -260,13 +312,14 @@ namespace chdr::output {
         /** @brief Publish a parallel wrapper, including the serial one-piece case. */
         inline void wrapper(std::ostream& out, const OutputGeometry& geometry,
                             const std::vector<Extent>& extents, const FrameRecord& frame,
-                            const std::optional<std::array<double, 18>>& offsets = std::nullopt) {
+                            const std::optional<std::array<double, 18>>& offsets = std::nullopt,
+                            OutputScales scales                                  = {}) {
             out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"PImageData\" version=\"1.0\" "
                    "byte_order=\"LittleEndian\">\n"
                 << "<PImageData WholeExtent=\"" << arrayText(wholeExtent(geometry))
                 << "\" GhostLevel=\"0\" Origin=\"" << arrayText(geometry.origin_m)
                 << "\" Spacing=\"" << arrayText(geometry.spacing_m) << "\">\n";
-            metadata(out, frame, offsets);
+            metadata(out, frame, offsets, scales);
             out << "<PPointData/><PCellData Vectors=\"E_raw\">\n"
                 << "<PDataArray type=\"Float64\" Name=\"E_raw\" NumberOfComponents=\"3\"/>\n"
                 << "<PDataArray type=\"Float64\" Name=\"B_raw\" "
@@ -305,14 +358,17 @@ namespace chdr::output {
     public:
         /** @brief Collectively prepare a fresh output directory; borrow the communicator. */
         FieldOutput(std::filesystem::path directory, OutputGeometry geometry, MPI_Comm communicator,
-                    bool binary = false)
+                    bool binary = false, OutputScales scales = {})
             : directory_m(std::move(directory))
             , geometry_m(geometry)
             , communicator_m(communicator)
-            , binary_m(binary) {
+            , binary_m(binary)
+            , scales_m(scales) {
             MPI_Comm_rank(communicator_m, &rank_m);
             MPI_Comm_size(communicator_m, &size_m);
             collectively([&] {
+                scales_m.validate();
+                geometry_m = output_detail::scaledGeometry(geometry_m, scales_m);
                 output_detail::validateGeometry(geometry_m);
                 if (binary_m && std::endian::native != std::endian::little)
                     throw std::runtime_error("Binary VTK output requires a little-endian host");
@@ -326,17 +382,18 @@ namespace chdr::output {
         template <class EField, class BField>
         void writeFrame(const EField& electric, const BField& magnetic, const FrameRecord& frame) {
             output_detail::Extent local{};
+            const auto converted = output_detail::scaledFrame(frame, scales_m);
             collectively([&] {
-                validateFrame(frame);
-                local = writeLocalPiece(electric, magnetic, frame);
+                validateFrame(converted);
+                local = writeLocalPiece(electric, magnetic, converted);
             });
             MPI_Allgather(local.data(), 6, MPI_INT, extents_m.data(), 6, MPI_INT, communicator_m);
             collectively([&] {
                 if (rank_m == 0)
-                    publishWrapper(frame);
+                    publishWrapper(converted);
             });
             collectively([&] {
-                frames_m.push_back(frame);
+                frames_m.push_back(converted);
             });
         }
 
@@ -466,7 +523,7 @@ namespace chdr::output {
                                       [&](std::ostream& out) {
                                           output_detail::piece(out, geometry_m, local, e, b,
                                                                electric.getNghost(), frame,
-                                                               offsets_m, binary_m);
+                                                               offsets_m, binary_m, scales_m);
                                       });
             return local;
         }
@@ -475,7 +532,7 @@ namespace chdr::output {
         void publishWrapper(const FrameRecord& frame) const {
             output_detail::atomicFile(
                 directory_m / output_detail::frameName(frame.step_m), [&](std::ostream& out) {
-                    output_detail::wrapper(out, geometry_m, extents_m, frame, offsets_m);
+                    output_detail::wrapper(out, geometry_m, extents_m, frame, offsets_m, scales_m);
                 });
         }
 
@@ -489,6 +546,7 @@ namespace chdr::output {
         std::optional<std::array<double, 18>> offsets_m;
         bool materialWritten_m = false;
         bool binary_m          = false;
+        OutputScales scales_m;
     };
 }  // namespace chdr::output
 #endif

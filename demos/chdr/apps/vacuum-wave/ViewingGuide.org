@@ -18,6 +18,10 @@ Open a Spreadsheet View and select Field Data to inspect =potential_time=,
 =E_time=, =B_time=, =dt=, =step= and =normalization=. The dataset/series time is
 =potential_time=. Each raw array has its own supplied timestamp; normalization
 code 1 denotes the declared dimensionless convention and assigns no SI scales.
+Code 0 denotes SI output: geometry is in metres, times in seconds, =E_raw= in
+volts per metre and =B_raw= in tesla. =run.json= records the supplied length and
+charge-density scales and the conversion factors. Choose the color range in the
+stored field units; -1 to 1 is the reference range only for normalized output.
 For this benchmark's backward-difference reconstruction the initial electric
 sample is half a timestep earlier than potential time zero. That initial
 negative E time is intentional; it does not mean an output frame was lost.
@@ -41,7 +45,10 @@ env -u DISPLAY OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 pvpython --force-offscre
 #+end_src
 The script fixes resolution, camera, component, range, colors and lighting,
 and writes a companion JSON containing actual metadata, reader versions, graphics
-backend and camera settings. =camera_orientation_checked= verifies the camera
+backend and camera settings. It labels the legend and time annotation according
+to =normalization=. Supply =--time= and =--range= in the stored units; for SI
+output the time is in seconds and the range is in volts per metre or tesla.
+=camera_orientation_checked= verifies the camera
 matrix only; =image_pixels_checked=false= means the PNG must still be inspected.
 It refuses a time absent from the series and refuses to replace an existing
 PNG. A failed rendering/provenance check can leave a PNG without its companion

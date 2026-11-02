@@ -3,6 +3,7 @@
  */
 #pragma once
 
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <stdexcept>
@@ -31,7 +32,8 @@ namespace chdr::simulation {
         using Observer = std::function<void(long long, Solver&, const material::MaterialOwner&)>;
 
         /** @brief Allocate the problem and select its timestep before loading initial histories.
-         * @details Material and field storage share one mesh and layout. The solver constructor
+         * @details Validate local extents collectively after repartitioning and before allocation.
+         * Material and field storage share one mesh and layout. The solver constructor
          * binds these fields and selects its update; initialize() clears the potential histories
          * and solve count. The explicit safety factor then sets the step used by load().
          */
@@ -40,12 +42,13 @@ namespace chdr::simulation {
             : fields_m(solver::makeBoxFieldContainer(box.cells_m, box.lengths(), box.splitAxis_m,
                                                      box.periodic_m)) {
             applyPartitionSeam(box);
+            checkLocalDomain(fields_m.getFL());
             initializeFieldStorage(fields_m);
             owner_m  = std::make_unique<material::MaterialOwner>(fields_m.getMesh(),
                                                                  fields_m.getFL(), map);
             solver_m = makeSolver(settings);
             solver_m->initialize();
-            solver_m->setSafetyFactor(settings.safetyFactor_m);
+            configureTimeStep(settings);
         }
 
         ChDRSimulationManager(const ChDRSimulationManager&)            = delete;
@@ -101,10 +104,33 @@ namespace chdr::simulation {
 
         /// Access the solver for experiment-specific fields, sources and diagnostics.
         Solver& solver() { return *solver_m; }
+        /** @brief Access the manager-owned fields for existing measurements and writers.
+         * @details The returned reference does not transfer ownership. Its mesh, layout and
+         * storage must not be moved or rebound while the solver or an observer refers to them.
+         */
+        ChDRFieldContainer& fields() { return fields_m; }
         /// Access the immutable material distribution and its cached coefficient fields.
         material::MaterialOwner& material() { return *owner_m; }
 
     private:
+        /** @brief Select an explicit reference step or the configured stability fraction.
+         * @details The explicit path uses the same interval as ChdrSolver::setSafetyFactor,
+         * but avoids a divide/multiply round trip when preserving an existing exact step.
+         * The bound and Standard/NonStandard endpoint policy belong to ChdrSolver; no new
+         * stability formula is introduced here. Selection precedes history initialization.
+         */
+        void configureTimeStep(const SolverSettings& settings) {
+            if (!settings.timeStep_m) {
+                solver_m->setSafetyFactor(settings.safetyFactor_m);
+                return;
+            }
+            const double step = *settings.timeStep_m, bound = solver_m->maxStableTimeStep();
+            if (!std::isfinite(step) || step <= 0 || step > bound
+                || (Solver::stencil() == solver::Stencil::Standard && step == bound))
+                throw std::invalid_argument("Explicit time step is outside the solver's interval");
+            solver_m->setTimeStepUnchecked(step);
+        }
+
         /** @brief Optionally place an explicit boundary between two MPI ranks before allocation.
          * @details MPI_Comm_size queries the field layout's communicator. The chosen axis is
          * already validated by makeBoxFieldContainer. All field allocations subsequently use

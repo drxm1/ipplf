@@ -41,5 +41,8 @@ namespace chdr::simulation {
         std::optional<solver::FormulationParameters> formulation_m =
             solver::FormulationParameters{solver::MaterialFormulation::O1VS, 1};
         solver::MurSpeed murSpeed_m = solver::MurSpeed::matched();
+        /// Optional physical step in solver units, checked against the selected solver's bound.
+        /// When present it replaces safetyFactor_m, preserving exact-step reference cases.
+        std::optional<double> timeStep_m = std::nullopt;
     };
 }  // namespace chdr::simulation

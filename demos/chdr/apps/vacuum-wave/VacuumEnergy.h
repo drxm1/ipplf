@@ -36,7 +36,7 @@
  * component, the scalar potential included; it is not the physical field energy in general.
  * The forward differences read one ghost layer in \f$+d\f$ of both histories. These ghosts
  * are current: FDTDSolverBase::finishPotentialStep fills the halo of \f$\mathcal A^{n+1}\f$
- * before timeShift copies whole views, and initializePotentials fills both initial halos.
+ * before timeShift copies whole views, and the shared history loader fills both initial halos.
  * No field is changed, copied to the host, or halo-exchanged.
  */
 #pragma once
