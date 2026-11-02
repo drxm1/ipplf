@@ -8,6 +8,8 @@
   #include "./docs/scTablePossibleOptionsMaterialTreatment.typ"
 
   #include "./docs/scChewsGaugeDecouplingAndRewrite.typ"
+
+  #include "./docs/scO1VSImplementation.typ"
 ]
 
 #standalone(

@@ -1,6 +1,7 @@
 // One import provides the manual helpers and all physica notation.
 #import "@preview/physica:0.9.8": *
 #import "@preview/equate:0.3.3": equate
+#import "@preview/simple-todo:0.1.0": list-todos, todo
 
 // Shared typography for the full manual and standalone chapters.
 #let manual-typography(body) = {
