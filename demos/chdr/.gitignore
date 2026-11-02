@@ -1,2 +1,15 @@
-# Doxygen output of ./Doxyfile
-/docs/
+# Generated Doxygen HTML
+/docs/html/
+
+# Compiled Typst manual
+/manual.pdf
+
+# vscode typst compiler artifact
+tinymist.lock
+
+# Chapter previews (legacy)
+/docs/manual/SimplifyingAssumptions.pdf
+/docs/manual/Units.pdf
+/docs/manual/preamble.pdf
+/core/solver/formulation/formulations.pdf
+/docs/manual/theVacuumUpdateInIPPL.pdf
