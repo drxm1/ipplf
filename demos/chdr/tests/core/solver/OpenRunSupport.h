@@ -1,5 +1,9 @@
 /** @file OpenRunSupport.h
  * @brief Shared source-free open-boundary test setup and deliberate failure controls.
+ * @details OpenTestSolver adds two test-only controls to ChdrSolver: the old finish order
+ * (halo exchange before Mur, no ghost closure) and a uniform kernel Mur speed. Users:
+ * test_mur_medium.cpp, test_mur_families.cpp, test_mur_stability.cpp,
+ * test_open_gauge_records.cpp and ReflectionRun.h.
  */
 #pragma once
 #include "CoreTestSupport.h"
@@ -27,9 +31,10 @@ namespace chdr::solver::test {
         /** @brief Apply a uniform control speed to faces, edges and corners through the step.
          * @details Normalized Mur weights depend only on \f$v\Delta t\f$: see
          * murFaceWeights, murEdgeWeights and murCornerWeights in BoundaryOracles.h;
-         * Mur (1981), section IV, Eq. (16), and Bamberger, Joly and Roberts (1987),
-         * section II, Eqs. (2.10)-(2.11). Scaling the boundary step and using unit
-         * coefficient speeds therefore changes all three operators, including intersections.
+         * [mur1981AbsorbingBoundaryFdtd, section IV, Eq. (16)] and
+         * [bamberger1987SecondOrderCorner, section II, Eqs. (2.10)-(2.11)]. Scaling the boundary
+         * step and using unit coefficient speeds therefore changes all three operators,
+         * including intersections.
          * The interior has already advanced. Pass a local step and speed copy directly
          * to the Mur dispatcher; neither the solver step nor its const descriptor changes.
          * The shipped-order control omits the final exchange and ghost closure.

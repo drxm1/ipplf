@@ -6,6 +6,11 @@ Values are ordered by level, component, x, y, z (z contiguous), as little-endian
 binary64. Each case uses a fresh seeded NumPy generator with a standard normal
 distribution. The data is independent of boundary conditions; the C++ loader
 handles optional boundary-layer masking and the solver prepares the ghosts.
+
+Fixtures: medium (seed 271828, 16 x 16 x 16 cells) for test_mur_medium.cpp;
+stability-open (seed 81413, 16 x 16 x 16) and stability-mixed (seed 81413,
+16 x 8 x 16) for test_mur_stability.cpp. CMake runs this script at build time
+with the output directory as the only argument. It needs NumPy.
 """
 
 from pathlib import Path

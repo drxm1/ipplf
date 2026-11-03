@@ -1,8 +1,25 @@
 /** @file test_open_beam.cpp
  * @brief Compare the central plane-wave reflection of a finite beam and a periodic witness.
- * The spatial projection and two-wave fit distinguish the selected tangential
+ * @details The spatial projection and two-wave fit distinguish the selected tangential
  * mode from the beam's other angles [jones1988MultiPointImpedance, equations
  * (1)-(3), p. 3; oskooi2010meep, equation (6)].
+ * Both tests drive a Gaussian sheet source at global x index 20 in vacuum (unit spacing,
+ * \f$k_z = 2\pi/14\f$, \f$\Delta t = 0.9/\sqrt3\f$, collocated R2, split along z on two ranks)
+ * and run two real quadratures.
+ * - FullBoxAgainstPeriodicWitness: 1436 steps in a 40 x 160 x 400 box with Mur on all faces,
+ *   and in a 40 x 2 x 14 witness with Mur on x and periodic y and z. The reflection
+ *   coefficients fitted on the 20 source-free layers must differ by at most 1e-4 and by at
+ *   most 1 % of the witness coefficient. Reference: self-consistency.
+ * - ReducedRankWitness: 300 steps in a 40 x 80 x 200 box with Mur on all faces. The final
+ *   owned potentials must equal an MPI_COMM_SELF replay within 1e-13 of the run maximum, and
+ *   the 20-layer Fourier sums within 1e-12 of \f$300\cdot80\cdot200\f$ times that maximum.
+ *   On one rank the replay repeats an identical run, so the serial entry tests only
+ *   determinism.
+ *
+ * CTest (label long, TIMEOUT 1800): chdr.solver.open.beam-ranks.serial and
+ * chdr.solver.open.beam-ranks.mpi2 (ReducedRankWitness); chdr.solver.open.beam-full.mpi2
+ * (FullBoxAgainstPeriodicWitness). chdr.solver.open.beam-full.serial is disabled: the full
+ * box runs on two ranks only.
  */
 #include <Kokkos_Complex.hpp>
 #include <complex>
@@ -164,6 +181,8 @@ namespace chdr::solver::test {
      * Compare every final owned potential with a run-maximum scale. Compare Fourier
      * sums using their non-cancelling input scale, including when a sum is near zero.
      * Record binary64 equality, including signed zeros, separately from the tolerances.
+     * Run: 300 steps, 40 x 80 x 200 cells; cells within 1e-13, Fourier sums within 1e-12.
+     * On one rank the replay repeats the same run.
      */
     TEST(OpenBeam, ReducedRankWitness) {
         auto fields = makeBoxFieldContainer({40, 80, 200}, {40, 80, 200}, 2, {false, false, false});

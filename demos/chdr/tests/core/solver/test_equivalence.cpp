@@ -6,9 +6,26 @@
  * the common vector histories (deduction from the componentwise wave update
  * of [fallahi2020mithra20fullwavesimulation, Eqs. (3.11)-(3.15)]).
  * Bitwise comparison assumes the two kernels use matching floating-point
- * contraction settings; the run record retains their actual compile commands.
+ * contraction settings; when it fails, compare these flags in the compile commands first.
  * The material comparison requires the unit-permittivity update to reproduce
  * the owner-free vacuum solver's potential histories and E/B fields exactly.
+ *
+ * LevelEquivalence evolves the sourced Lorenz wave of makeSourcedWave() with R2 and with
+ * R2Prime on separate field containers (unit box, default step, 60 solves; Standard 8x8x16
+ * and NonStandard 8x8x12 cells). After every solve it counts the owned components whose bit
+ * patterns differ: the shifted scalar history, A, E and B. The count over all solves and
+ * ranks must be zero, and both solvers must meet the final identities
+ * (requireFinalIdentities()) after the last solve.
+ *
+ * MediumEquivalence evolves the source-free mixed wave of makeMixedWave() with the
+ * Homogeneous update at \f$\varepsilon=1\f$ and with the owner-free vacuum ChdrSolver
+ * (Standard 16x16x16 cells, unit box, default step, 256 solves) for R1, R2 and R2Prime
+ * collocated and R2 staggered. The count of differing bit patterns in A_n, A_nm1, E and B
+ * over all solves and ranks must be zero.
+ *
+ * In both suites, +0 and -0 count as different, and there is no tolerance. CTest entries
+ * (label unit, timeout 60 s): chdr.solver.equivalence.{serial,mpi2} and
+ * chdr.solver.medium.Equivalence.{serial,mpi2}.
  */
 #include <bit>
 #include <cstdint>
@@ -136,9 +153,12 @@ namespace {
         compareEvolution(r2, prime, wave);
     }
 
+    /// R2 and R2Prime on Standard 8x8x16 cells: zero differing bit patterns after each of
+    /// 60 solves of the sourced wave.
     TEST(LevelEquivalence, Standard) {
         equivalent<StandardSolverPeriodic>({8, 8, 16});
     }
+    /// The same bitwise comparison on NonStandard 8x8x12 cells.
     TEST(LevelEquivalence, NonStandard) {
         equivalent<NonStandardSolverPeriodic>({8, 8, 12});
     }
@@ -199,7 +219,8 @@ namespace {
                       MPI_COMM_WORLD);
         EXPECT_EQ(differences, 0ULL);
     }
-    /// Exercise all collocated time reconstructions and the staggered R2 placement.
+    /// Homogeneous update at \f$\varepsilon=1\f$ against the vacuum ChdrSolver: zero differing
+    /// bit patterns over 256 solves for R1, R2, R2Prime collocated and R2 staggered.
     TEST(MediumEquivalence, EveryReconstruction) {
         for (auto reconstruction : {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
                                     EBReconstructionConvention::R2Prime})

@@ -1,11 +1,26 @@
 /** @file test_interface_energy.cpp
- * @brief Conservation of discrete potential invariants and rank decomposition checks.
+ * @brief Conservation of the two discrete potential invariants of O1-VS, and their
+ * independence of the MPI decomposition.
  * @details Random potential histories do not impose the generalized-gauge constraint.
  * This checks the two leapfrog invariants defined in energyDetail::Reduction,
  * not physical electromagnetic energy conservation for these initial data.
  * The conserved quantities are cross-level quadratic forms
  * [kreiss2002SecondOrderWave, section 2, before Eq. (2.10)], specialized to the
  * potential equations [chew2014generalizedgauge, Eqs. (16)--(18)].
+ *
+ * Configuration: a periodic box of 8 by 6 by 10 cells with lengths 8, 7.8 and 8, and the
+ * dielectric slab \f$0 \le x \le 4\f$ (cells 0 to 3) with \f$\varepsilon_r = 2.13\f$.
+ * ChdrSolver uses R2, the staggered reading, O1-VS and the safety factor 0.9. The
+ * histories are random (seeds 23 and 71), the source is zero, and the run has 50 solves.
+ * Each test requires a relative drift of at most \f$10^{-12}\f$ for the vector and for
+ * the scalar invariant. Rank 0 then repeats the run on a communicator-self layout. The
+ * retained histories \f$A^n\f$ and \f$A^{n-1}\f$ must be bitwise equal to the distributed
+ * run, and each part of each energy record (total, vacuum, dielectric, absolute sum) must
+ * agree within \f$10^{-14}\f$ times the initial one-rank total.
+ *
+ * CTest: chdr.diagnostics.energy.serial runs NormalSplit on one rank, where the
+ * one-rank repeat has the same decomposition as the distributed run.
+ * chdr.diagnostics.energy.mpi2 runs both tests on two ranks.
  */
 #include <bit>
 #include <gtest/gtest.h>
@@ -109,9 +124,11 @@ namespace {
             compare(distributed, serial);
         }
     }
+    /// Split along x: the rank seam lies on the slab face at x = 4. Drift at most 1e-12.
     TEST(InterfaceEnergy, NormalSplit) {
         checkSplit(0);
     }
+    /// Split along y: the rank seam crosses the slab and the vacuum. Drift at most 1e-12.
     TEST(InterfaceEnergy, TangentialSplit) {
         checkSplit(1);
     }

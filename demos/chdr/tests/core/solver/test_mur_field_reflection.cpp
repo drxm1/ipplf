@@ -1,5 +1,18 @@
 /** @file test_mur_field_reflection.cpp
  * @brief Check signed electric and magnetic reflection at their declared sample positions.
+ * @details Rows v60 (vacuum) and m46.748 (\f$\varepsilon_r = 2.13\f$) of OpenBoxCases.h, both
+ * readings, R2, TE (\f$E_y\f$ from \f$A_y\f$) and TM0 (averaged \f$B_y\f$ from \f$A_z\f$).
+ * Box: 40 normal cells, Mur on x, periodic y and z, split along z on two ranks; 30 steps from
+ * the exact two-wave state. On layers 1 to 8, every transverse cell must match the
+ * incident-plus-reflected oracle within 1e-10 of the incident amplitude at layer 1, and the
+ * fitted signed field coefficient must match fieldRowRatio() of ReflectionOracles.h within
+ * 1e-9 (exact lattice value). verifyRanks(), defined in test_mur_reflection.cpp, replays each
+ * run on MPI_COMM_SELF: cells within 1e-13, projections within 1e-12. In the serial entry this
+ * replay compares a run with an identical run.
+ *
+ * CTest: chdr.solver.mur.field-reflection.serial and chdr.solver.mur.field-reflection.mpi2
+ * (MurFieldReflection.SignedElectricAndMagnetic). The disabled holdout
+ * MurReflection.DISABLED_Holdout also calls checkFieldReflection().
  */
 #include <gtest/gtest.h>
 
@@ -14,7 +27,7 @@ namespace chdr::solver::test::reflection {
          * collocated or staggered samples. These evaluate the incident root explicitly;
          * no production reconstruction supplies an expected value. fieldRowRatio() documents
          * the corresponding reflected-wave signs and sample offsets, from the potential-field
-         * relations [Fallahi (2020), MITHRA 2.0, section 3.1.1, Eqs. (3.6)-(3.8)].
+         * relations [fallahi2020mithra20fullwavesimulation, section 3.1.1, Eqs. (3.6)-(3.8)].
          */
         Complex incidentField(const Case& row, Complex theta, bool magnetic, bool staggered,
                               int j) {
@@ -81,8 +94,9 @@ namespace chdr::solver::test::reflection {
                   << " field_coefficient_error=" << coefficientError << '\n';
     }
 
-    /// Two propagating rows, two readings and two polarizations, with identical MPI/serial
-    /// fixtures.
+    /// Two propagating rows (v60, m46.748), two readings and two polarizations, with identical
+    /// MPI/serial fixtures. Pass: field error at most 1e-10, field-coefficient error at most
+    /// 1e-9, and the MPI_COMM_SELF replay within 1e-13 (cells) and 1e-12 (projections).
     TEST(MurFieldReflection, SignedElectricAndMagnetic) {
         for (const auto& row : {cases[1], cases[7]})
             for (auto reading :

@@ -1,5 +1,33 @@
 /** @file test_convergence.cpp
  * @brief Check refinement of the source-free and sourced Lorenz-wave families.
+ * @details Each Convergence test runs one refinement ladder of Convergence.h for one
+ * stencil, one wave family and one reconstruction: collocated, default step, one period,
+ * split along x, Standard on \f$N^3\f$ or NonStandard on \f$N\times N\times 3N/2\f$ cells of
+ * the unit box, \f$N=16,32,64\f$. The reference is the continuum wave of LorenzWave.h: the
+ * source-free mixed wave or the sourced Lorenz-gauge wave, both with
+ * \f$\mathbf k=2\pi(1,2,2)\f$. On the pair (32, 64), the observed order
+ * \f$\log_2(e_{32}/e_{64})\f$ of the relative \f$L^2\f$ error of B must be at least 1.8. For
+ * R2 and R2Prime, the E and Gauss orders must also be at least 1.8; for the sourced wave, the
+ * gauge order too when its fine error exceeds \f$10^{-12}\f$. R1 has no E or Gauss bound
+ * here; its first-order control runs on the pair (64, 128) in test_convergence_long.cpp. The
+ * final identities must hold at \f$10^{-12}\f$ on every level, and the states at
+ * \f$N=16\f$ and 32 are written as rank records for chdr.solver.ranks. CTest runs the tests as
+ * chdr.solver.convergence.{Standard,NonStandard}.{Mixed,Sourced}.{R1,R2,R2Prime}.{serial,mpi2}.
+ *
+ * WaveNorms (chdr.solver.wave_norms.{serial,mpi2}) compares the gauge ratio of waveErrors
+ * with an independent Fourier calculation, without a solve.
+ *
+ * The medium suites use R2, \f$\varepsilon=2.13\f$, safety factor \f$\sqrt3/2\f$, Standard
+ * \f$N^3\f$ cells and both readings. MediumConvergence evolves six source-free plane waves at
+ * speed \f$1/n\f$; MediumSource evolves one driven Lorenz-gauge wave. The E and B orders
+ * must be at least 1.8 on (32, 64), and also on (64, 128) in the Long suites; the Gauss
+ * order, and for MediumSource the gauge order, only when its fine error exceeds
+ * \f$10^{-12}\f$. At \f$N=32\f$, each ladder repeats the run on MPI_COMM_SELF and compares
+ * the fields: cells to \f$10^{-13}\f$, statistics to \f$10^{-12}\f$ (SerialReference.h).
+ * CTest entries, each serial and mpi2: chdr.solver.medium.Convergence.{Collocated,Staggered},
+ * chdr.solver.medium.Source, chdr.solver.medium.long.Convergence.{Collocated,Staggered} and
+ * chdr.solver.medium.long.Source.{Collocated,Staggered}. MediumHoldout.DISABLED_Fields has
+ * no CTest entry.
  */
 #include <complex>
 
@@ -39,9 +67,10 @@ namespace chdr::solver::test {
         return std::abs(gauge) / std::abs(divergence);
     }
 
-    /// Check R1, R2, R2Prime against an independent Fourier calculation:
-    ///   - Predicted gauge ration must exceed 1e-4, avoiding a trivial zero comparison.
-    ///   - Measured/reference relative discrepancy must be <= 1e-12.
+    /// Check R1, R2, R2Prime against an independent Fourier calculation, on 16 by 16 by 16
+    /// cells with sourced-wave histories and no solve:
+    ///   - The predicted gauge ratio must exceed 1e-4, so that the comparison is not trivial.
+    ///   - The relative difference of measured and predicted ratio must be at most 1e-12.
     TEST(WaveNorms, NonzeroGaugeMatchesIndependentMode) {
         auto fields = makeBoxFieldContainer({16, 16, 16}, {1, 1, 1}, 0);
         initializeFieldStorage(fields);
@@ -58,39 +87,52 @@ namespace chdr::solver::test {
             EXPECT_LE(std::abs(waveErrors(solver, wave).gauge_m / predicted - 1), 1e-12);
         }
     }
+    /// Standard, mixed wave, R1: B order at least 1.8 on (32, 64).
     TEST(Convergence, StandardMixedR1) {
         waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R1, false);
     }
+    /// Standard, mixed wave, R2: E, B and Gauss orders at least 1.8 on (32, 64).
     TEST(Convergence, StandardMixedR2) {
         waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2, false);
     }
+    /// Standard, mixed wave, R2Prime: E, B and Gauss orders at least 1.8 on (32, 64).
     TEST(Convergence, StandardMixedR2Prime) {
         waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2Prime, false);
     }
+    /// Standard, sourced wave, R1: B and gauge orders at least 1.8 on (32, 64).
     TEST(Convergence, StandardSourcedR1) {
         waveLadder<StandardSolverPeriodic>(true, EBReconstructionConvention::R1, false);
     }
+    /// Standard, sourced wave, R2: E, B, Gauss and gauge orders at least 1.8 on (32, 64).
     TEST(Convergence, StandardSourcedR2) {
         waveLadder<StandardSolverPeriodic>(true, EBReconstructionConvention::R2, false);
     }
+    /// Standard, sourced wave, R2Prime: E, B, Gauss and gauge orders at least 1.8 on (32, 64).
     TEST(Convergence, StandardSourcedR2Prime) {
         waveLadder<StandardSolverPeriodic>(true, EBReconstructionConvention::R2Prime, false);
     }
+    /// NonStandard, mixed wave, R1: B order at least 1.8 on (32, 64).
     TEST(Convergence, NonStandardMixedR1) {
         waveLadder<NonStandardSolverPeriodic>(false, EBReconstructionConvention::R1, false);
     }
+    /// NonStandard, mixed wave, R2: E, B and Gauss orders at least 1.8 on (32, 64).
     TEST(Convergence, NonStandardMixedR2) {
         waveLadder<NonStandardSolverPeriodic>(false, EBReconstructionConvention::R2, false);
     }
+    /// NonStandard, mixed wave, R2Prime: E, B and Gauss orders at least 1.8 on (32, 64).
     TEST(Convergence, NonStandardMixedR2Prime) {
         waveLadder<NonStandardSolverPeriodic>(false, EBReconstructionConvention::R2Prime, false);
     }
+    /// NonStandard, sourced wave, R1: B and gauge orders at least 1.8 on (32, 64).
     TEST(Convergence, NonStandardSourcedR1) {
         waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R1, false);
     }
+    /// NonStandard, sourced wave, R2: E, B, Gauss and gauge orders at least 1.8 on (32, 64).
     TEST(Convergence, NonStandardSourcedR2) {
         waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R2, false);
     }
+    /// NonStandard, sourced wave, R2Prime: E, B, Gauss and gauge orders at least 1.8 on
+    /// (32, 64).
     TEST(Convergence, NonStandardSourcedR2Prime) {
         waveLadder<NonStandardSolverPeriodic>(true, EBReconstructionConvention::R2Prime, false);
     }
@@ -109,30 +151,41 @@ namespace chdr::solver::test {
                 waveLadder<StandardSolverPeriodic>(sourced, EBReconstructionConvention::R2, longRun,
                                                    reading, false, false, 2.13, direction, gamma);
     }
+    /// Six plane waves at \f$\varepsilon=2.13\f$, collocated: E and B orders at least 1.8 on
+    /// (32, 64).
     TEST(MediumConvergence, Collocated) {
         mediumLadders(false, false, SpatialDiscretization::Collocated);
     }
+    /// As MediumConvergence.Collocated in the staggered reading.
     TEST(MediumConvergence, Staggered) {
         mediumLadders(false, false, SpatialDiscretization::Staggered);
     }
+    /// The collocated plane-wave ladders up to \f$N=128\f$: orders at least 1.8 on (32, 64)
+    /// and (64, 128).
     TEST(MediumConvergenceLong, Collocated) {
         mediumLadders(true, false, SpatialDiscretization::Collocated);
     }
+    /// As MediumConvergenceLong.Collocated in the staggered reading.
     TEST(MediumConvergenceLong, Staggered) {
         mediumLadders(true, false, SpatialDiscretization::Staggered);
     }
     // This ladder samples analytic physical charge/current at each step; it does
     // not manufacture a discrete forcing as test_manufactured.cpp does. The final
     // field errors therefore include source discretization and accumulated evolution.
+    /// Driven wave at \f$\varepsilon=2.13\f$, collocated: E and B orders at least 1.8 on
+    /// (32, 64), Gauss and gauge orders too when their fine errors exceed \f$10^{-12}\f$.
     TEST(MediumSource, Collocated) {
         mediumLadders(false, true, SpatialDiscretization::Collocated);
     }
+    /// As MediumSource.Collocated in the staggered reading.
     TEST(MediumSource, Staggered) {
         mediumLadders(false, true, SpatialDiscretization::Staggered);
     }
+    /// The collocated driven-wave ladder up to \f$N=128\f$, with the rules on both pairs.
     TEST(MediumSourceLong, Collocated) {
         mediumLadders(true, true, SpatialDiscretization::Collocated);
     }
+    /// As MediumSourceLong.Collocated in the staggered reading.
     TEST(MediumSourceLong, Staggered) {
         mediumLadders(true, true, SpatialDiscretization::Staggered);
     }

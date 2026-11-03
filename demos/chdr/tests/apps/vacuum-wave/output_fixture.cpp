@@ -2,6 +2,19 @@
  * @brief Output-only sentinel using the production writer, no Maxwell step.
  * @details The 72-cell dataset is documented in demos/chdr/apps/vacuum-wave/ViewingGuide.org.
  * Coordinates and vector data are synthetic, not SI or Maxwell-solution claims.
+ *
+ * The writer is core/output/FieldOutput.h, which all three programs use: chdr-vacuum-wave
+ * directly, planar-interface and interface-movies through opt-in/output/FieldRunOutput.h.
+ * The fixture has 4 by 3 by 6 cells, origin (-2, 3, 5) and spacing (0.5, 1.25, 2); on two
+ * ranks each rank owns 3 z layers. Every halo cell holds the sentinel -987654321.
+ * Under a comma-decimal global locale, the case "valid" writes the frames of steps 0, 1
+ * and 3 (times 0, 0.125, 0.375). The failure cases "piece", "wrapper", "series" and
+ * "nonfinite" write frame 0 and then make frame 1 fail on one rank; every rank must catch
+ * std::runtime_error. read_output_fixture.py reads the files.
+ *
+ * CTest (through run_output_fixture.py): chdr.vacuum.output.serial and
+ * chdr.vacuum.output.mpi2 (case "valid"), and chdr.vacuum.output.failure.piece, .wrapper,
+ * .series and .nonfinite on two ranks.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 
@@ -89,7 +102,7 @@ void fillFixture(FixtureField& field, double time, bool electric) {
     Kokkos::deep_copy(field.view_m, host);
 }
 
-/** @brief Three unequal actual times and steps, always writing the same writer path. */
+/** @brief Fill E and B for one step (time step/8), write its frame and rewrite the series. */
 void writeFixtureFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b,
                        int step) {
     fillFixture(e, step * 0.125, true);
@@ -98,13 +111,15 @@ void writeFixtureFrame(chdr::output::FieldOutput& writer, FixtureField& e, Fixtu
     writer.writeSeries();
 }
 
-/** @brief Three unequal actual times and steps, using the same writer path. */
+/** @brief Three unequal steps 0, 1 and 3 (times 0, 0.125, 0.375), on the same writer path. */
 void successfulFrames(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b) {
     for (const int step : {0, 1, 3})
         writeFixtureFrame(writer, e, b, step);
 }
 
-/** @brief Deliberately fail one rank's piece, or rank zero's manifest open. */
+/** @brief Prepare one failure: a NaN in one owned E value on the last rank ("nonfinite"),
+ * or a directory that blocks the temporary file of the last rank's piece ("piece"), of
+ * rank zero's PVTI wrapper ("wrapper") or of rank zero's series file ("series"). */
 void injectFailure(const std::string& mode, const std::filesystem::path& directory,
                    FixtureField& electric, int rank, int ranks) {
     if (mode == "nonfinite" && rank == ranks - 1) {
@@ -122,7 +137,7 @@ void injectFailure(const std::string& mode, const std::filesystem::path& directo
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-/** @brief Establish one good frame, then require coordinated publication failure. */
+/** @brief Try to publish frame 1; return 1 if this rank catches std::runtime_error, else 0. */
 int rejectedFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b) {
     try {
         writer.writeFrame(e, b, fixtureFrame(1));

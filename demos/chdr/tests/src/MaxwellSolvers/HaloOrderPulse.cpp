@@ -1,3 +1,17 @@
+/** @file HaloOrderPulse.cpp
+ * @brief Pulse checks of the executable HaloOrder: one rank against two ranks for a Gaussian
+ * pulse that crosses the rank seam near an absorbing face.
+ * @details The all-absorbing boxes have 16 by 16 by 48 cells and \f$\Delta t = 0.5\f$, with
+ * spacing (1, 1, 1) for Standard and (1, 1, 0.5) for NonStandard. The world layout splits
+ * along \f$z\f$. Over 256 steps, the maximum difference of the owned potential samples from a
+ * separate MPI_COMM_SELF solver, divided by the maximum of the one-rank solution, must be at
+ * most \f$10^{-13}\f$. The old-order control of ShippedOrderSolver.h must differ by at least
+ * \f$10^{-3}\f$. The test prints whether the two runs agree bit for bit; it does not assert it.
+ *
+ * Both tests require exactly two ranks (ASSERT_EQ on the communicator size). They run only in
+ * chdr.src.HaloOrder.mpi2; chdr.src.HaloOrder.serial compiles this file but filters out its
+ * tests. HaloOrderMixed.cpp also uses difference(), which this file defines.
+ */
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -87,10 +101,13 @@ namespace fdtd_test {
                   << " bitwise=" << repaired.second << '\n';
     }
 
+    /// Standard stencil, spacing (1, 1, 1): rank difference at most 1e-13, control at least 1e-3.
     TEST(HaloOrder, StandardPulseAcrossSeam) {
         checkPulse<Standard<ippl::absorbing>>({1, 1, 1});
     }
 
+    /// NonStandard stencil, spacing (1, 1, 0.5): rank difference at most 1e-13, control at least
+    /// 1e-3.
     TEST(HaloOrder, NonStandardPulseAcrossSeam) {
         checkPulse<NonStandard<ippl::absorbing>>({1, 1, .5});
     }

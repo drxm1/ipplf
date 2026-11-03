@@ -1,5 +1,21 @@
 /** @file test_mur_families.cpp
  * @brief Check local plane-wave compatibility of Mur faces, edges and corners.
+ * @details Box: 16 x 16 x 16 cells, split along y on two ranks, collocated R1 (the defaults
+ * of makeOpenTestSolver()), matched Mur speed.
+ * - LocalCompatibility: 72 fixtures from h = (1, 1, 1) or (1.25, 0.8, 1),
+ *   \f$\varepsilon_r\f$ = 1 or 2.13, the default step or safety factor 0.98, and 9 selections:
+ *   the 8 corners of the all-Mur box and one edge (lower x, lower z) of a box with periodic y.
+ *   After 3 steps, all four potential components in the causal region (inward layers 0 to 8)
+ *   must equal the exact sum of 8 (corner) or 4 (edge) lattice plane waves within 1e-13 of the
+ *   family maximum. Reference: exact lattice value from familyAmplitude() in
+ *   ReflectionOracles.h. On two ranks each run must also equal an MPI_COMM_SELF replay within
+ *   1e-13.
+ * - ShippedOrderControls: with the old finish order, the edge case must miss by at least 1e-3
+ *   on one and on two ranks. The corner-0 case must miss by at least 1e-3 on two ranks; on one
+ *   rank it must pass within 1e-13, because a serial all-open box has no stale periodic wrap.
+ *
+ * CTest: chdr.solver.mur.families.serial and chdr.solver.mur.families.mpi2
+ * (MurEdgeCornerFamilies.*).
  */
 #include <complex>
 #include <gtest/gtest.h>
@@ -18,7 +34,7 @@ namespace chdr::solver::test {
          * @details Each wave amplitude and the frequency come from the independent oracle.
          * Sum their phases in inward layer coordinates, with the outermost owned sample at
          * zero. The local family satisfies the selected faces and their intersections by
-         * linear superposition [Bamberger, Joly and Roberts (1987), section II, p. 05], as
+         * linear superposition [bamberger1987SecondOrderCorner, section II, p. 05], as
          * explained in familyAmplitude(). Opposite faces are excluded from the causal region.
          */
         struct Family {
@@ -160,7 +176,8 @@ namespace chdr::solver::test {
     }  // namespace
 
     /// Two aspects, two media, two physical steps and eight corners plus one mixed edge: 72
-    /// fixtures.
+    /// fixtures. Pass: causal-region error at most 1e-13 of the family maximum after 3 steps,
+    /// and on two ranks the MPI_COMM_SELF replay within 1e-13.
     TEST(MurEdgeCornerFamilies, LocalCompatibility) {
         for (const auto h : {std::array{1., 1., 1.}, std::array{1.25, .8, 1.}})
             for (double epsilon : {1., 2.13})
@@ -172,8 +189,9 @@ namespace chdr::solver::test {
                     }
     }
 
-    /// Serial all-open fields have no stale wrap; only distributed all-open and mixed cases must
-    /// fail.
+    /// Old finish order: the mixed edge case (periodic y) must miss by at least 1e-3 on any rank
+    /// count, the all-open corner-0 case only on two ranks. Serial all-open fields have no stale
+    /// wrap, so there corner 0 must pass within 1e-13.
     TEST(MurEdgeCornerFamilies, ShippedOrderControls) {
         familyCase({1., 1., 1.}, 1., false, 0, true);
         familyCase({1., 1., 1.}, 1., false, 8, true);

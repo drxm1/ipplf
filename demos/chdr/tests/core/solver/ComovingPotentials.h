@@ -1,5 +1,9 @@
 /** @file ComovingPotentials.h
  * @brief Analytic periodic co-moving potentials and independent field-error symbols.
+ * @details test_comoving.cpp loads ComovingPotentials into ChdrSolver, calls
+ * reconstructEB() and compares the measured E errors with the two predictions of
+ * comovingSymbols(): the exact difference symbols (P1) and their leading-order series (P2).
+ * No measured field value enters these predictions.
  */
 #pragma once
 

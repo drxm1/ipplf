@@ -1,5 +1,17 @@
 /** @file test_mur_refinement.cpp
  * @brief Compare the centre-plane discrete reflection with its continuum limit.
+ * @details Both tests evaluate only the oracle functions of ReflectionOracles.h. They create
+ * no solver and make no MPI call, so each mpi2 entry repeats the serial computation on both
+ * ranks.
+ * - CentrePlaneOrder: for 11 rows (vacuum and \f$\varepsilon_r = 2.13\f$, from normal to
+ *   evanescent incidence; h = 1, \f$\Delta t = 0.5\f$, matched speed), the observed order of
+ *   \f$\lvert R_{1/2} - R_c\rvert\f$ between the refinement factors 2 and 4 must lie in
+ *   [1.9, 2.1]. Reference: the continuum coefficient \f$R_c\f$ of continuumReflection().
+ * - CodeConfirmedRows: prints 117 reflection-record lines and asserts nothing.
+ *
+ * CTest: chdr.solver.mur.refinement.serial and chdr.solver.mur.refinement.mpi2
+ * (CentrePlaneOrder); chdr.solver.mur.records.serial and chdr.solver.mur.records.mpi2
+ * (CodeConfirmedRows, label record).
  */
 #include <gtest/gtest.h>
 #include <iostream>
@@ -34,7 +46,7 @@ namespace chdr::solver::test::reflection {
          * by the refinement factor. This represents physical mesh refinement at fixed mode
          * and Courant number. Both coefficients come from the independent oracle; using
          * centre instead of layerZero removes the reference-plane phase described by
-         * discreteReflection() [Mur (1981), section IV, Eq. (16)].
+         * discreteReflection() [mur1981AbsorbingBoundaryFdtd, section IV, Eq. (16)].
          */
         double refinementError(const RefinementRow& row, int refinement) {
             const double speed = 1 / std::sqrt(row.epsilon_m), omega = row.omega_m / refinement;
@@ -49,6 +61,8 @@ namespace chdr::solver::test::reflection {
     /** Finest-pair errors must give second order without changing the coarse period by rounding.
      * The interval allows finite-mesh terms in the centred Mur discretization; the discrete
      * and continuum coefficients are independently defined in ReflectionOracles.h.
+     * Pass: for each of the 11 rows, the order between the refinement factors 2 and 4 lies in
+     * [1.9, 2.1].
      */
     TEST(MurReflectionRefinement, CentrePlaneOrder) {
         for (const auto& row : refinementRows) {
@@ -63,8 +77,12 @@ namespace chdr::solver::test::reflection {
         }
     }
 
-    /// Three-mesh angular and evanescent tables; evolved marks only an independently checked coarse
-    /// row.
+    /// Three-mesh angular and evanescent tables; evolved=1 marks only a coarse row that
+    /// MurReflection.ExactTwoWaveRows checks with ChdrSolver. Prints 117 reflection-record lines
+    /// (discrete \f$R_0\f$ and \f$R_{1/2}\f$, continuum \f$R_c\f$, and \f$R_0\f$ at unit physical
+    /// Mur speed) at refinements 1, 2 and 4: 13 vacuum rows at the steps 0.5 and
+    /// \f$0.98/\sqrt3\f$, 11 medium rows at 0.5, and the 2 anisotropic rows of OpenBoxCases.h.
+    /// Asserts nothing.
     TEST(MurReflectionRefinement, CodeConfirmedRows) {
         const auto precision = std::cout.precision(17);
         const auto record    = [](const Case& row, bool normal, bool evolved, int refinement) {

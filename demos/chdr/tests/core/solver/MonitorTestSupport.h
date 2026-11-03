@@ -1,5 +1,12 @@
 /** @file MonitorTestSupport.h
  * @brief Shared final-transition checks for evolved periodic test cases.
+ * @details requireFinalIdentities is the check that the test README calls the final
+ * identities: after the last solve, the normalized residuals of the divergence of B, the
+ * divergence of the raw B, the three Faraday components and the Gauss formula must each be
+ * at most \f$10^{-12}\f$. A normalized residual is the residual of a cell divided by its
+ * uncancelled absolute scale, maximized over the cells (ResidualMetrics::cell_m in
+ * opt-in/diagnostics/MonitorExpressions.h). advanceWithFinalMonitor applies the check to the
+ * last requested solve only.
  */
 #pragma once
 #include <gtest/gtest.h>

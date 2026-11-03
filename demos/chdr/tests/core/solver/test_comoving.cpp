@@ -1,8 +1,27 @@
 /** @file test_comoving.cpp
  * @brief Compare reconstructed co-moving fields with independent analytic predictions.
- * @details Output rows tagged T7a describe one Fourier mode; T7b describes the
- * neutralized Gaussian train. P1 columns contain exact-symbol predictions and
- * P2 columns contain their leading-order expansions, defined by comovingSymbols().
+ * @details Each case loads the analytic potentials of ComovingPotentials (charge in rigid
+ * motion along z at \f$\gamma=118.417071\f$) into both history slots and calls
+ * reconstructEB() once, without time stepping. The single-mode cases use one Fourier mode
+ * on 8x8x64 cells; the bunch-train cases use a transversely neutralized Gaussian train on
+ * 32x32x64 cells. All cases have \f$h_z=1/64\f$ and \f$h_x=h_y=h_z\f$ (Standard) or
+ * \f$1.5h_z\f$ (NonStandard), periodic, split along z. Collocated cases run R1, R2 and
+ * R2Prime; the staggered cases run Standard R2.
+ *
+ * For \f$E_z\f$ and \f$E_x\f$ the test measures the relative \f$L^2\f$ error and the
+ * relative maximum error against the analytic field. Both must equal the exact-symbol
+ * prediction (P1) to relative \f$10^{-9}\f$; for the bunch train they must also equal the
+ * leading-order series (P2) to relative 0.10. comovingSymbols() defines P1 and P2. R1 is
+ * compared at the whole and at the half step. The test also requires the default step
+ * 0.5/64 (Standard) or 1/64 (NonStandard), a cellwise normalized divergence of the
+ * reconstructed B of at most \f$10^{-12}\f$, numerically equal E values for R2Prime and R2
+ * (equality of the double values; signed zeros of opposite sign count as equal), and a
+ * refusal of a wave number that does not fit the periodic box.
+ *
+ * Rank zero prints one line and writes one JSONL record per case, component and time label;
+ * the line and the record name carry a single-mode or a bunch-train tag (recordComparison()).
+ * CTest entries: chdr.solver.comoving.{serial,mpi2} (label unit, timeout 60 s, records in
+ * runs/comoving-serial and runs/comoving-mpi2).
  */
 #include <algorithm>
 #include <cmath>
@@ -102,7 +121,8 @@ namespace {
         return {std::sqrt(double(errorNorm / referenceNorm)), errorMaximum / referenceMaximum};
     }
 
-    /// Preserve global-component traversal within each owned block for the bitwise R2 check.
+    /// Preserve global-component traversal within each owned block for the R2Prime against R2
+    /// equality check.
     std::vector<double> ownedElectric(EMFieldsType& field) {
         const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, field.getView());
         const auto local = field.getLayout().getLocalNDIndex();
@@ -118,7 +138,7 @@ namespace {
 
     /** @brief Check equality under the same floating-point contraction setting.
      * @details The two reconstruction kernels must be compiled with compatible
-     * contraction flags; the evidence records the actual compile commands.
+     * contraction flags; when the check fails, compare these flags in the compile commands.
      */
     void checkEquivalentFields(EBReconstructionConvention ebReconstructionConvention,
                                EMFieldsType& field, std::vector<double>& r2Values) {
@@ -269,6 +289,8 @@ namespace {
                                                        ebReconstructionConvention, r2Values);
     }
 
+    /// Refusal of the fixture input: \f$k_x=16\pi\f$ (1.5 periods in x length 0.1875) throws
+    /// std::invalid_argument; \f$k_x=32\pi/3\f$ (one period) is accepted.
     TEST(ComovingT7, RejectsNonperiodicSingleMode) {
         constexpr double PI = ComovingPotentials::PI;
         EXPECT_THROW(
@@ -277,21 +299,29 @@ namespace {
         EXPECT_NO_THROW(ComovingPotentials::requirePeriodicWave({32 * PI / 3, 0, 6 * PI},
                                                                 {0.1875, 0.1875, 1.0}));
     }
+    /// One mode on Standard 8x8x64 cells, collocated R1, R2, R2Prime: measured errors equal
+    /// the exact-symbol prediction to relative \f$10^{-9}\f$.
     TEST(ComovingT7, StandardSingleMode) {
         comovingCase<StandardSolverPeriodic>(true);
     }
+    /// The single-mode rule on NonStandard 8x8x64 cells (\f$h_x=h_y=1.5h_z\f$).
     TEST(ComovingT7, NonStandardSingleMode) {
         comovingCase<NonStandardSolverPeriodic>(true);
     }
+    /// Gaussian bunch train on Standard 32x32x64 cells, collocated R1, R2, R2Prime: exact
+    /// symbols to relative \f$10^{-9}\f$, leading-order series to relative 0.10.
     TEST(ComovingT7, StandardBunchTrain) {
         comovingCase<StandardSolverPeriodic>(false);
     }
+    /// The bunch-train rules on NonStandard 32x32x64 cells (\f$h_x=h_y=1.5h_z\f$).
     TEST(ComovingT7, NonStandardBunchTrain) {
         comovingCase<NonStandardSolverPeriodic>(false);
     }
+    /// The single-mode rule in the staggered reading, Standard R2.
     TEST(ComovingT7, StaggeredSingleMode) {
         comovingCase<StandardSolverPeriodic>(true, SpatialDiscretization::Staggered);
     }
+    /// The bunch-train rules in the staggered reading, Standard R2.
     TEST(ComovingT7, StaggeredBunchTrain) {
         comovingCase<StandardSolverPeriodic>(false, SpatialDiscretization::Staggered);
     }

@@ -3,6 +3,21 @@
  * @details GaussIdentity explains the discrete formula derived from
  * [christlieb2024GaugeConserving, Theorem 3.5]. Distinct histories exercise each
  * reconstruction's scalar slot and the delayed R2Prime electric output.
+ *
+ * Configuration: periodic boxes of unit length per axis, Standard with 12 by 10 by 8 cells
+ * and NonStandard with 8 by 8 by 12 cells, for R1, R2 and R2Prime (collocated reading).
+ * The data add a hash of the global cell index, the checkerboard \f$(-1)^{x+y+z}\f$ and
+ * the x-Nyquist mode \f$(-1)^x\f$, so the input bits do not depend on the rank count.
+ * Over five monitor steps, each with a new source, the normalized mismatch between the Gauss
+ * defect and its discrete formula (cell mismatch divided by its uncancelled absolute scale,
+ * maximum over cells) is at most \f$10^{-12}\f$. After the live source is overwritten with
+ * 12345.0, a second evaluation returns the same normalized formula mismatch and the same L2
+ * norm of the Gauss defect (EXPECT_DOUBLE_EQ, 4 units in the last place). Reference: exact
+ * lattice value (the
+ * discrete formula at round-off).
+ * The records are the in-memory reports of MonitorRecords.h; the test writes no file.
+ *
+ * CTest: chdr.diagnostics.monitor-records.serial and chdr.diagnostics.monitor-records.mpi2.
  */
 #include <gtest/gtest.h>
 #include <iostream>
@@ -85,9 +100,11 @@ namespace {
                        EBReconstructionConvention::R2Prime})
             checkGaussReconstruction<PotentialSolverBase>(cells, r);
     }
+    /// Standard stencil, 12 by 10 by 8 cells: Gauss formula check of R1, R2 and R2Prime.
     TEST(ChdrMonitorRecords, GaussStandard) {
         checkGauss<StandardSolverPeriodic>({12, 10, 8});
     }
+    /// NonStandard stencil, 8 by 8 by 12 cells: the same checks.
     TEST(ChdrMonitorRecords, GaussNonStandard) {
         checkGauss<NonStandardSolverPeriodic>({8, 8, 12});
     }

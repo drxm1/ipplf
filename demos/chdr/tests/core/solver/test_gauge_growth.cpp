@@ -4,9 +4,26 @@
  * defect: [christlieb2024GaugeConserving, Lemma 3.3,
  * Eq. (38)]. This test measures the norm from actual IPPL arrays, not a modal
  * predictor, over at least ten periods of the discrete gauge and mixed Lorenz waves.
- * B5 labels the collocated first/last-period growth record; T2 is the discrete
- * gauge mode and T3 the continuum mixed wave. Staggered histories are records
- * without a ratio criterion because their gauge is at round-off.
+ * Staggered histories are records without a ratio criterion because their gauge is at round-off.
+ *
+ * Configuration: R2, no sources, default step, \f$\lceil 10T/\Delta t\rceil\f$ solves with
+ * the wave period \f$T=2\pi/\omega\f$, periodic unit box split along x. Standard uses
+ * 32x32x32 cells, NonStandard 32x32x48 cells (\f$h_x=h_y=1.5h_z\f$). Each stencil runs two
+ * waves with \f$\mathbf k=2\pi(1,2,2)\f$: the exact discrete gauge wave (GaugeWave) and the
+ * mixed wave of makeMixedWave(). After every solve the test takes the global \f$L^2\f$ norm
+ * of the discrete gauge residual.
+ *
+ * Pass rules, collocated reading only: for both waves, the largest norm with
+ * \f$t\ge9T\f$ is at most 1.05 times the largest norm with \f$t\le T\f$. For the discrete
+ * gauge wave, the norm after the first solve equals exactGaugeNorm() and the last/first
+ * ratio equals 1, both to relative \f$10^{-12}\f$. Every case, the staggered one included,
+ * requires finite norms and the final identities (requireFinalIdentities(), six cellwise
+ * bounds of \f$10^{-12}\f$) after the first and the last solve. Rank zero writes each
+ * history as one gauge-history JSONL record; each collocated case prints its two maxima
+ * and their ratio.
+ *
+ * CTest entries (label long, timeout 1800 s, records in runs/long-serial and runs/long-mpi2):
+ * chdr.solver.long.GaugeGrowth.{Standard,NonStandard,StaggeredRecord}.{serial,mpi2}.
  */
 #include <algorithm>
 #include <cmath>
@@ -134,7 +151,8 @@ namespace chdr::solver::test {
         return discrete;
     }
 
-    /// Frozen growth criterion plus the independent two-sided discrete-wave development check.
+    /// Collocated runs: the 1.05 ratio rule and, for the discrete gauge wave, the closed-form
+    /// first norm and the unit ratio to \f$10^{-12}\f$. Every run writes its history record.
     template <class SolverType>
     void checkGrowth(SolverType& solver, const GaugeWave& discrete, const GaugeEnvelope& result,
                      bool gaugeWave) {
@@ -174,12 +192,17 @@ namespace chdr::solver::test {
         gaugeGrowth<PotentialSolverBase>(true);
         gaugeGrowth<PotentialSolverBase>(false);
     }
+    /// Standard 32x32x32, collocated R2: last-period maximum of the gauge norm at most 1.05
+    /// times the first-period maximum; discrete gauge wave also exact to \f$10^{-12}\f$.
     TEST(LongGaugeGrowth, Standard) {
         bothGaugeGrowthCases<StandardSolverPeriodic>();
     }
+    /// The same rules on NonStandard 32x32x48 cells with \f$h_x=h_y=1.5h_z\f$.
     TEST(LongGaugeGrowth, NonStandard) {
         bothGaugeGrowthCases<NonStandardSolverPeriodic>();
     }
+    /// Record only: gauge-norm history of the discrete gauge wave in the staggered reading
+    /// (Standard 32x32x32, R2); it asserts finite norms and the final identities, no ratio.
     TEST(LongGaugeGrowth, StaggeredRecord) {
         gaugeGrowth<StandardSolverPeriodic>(true, SpatialDiscretization::Staggered);
     }

@@ -1,5 +1,19 @@
 /** @file test_mur_outer_layer.cpp
  * @brief Check reconstructed outer-layer fields against independent polynomial values.
+ * @details
+ * - MurOuterLayer.PolynomialFieldsAndZeroGhostControl: 8 x 6 x 10 cells,
+ *   h = (1, 0.8, 1.25), Mur on x and z, y periodic or Mur, split along z on two ranks, R2 in
+ *   both readings, safety factor 0.9. The potentials come from the polynomial fixture of
+ *   OuterLayerOracles.h. On the outermost owned layers of the open axes, E, averaged B and
+ *   raw B must lie within 1e-13 of their analytic values after prepareHistories(), and at
+ *   least 0.1 off with zero ghosts; both relative to the positive analytic maximum (exact
+ *   lattice value). On two ranks the three fields must also equal an MPI_COMM_SELF replay
+ *   within 1e-13.
+ * - MurOuterLayerRecords.ZeroGhostMagnitude: prints the raw-B error with zero ghosts at 10,
+ *   20, 40 and 80 points per wavelength and asserts nothing. It skips on more than one rank.
+ *
+ * CTest: chdr.solver.mur.outer-layer.serial and chdr.solver.mur.outer-layer.mpi2
+ * (MurOuterLayer.*); chdr.solver.open.record.zero-ghost (serial only, label record).
  */
 #include <complex>
 #include <gtest/gtest.h>
@@ -81,6 +95,7 @@ namespace chdr::solver::test {
          * @details Retain the physical step, reading and periodic axes. Only global rank zero
          * reconstructs the self-communicator fields; the shared comparison uses each field's
          * nonzero serial maximum and records binary equality separately from its tolerance.
+         * On one rank this function returns without a check.
          */
         void checkFieldRanks(Solver& solver, const EMFieldsType& raw, bool periodicY) {
             if (solver.A_n.getLayout().comm.size() == 1)
@@ -115,6 +130,7 @@ namespace chdr::solver::test {
      * The zero-ghost control must exceed 0.1 of the analytic maximum for E,
      * averaged B and raw B. Prepared fields must be within 1e-13 on both
      * all-open and mixed boxes. CTest runs the same fixtures on one and two ranks.
+     * On two ranks the three fields must also equal an MPI_COMM_SELF replay within 1e-13.
      */
     TEST(MurOuterLayer, PolynomialFieldsAndZeroGhostControl) {
         for (bool periodicY : {false, true})
@@ -152,7 +168,10 @@ namespace chdr::solver::test {
      * continued plane wave. Normalize by \f$k|A_y|\f$, where \f$k=2\pi/\mathrm{PPW}\f$.
      * The missing term has magnitude \f$1/(2kh)\f$ for the centred lower face and
      * \f$1/(kh)\f$ for the forward upper face (deduction from the difference rows in
-     * Fornberg (1988), Table 1, and Ryu et al. (2016), Appendix A). No evolution is used.
+     * [fornberg1988FiniteDifferenceFormulas, Table 1] and [ryu2016potentialfdtd, Appendix A]).
+     * No evolution is used. Box: 24 x 2 x 4 cells, h = 1, Mur on x; 10, 20, 40 and 80 points
+     * per wavelength in both readings. The test prints the error and asserts nothing. It skips
+     * on more than one rank.
      */
     TEST(MurOuterLayerRecords, ZeroGhostMagnitude) {
         if (ippl::Comm->size() != 1)

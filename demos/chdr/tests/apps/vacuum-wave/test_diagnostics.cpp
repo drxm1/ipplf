@@ -2,9 +2,19 @@
  * @brief Regression and fault tests for owned-cell vacuum diagnostics.
  * @details CPU checks for the default coarse mode on one/two ranks. The independent
  * host recurrence and derivative references follow our substitution in Fallahi,
- * MITHRA 2.0, arXiv:2009.13645v1, Eqs. (3.6)-(3.17), printed pp.12-14.
+ * MITHRA 2.0, arXiv:2009.13645v1 [fallahi2020mithra20fullwavesimulation],
+ * Eqs. (3.6)-(3.17), printed pp.12-14.
  * Production referencePotential, evaluate_EB and the closed-form helper are not
  * used to create expected arrays. This does not replace the full propagation test.
+ *
+ * The tests seed the owned cells of the coarse grid (8 by 8 by 64 cells) from the scalar
+ * recurrence, leave every halo NaN and call measure() of VacuumDiagnostics.h. They check
+ * the step-0 values, injected faults on the last rank, 128 steps of the recurrence
+ * (discrete error at most 1e-10, Fourier coefficient, phase increment and speed within
+ * 1e-12) and the phase tracker. Reference: exact lattice value (scalar recurrence) and
+ * the detection of injected faults.
+ *
+ * CTest: chdr.vacuum.unit.serial, chdr.vacuum.unit.mpi2 and chdr.vacuum.unit.mpi2.shuffle.
  */
 #include "Ippl.h"
 
@@ -299,22 +309,35 @@ namespace {
         Solver* solver_m = &run_m.solver();
     };
 
+    /// Step 0: 4096 owned cells, discrete error below 1e-12, zero error 0, relative E and B
+    /// errors within 1e-13 of \f$1-\sin(x)/x\f$ and \f$1-\sin(q)/q\f$ (\f$x = k\Delta t/2\f$,
+    /// \f$q = kh_z\f$), Fourier coefficient \f$-\mathrm{i}\f$ within 1e-13, raw times
+    /// \f$-\Delta t/2\f$ and 0.
     TEST_F(VacuumDiagnosticsTest, MatchesInitialReferenceAndOwnership) {
         checkInitial(*solver_m, fields_m);
     }
 
+    /// The value 0.4 in one owned cell of a history, E or B on the last rank raises the
+    /// discrete error above 1e-10, and in an inactive component also the zero error above
+    /// 1e-12. A source value 1e-5 appears exactly as source error and zero error.
     TEST_F(VacuumDiagnosticsTest, DetectsFiniteFieldAndHistoryDefects) {
         checkFiniteDefects(*solver_m, fields_m);
     }
 
+    /// A NaN in one owned cell of any history, E, B or J on the last rank makes the result
+    /// nonfinite on every rank.
     TEST_F(VacuumDiagnosticsTest, RejectsNonfiniteOwnedValuesOnAnyRank) {
         checkNonfiniteFields(*solver_m, fields_m);
     }
 
+    /// A resized scratch history on the last rank gives a nonfinite result and count 0 on
+    /// every rank.
     TEST_F(VacuumDiagnosticsTest, RejectsStorageMismatchCollectively) {
         checkStorageMismatch(*solver_m, fields_m);
     }
 
+    /// An origin z equal to the largest finite double makes the reference overflow; the
+    /// result is nonfinite.
     TEST_F(VacuumDiagnosticsTest, RejectsOverflowedReferenceFromFiniteMetadata) {
         seed(*solver_m, fields_m, 0);
         ippl::Vector<double, Dim> origin(0.0);
@@ -323,10 +346,16 @@ namespace {
         EXPECT_FALSE(measure(*solver_m, fields_m, 0).finite_m);
     }
 
+    /// Steps 0 to 128 seeded from the recurrence: discrete error at most 1e-10; Fourier
+    /// coefficient \f$-\mathrm{i}u_n\f$, phase increment and cumulative speed within 1e-12.
     TEST_F(VacuumDiagnosticsTest, MatchesIndependentModesAndUnwrappedPhase) {
         checkSteps(*solver_m, fields_m);
     }
 
+    /// PhaseTracker measures speed 0.9, a backward wave and amplitudes 0.5 and 1e-250
+    /// without a policy decision. It rejects a repeated or skipped step, an inconsistent
+    /// time, a changed time step, zero amplitude and a NaN coefficient; measure() rejects
+    /// step -1.
     TEST_F(VacuumDiagnosticsTest, SeparatesPhaseStructureFromAcceptancePolicy) {
         checkPhaseFailures(*solver_m, fields_m);
     }

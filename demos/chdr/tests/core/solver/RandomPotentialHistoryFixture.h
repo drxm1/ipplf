@@ -5,6 +5,9 @@
  * GenerateRandomPotentialHistoryFixtures.py, not by a platform-specific C++ random engine.
  * The data does not select boundary conditions: the receiving solver supplies periodic
  * or Mur boundaries and prepares the ghosts after the owned samples have been loaded.
+ * Users: test_mur_medium.cpp (fixture medium) and test_mur_stability.cpp (stability-open,
+ * stability-mixed). CMake runs the generator at build time and passes the output directory
+ * as CHDR_RANDOM_POTENTIAL_HISTORY_FIXTURE_DIR.
  */
 #pragma once
 #include <array>

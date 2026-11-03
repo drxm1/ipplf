@@ -1,5 +1,17 @@
 /** @file test_derived.cpp
  * @brief Compare every cached coefficient cell with its independently authored closed form.
+ * @details IndexMap{2} gives values in \f$[1, 16)\f$ on the 12 by 14 by 16 grid of
+ * OwnerTestSupport.h, periodic or open, with each split axis. Every allocated cell of
+ * \f$Q = \varepsilon^{-2}\f$ and of the three harmonic face fields must be bitwise equal to the
+ * closed form on the extended map (OwnerOracles.h). In the lower ghost layer of an open axis
+ * the face value is \f$H(\varepsilon_0, \varepsilon_0) = \varepsilon_0\f$, with
+ * \f$\varepsilon_0\f$ the value of cell 0 on that axis. A repeated derive() must return the
+ * same storage, and the owner must hold five fields. derived() before derive() must throw
+ * std::out_of_range, and a rule with a colliding name must throw std::invalid_argument. A
+ * uniform 2.13 must give 2.13 in every face cell, ghosts included.
+ *
+ * Reference: exact lattice value; self-consistency (cache, refusal). CTest entries:
+ * chdr.material.Derived.serial and chdr.material.Derived.mpi2 (filter MaterialDerived.*).
  */
 #include <gtest/gtest.h>
 
@@ -25,6 +37,9 @@ namespace chdr::material::test {
             << "face axis " << Axis;
     }
 
+    /// Periodic and open grids, 3 split axes: Q and the three face fields are bitwise equal to
+    /// their closed forms in every allocated cell, a repeated derive() reuses the storage, and
+    /// the owner holds five fields.
     TEST(MaterialDerived, CompleteExtendedMap) {
         // Vary the decomposition axis independently of the three face directions;
         // physical runs also cover edges shared by a rank boundary and a global face.
@@ -53,6 +68,8 @@ namespace chdr::material::test {
     /// The same key with another type must not silently return a different rule's field.
     struct NameCollision : InverseSquare {};
 
+    /// Uniform 2.13 on an open grid split along x: derived() before derive() throws, a name
+    /// collision throws, and every allocated cell of the x face field equals 2.13.
     TEST(MaterialDerived, CacheIdentityAndHomogeneousFaces) {
         auto grid      = makeGrid(0, false);
         const auto map = KOKKOS_LAMBDA(CellIndex, Position, bool& marked) {

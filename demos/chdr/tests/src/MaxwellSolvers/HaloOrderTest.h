@@ -1,3 +1,11 @@
+/** @file HaloOrderTest.h
+ * @brief Solver storage and host access shared by HaloOrder, OpenBoundaryRegression,
+ * InteriorBounds and MurDispatch.
+ * @details Fields builds a box split along \f$z\f$ on a given communicator, with all axes or
+ * selected axes periodic. load() writes owned potential samples from global labels and
+ * exchanges them; owned() visits owned samples in global order. A box on MPI_COMM_SELF is a
+ * one-rank reference with the same global labels as the box on MPI_COMM_WORLD.
+ */
 #ifndef IPPL_TEST_HALO_ORDER_H
 #define IPPL_TEST_HALO_ORDER_H
 

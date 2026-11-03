@@ -1,3 +1,19 @@
+/** @file HaloOrderMixed.cpp
+ * @brief Drift and pulse checks of the executable HaloOrder in a Standard box that is open in
+ * \f$x\f$ and periodic in \f$y\f$ and \f$z\f$.
+ * @details The box has 32 by 4 by 32 cells of spacing 1, and the solver receives
+ * FDTDBoundary::fromLayout(). MixedStandardDrift runs 64 steps with \f$\Delta t = 0.5\f$ on
+ * MPI_COMM_SELF and on MPI_COMM_WORLD. The drift from \f$\psi^k = k\f$ must be at most
+ * \f$10^{-12}\f$, and the old-order control must miss by at least \f$10^{-2}\f$ on both
+ * communicators: its periodic ghost copies keep the values from before the Mur update.
+ * MixedStandardPulseAcrossSeam runs a Gaussian pulse for 256 steps with \f$\Delta t = 0.5\f$ and
+ * \f$\Delta t = 0.98/\sqrt{3}\f$ on two ranks. The difference from a one-rank solver must be at
+ * most \f$10^{-13}\f$ of the one-rank maximum, and the control must differ by at least
+ * \f$10^{-3}\f$.
+ *
+ * MixedStandardDrift runs in chdr.src.HaloOrder.serial and chdr.src.HaloOrder.mpi2.
+ * MixedStandardPulseAcrossSeam requires exactly two ranks and runs only in the mpi2 entry.
+ */
 #include <cmath>
 #include <gtest/gtest.h>
 
@@ -15,6 +31,9 @@ namespace fdtd_test {
     /** @brief Reuse the owned-sample comparison from HaloOrderPulse.cpp.
      * @details It records maximum discrepancy, reference magnitude and exact
      * binary64 equality; neither physical exterior ghosts nor rank ghosts enter.
+     * This declaration is written by hand, and the definition is in HaloOrderPulse.cpp.
+     * The executable therefore needs the pulse file, also in the serial entry, which
+     * filters out the pulse tests.
      */
     void difference(Potential&, Potential&, std::array<double, 2>&, int&);
 
@@ -71,6 +90,8 @@ namespace fdtd_test {
         return {global[0] / global[1], allIdentical != 0};
     }
 
+    /// Mixed box, 64 steps of 0.5 on the self and the world communicator: drift at most 1e-12,
+    /// old-order control at least 1e-2.
     TEST(HaloOrder, MixedStandardDrift) {
         for (MPI_Comm comm : {MPI_COMM_SELF, MPI_COMM_WORLD}) {
             const auto repaired = mixedRun<MixedStandard>(.5, true, comm);
@@ -82,6 +103,8 @@ namespace fdtd_test {
         }
     }
 
+    /// Mixed box on two ranks, 256 steps with time steps 0.5 and \f$0.98/\sqrt{3}\f$: rank
+    /// difference at most 1e-13 of the one-rank maximum, old-order control at least 1e-3.
     TEST(HaloOrder, MixedStandardPulseAcrossSeam) {
         ASSERT_EQ(ippl::Comm->size(), 2);
         for (double dt : {.5, .98 / std::sqrt(3.)}) {

@@ -1,5 +1,8 @@
 /** @file MediumCases.h
  * @brief One shared table of accepted and refused homogeneous material selections.
+ * @details test_medium_guard.cpp passes every row of MediumCases to
+ * validateMaterialUpdate() (suite MediumValidity) and to the ChdrSolver constructor
+ * (suite MediumGuard). GuardMap turns a row into a material map.
  */
 #pragma once
 #include <limits>
@@ -10,8 +13,9 @@ namespace chdr::solver::test {
     /** @brief Expected acceptance for one material map and solver selection.
      * @details epsilon_m is the background relative permittivity. defect_m is zero
      * for a constant map, one for one finite mismatch, or two for one NaN sample.
-     * The rejected rows isolate these map defects, a subunit value, a nonunit gauge
-     * parameter and the NonStandard stencil. The final rows are valid controls.
+     * The five rejected rows isolate these map defects, a subunit value (0.5), a nonunit
+     * gauge parameter (\f$\alpha=2\f$) and the NonStandard stencil. The final three rows
+     * (\f$\varepsilon=1,2.13,4\f$) are valid controls.
      */
     struct MediumCase {
         double epsilon_m, alpha_m;

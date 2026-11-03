@@ -3,8 +3,21 @@
  * @details GaugeWave supplies the exact discrete potentials and the R1 closed
  * form, derived from [christlieb2024GaugeConserving, section 3.1, proof of
  * Theorem 3.5, p. 8] and [fallahi2020mithra20fullwavesimulation,
- * Eqs. (3.17), (3.24)]. A6 labels these gauge-cancellation records.
- * No continuum approximation replaces the oracle here.
+ * Eqs. (3.17), (3.24)]. No continuum approximation replaces the oracle here.
+ *
+ * Each case loads the wave, runs R1, R2 and R2Prime in turn (collocated, periodic box split
+ * along x) and after every solve takes the largest owned E error (against zero for R2 and
+ * R2Prime, against GaugeWave::r1Electric() for R1) and the largest \f$\lvert B\rvert\f$.
+ * Both maxima over all solves are divided by the largest sampled
+ * \f$\lvert D_c\phi\rvert\f$. The pass rule requires each ratio to be at most
+ * \f$10^{-12}\f$, plus the final identities (requireFinalIdentities(), six cellwise bounds
+ * of \f$10^{-12}\f$) after the last solve. Rank zero prints both ratios of every run.
+ * The case at the stability bound \f$S=1\f$ only prints the ratios and the z-parity
+ * projection of \f$A_z\f$; it asserts finite values and the final identities.
+ *
+ * CTest entries (label unit, timeout 60 s): chdr.solver.levels.{serial,mpi2} runs Levels.*;
+ * chdr.solver.gauge.X.{serial,mpi2} runs GaugeWave.X for X = ObliqueStandard,
+ * ObliqueNonStandard, AxialNonStandardStable and AxialNonStandardBoundaryRecord.
  */
 #include <gtest/gtest.h>
 #include <iostream>
@@ -224,31 +237,42 @@ namespace {
                                               ebReconstructionConvention);
     }
 
+    /// Standard 8x8x64 cells (\f$h=1/64\f$), \f$\mathbf k=(0,0,2\pi)\f$, default step,
+    /// 128 solves: normalized E and B errors at most \f$10^{-12}\f$ for R1, R2, R2Prime.
     TEST(Levels, EarlyAxial) {
         gaugeCase<StandardSolverPeriodic>(
             {8, 8, 64}, {0.125, 0.125, 1},
             ippl::Vector<double, SpatialDim>(0, 0, 2 * Kokkos::numbers::pi_v<double>), 128);
     }
+    /// The same grid and rule with the oblique wave \f$\mathbf k=2\pi(8,8,1)\f$.
     TEST(Levels, EarlyOblique) {
         gaugeCase<StandardSolverPeriodic>(
             {8, 8, 64}, {0.125, 0.125, 1},
             2 * Kokkos::numbers::pi_v<double> * ippl::Vector<double, SpatialDim>(8, 8, 1), 128);
     }
+    /// Standard 32x32x32 unit box, \f$\mathbf k=2\pi(1,2,2)\f$, default step, ten periods:
+    /// normalized E and B errors at most \f$10^{-12}\f$.
     TEST(GaugeWave, ObliqueStandard) {
         gaugeCase<StandardSolverPeriodic>(
             {32, 32, 32}, {1, 1, 1},
             2 * Kokkos::numbers::pi_v<double> * ippl::Vector<double, SpatialDim>(1, 2, 2), 0);
     }
+    /// The same rule on NonStandard 32x32x48 cells (\f$h_x=h_y=1.5h_z\f$, \f$\Delta t=h_z\f$).
     TEST(GaugeWave, ObliqueNonStandard) {
         gaugeCase<NonStandardSolverPeriodic>(
             {32, 32, 48}, {1, 1, 1},
             2 * Kokkos::numbers::pi_v<double> * ippl::Vector<double, SpatialDim>(1, 2, 2), 0);
     }
+    /// NonStandard 8x8x64 cells (\f$h_x=h_y=1.5h_z\f$), \f$\mathbf k=(0,0,2\pi)\f$, safety
+    /// factor 0.98, 640 solves: normalized E and B errors at most \f$10^{-12}\f$.
     TEST(GaugeWave, AxialNonStandardStable) {
         gaugeCase<NonStandardSolverPeriodic>(
             {8, 8, 64}, {0.1875, 0.1875, 1},
             ippl::Vector<double, SpatialDim>(0, 0, 2 * Kokkos::numbers::pi_v<double>), 640, 0.98);
     }
+    /// Record only: the axial case above at safety factor 1 (the stability bound). It prints
+    /// the normalized E and B and, every 64 solves, the z-parity projection of \f$A_z\f$; it
+    /// asserts finite values and the final identities, not the \f$10^{-12}\f$ rule.
     TEST(GaugeWave, AxialNonStandardBoundaryRecord) {
         gaugeCase<NonStandardSolverPeriodic>(
             {8, 8, 64}, {0.1875, 0.1875, 1},

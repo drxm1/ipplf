@@ -1,5 +1,21 @@
 /** @file test_medium_guard.cpp
  * @brief Check cached validity decisions and collective refusal before a material step.
+ * @details Both suites use the eight rows of MediumCases (MediumCases.h) with the
+ * Homogeneous formulation in a periodic unit box split along x. The five refused rows are
+ * one cell with \f$\varepsilon+1\f$ at the global origin, one NaN cell, \f$\varepsilon=0.5\f$,
+ * \f$\alpha=2\f$ and the NonStandard stencil; the three accepted rows have
+ * \f$\varepsilon=1,2.13,4\f$. On two ranks only one rank owns the defective cell.
+ *
+ * MediumValidity (8x8x8 cells, collocated R2): validateMaterialUpdate() throws IpplException
+ * for every refused row, and for every accepted row maxStableTimeStep() equals
+ * mediumMaxStableTimeStep(), \f$\sqrt{\varepsilon/\sum_d h_d^{-2}}\f$, to relative
+ * \f$10^{-15}\f$. MediumGuard (8x8x12 cells, R2, collocated and staggered): the ChdrSolver
+ * constructor throws IpplException on every rank for a refused row and on no rank for an
+ * accepted row; Monitors::beforeSolve() accepts \f$\varepsilon=1\f$ and throws
+ * std::logic_error for \f$\varepsilon=2.13\f$ and 4.
+ *
+ * CTest entries (label unit, timeout 60 s): chdr.solver.medium.Validity.{serial,mpi2} and
+ * chdr.solver.medium.Guard.{serial,mpi2}.
  */
 #include <gtest/gtest.h>
 
@@ -15,7 +31,8 @@ namespace chdr::solver::test {
     /** @brief Check map-wide validity and the bound without advancing a solver.
      * @details Refused rows exercise the cached-statistics guard directly. Accepted
      * rows also construct the update and compare its physical-step bound with the
-     * independently evaluated mediumMaxStableTimeStep oracle, including vacuum.
+     * independently evaluated mediumMaxStableTimeStep oracle, including vacuum, to
+     * relative \f$10^{-15}\f$.
      */
     TEST(MediumValidity, CachedTableAndBound) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1}, 0);

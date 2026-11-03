@@ -1,8 +1,9 @@
 /** @file LorenzWave.h
- * @brief Source-free and driven continuum potential, source and field samples for Waves.h.
+ * @brief Source-free and driven continuum potential, source and field samples.
  *
- * An anylatic test generator that supplies potential samples and source sample.
- * Also provides corresponding E and B reference fields.
+ * An analytic test generator that supplies potential samples and source samples.
+ * It also provides the corresponding continuum E and B reference fields, which
+ * WaveNorms.h compares with the solver output in the ladders of Convergence.h.
  */
 #pragma once
 #include "MediumOracles.h"

@@ -2,10 +2,34 @@
  * @brief Measure dispersion by projecting the evolved potential arrays.
  * @details Single-root histories and the independent dispersion prediction use
  * [fallahi2020mithra20fullwavesimulation, Eqs. (3.17), (3.24)-(3.25)].
- * T5 identifies these dispersion records. Projection uses the spatial kernel
+ * Projection uses the spatial kernel
  * \f$\exp(-i k\cdot x)\f$ for modes \f$\exp(i(k\cdot x-\omega t))\f$.
  * All potential components share the same scalar update, so the test projects
  * A_x in every direction; field reconstruction is checked by the Convergence suites.
+ *
+ * Each case loads one travelling mode of \f$A_x\f$ (R1, collocated, periodic box), projects
+ * the evolved \f$A_x\f$ on that mode after each of \f$\lceil 2\pi/\vartheta\rceil\f$ solves
+ * and compares the mean phase advance per step with the predicted phase per step
+ * \f$\vartheta\f$ of prediction(). The pass rule (requirePhase()) is relative agreement to
+ * \f$10^{-12}\f$; for the NonStandard axial mode at safety factor 1 the phase velocity must
+ * also equal 1 to \f$10^{-12}\f$. Vacuum cases also require the final identities
+ * (requireFinalIdentities()) after the last solve; medium cases have no monitor. Each case
+ * prints one line, and rank zero writes one JSONL record per case to the record directory.
+ *
+ * Vacuum suites: Dispersion has 19 cases (Standard \f$N=32\f$, NonStandard \f$N_z=24\f$)
+ * and writes a phase record per case for chdr.solver.ranks; RecordDispersion runs the same
+ * rules on 37 cases (Standard \f$N=64\f$, NonStandard \f$N_z=24,48,96\f$). Medium suites
+ * (Homogeneous update, prediction mediumPhasePerStep()): MediumDispersion has 20 cases
+ * (\f$\varepsilon=2.13,4\f$, \f$N=32\f$) and writes phase records for
+ * chdr.solver.medium.ranks; MediumDispersionLong runs the same 20 cases at \f$N=64\f$;
+ * MediumDispersionRecord only records 48 cases. MediumHoldout.DISABLED_Phase is a disabled
+ * holdout without a CTest entry.
+ *
+ * CTest entries: chdr.solver.dispersion.{serial,mpi2} (label unit, timeout 60 s),
+ * chdr.solver.record.dispersion.{serial,mpi2} (label record, timeout 600 s, records in
+ * runs/record-serial and runs/record-mpi2), chdr.solver.medium.Dispersion.{serial,mpi2}
+ * (label unit, timeout 60 s), chdr.solver.medium.long.Dispersion.{serial,mpi2} and
+ * chdr.solver.medium.record.Dispersion.{serial,mpi2} (both label long, timeout 1800 s).
  */
 #include <algorithm>
 #include <cmath>
@@ -187,6 +211,8 @@ namespace chdr::solver::test {
         }
     }
 
+    /// Pass rule: measured and predicted phase per step agree to relative \f$10^{-12}\f$; the
+    /// NonStandard axial mode at safety factor 1 also has phase velocity 1 to \f$10^{-12}\f$.
     template <class SolverType>
     void requirePhase(SolverType& solver, const DispersionInput& input,
                       const DispersionPrediction& expected, const PhaseMeasurement& measured) {
@@ -267,7 +293,7 @@ namespace chdr::solver::test {
      * test entry. This records the phase error from retaining a vacuum-bound step;
      * the material remains uniform with permittivity eps.
      * Both initialization and prediction use getDt() after this selection.
-     * recordOnly cases record dispersion without imposing the development threshold.
+     * recordOnly cases record dispersion without the \f$10^{-12}\f$ phase rule.
      */
     template <class PotentialSolverBase>
     void dispersionCase(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
@@ -333,15 +359,22 @@ namespace chdr::solver::test {
                         + std::to_string(safety),
                     ranks);
     }
+    /// Ten Standard cases at \f$N=32\f$: axial modes in boxes of eight transverse cells, modes
+    /// (1,1,0) and (1,1,1) on 32x32x32, each at the default step and at safety factor 0.98.
+    /// Phase per step to relative \f$10^{-12}\f$; writes a phase record per case.
     TEST(Dispersion, StandardRankCases) {
         standardDispersion(32, true);
     }
+    /// Nine NonStandard cases at \f$N_z=24\f$, \f$h_x=h_y=1.5h_z\f$: axial mode at safety
+    /// factors 1, 0.99, 0.98 and mode (1,0,1) in boxes of x length 2, 4, 8 at 1 and 0.98.
     TEST(Dispersion, NonStandardRankCases) {
         nonstandardDispersion(24, true);
     }
+    /// The ten Standard cases at \f$N=64\f$; same rule, one JSONL record each, no rank record.
     TEST(RecordDispersion, Standard) {
         standardDispersion(64, false);
     }
+    /// The nine NonStandard cases at \f$N_z=24,48,96\f$ (27 cases); same rule, no rank record.
     TEST(RecordDispersion, NonStandard) {
         for (int n : {24, 48, 96})
             nonstandardDispersion(n, false);
@@ -360,14 +393,22 @@ namespace chdr::solver::test {
                 for (double safety : {std::sqrt(3.0) / 2, 0.98})
                     standardDirection(n, direction, modes[direction], safety, ranks, eps);
     }
+    /// 20 medium cases at \f$N=32\f$: \f$\varepsilon=2.13,4\f$, the five Standard modes,
+    /// safety factors \f$\sqrt3/2\f$ and 0.98. Phase per step equal to
+    /// \f$2\arcsin((\Delta t/2)\sqrt{K^2/\varepsilon})\f$ to relative \f$10^{-12}\f$; writes
+    /// a phase record per case for the rank comparison.
     TEST(MediumDispersion, RankCases) {
         mediumDispersion(32, true);
     }
+    /// The same 20 medium cases and rule at \f$N=64\f$, without rank records.
     TEST(MediumDispersionLong, ResolvedModes) {
         mediumDispersion(64, false);
     }
-    // Pair the medium-bound and vacuum-bound steps at each resolution and direction.
-    // Record-only cases omit the measured-versus-symbol agreement assertion.
+    /// Record only: 48 cases at \f$\varepsilon=2.13\f$ (\f$N=16,32,64,128\f$; modes (1,0,0),
+    /// (1,1,0), (1,1,1); safety factors 0.9 and \f$\sqrt3/2\f$). Each resolution and direction
+    /// pairs the medium-bound and the vacuum-bound step. The test writes the phase error per
+    /// wavelength; it omits the phase rule and asserts only a nonzero projected amplitude
+    /// after each solve.
     TEST(MediumDispersionRecord, WavelengthError) {
         const std::array<std::array<int, 3>, 3> modes = {{{1, 0, 0}, {1, 1, 0}, {1, 1, 1}}};
         for (int n : {16, 32, 64, 128})
@@ -386,6 +427,8 @@ namespace chdr::solver::test {
      * agreement with that independent symbol, then compare the two measured
      * phases across rank counts. The root-only replay uses exactly the distributed
      * step; serialFrequency also means radians per step, as in PhaseMeasurement.
+     * It was the held-out final acceptance check of earlier work; it is disabled and has no
+     * CTest entry.
      */
     TEST(MediumHoldout, DISABLED_Phase) {
         const DispersionInput input{{120, 144, 160}, {-1, 2, 3}, {1, 1, 1}, 0.9, "medium-held",

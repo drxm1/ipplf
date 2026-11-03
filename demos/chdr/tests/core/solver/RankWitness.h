@@ -1,5 +1,11 @@
 /** @file RankWitness.h
  * @brief Compare globally ordered serial and distributed samples with explicit scales.
+ * @details Used by the one-against-two-rank checks of test_mur_reflection.cpp,
+ * test_mur_outer_layer.cpp, test_mur_families.cpp, test_mur_stability.cpp and
+ * test_open_beam.cpp. rankDifference() runs on the rank that holds the MPI_COMM_SELF replay;
+ * checkRankAgreement() broadcasts its result, requires the relative difference to be at most
+ * the tolerance (1e-13 by default) and prints the binary equality flag.
+ * MurReflection.DISABLED_Holdout also runs this code.
  */
 #pragma once
 #include <algorithm>

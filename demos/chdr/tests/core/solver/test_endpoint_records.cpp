@@ -5,6 +5,19 @@
  * zero is \f$a_n=(-1)^n(n+1)\f$. Deduction from
  * [fallahi2020mithra20fullwavesimulation, Eqs. (3.17), (3.24)].
  * The record also follows the host symbol using its actual rounded step.
+ *
+ * Each case sets the scalar potential to the highest periodic mode (Standard: index
+ * \f$N_d/2\f$ on every axis; NonStandard: index 0 in x and y, \f$N_z/2\f$ in z), with
+ * current amplitude 1 and previous amplitude 0, in a unit box without sources. It sets the
+ * step to maxStableTimeStep() (\f$S=1\f$) with setTimeStepUnchecked(), because
+ * setSafetyFactor() refuses \f$S=1\f$ for Standard. It then makes 256 solves with R1.
+ * Before each solve and after the last, rank zero prints the projected amplitude beside
+ * the host recurrence \f$a_{n+1}=c\,a_n-a_{n-1}\f$, \f$c=2+\Delta t^2\lambda_h\f$, with 17 digits
+ * (\f$\lambda_h\f$ is laplacianSymbol()). This is a print-only record: the test asserts
+ * only finite projections and the final identities (requireFinalIdentities()) after solve
+ * 256; it compares no amplitude with the recurrence.
+ *
+ * CTest entries: chdr.solver.record.endpoint.{serial,mpi2} (label unit, timeout 60 s).
  */
 #include <gtest/gtest.h>
 #include <iomanip>
@@ -159,15 +172,19 @@ namespace {
         evolveEndpoint(solver, shape, norm, coefficient);
     }
 
+    /// Record only: Standard 16x16x16, mode index (8,8,8), 256 solves at \f$S=1\f$.
     TEST(TimeStepRecords, EvenStandard) {
         endpoint<StandardSolverPeriodic>({16, 16, 16});
     }
+    /// Record only: Standard 15x15x15, mode index (7,7,7), 256 solves at \f$S=1\f$.
     TEST(TimeStepRecords, OddStandard) {
         endpoint<StandardSolverPeriodic>({15, 15, 15});
     }
+    /// Record only: NonStandard 16x16x24, mode index (0,0,12), 256 solves at \f$S=1\f$.
     TEST(TimeStepRecords, EvenNonStandard) {
         endpoint<NonStandardSolverPeriodic>({16, 16, 24});
     }
+    /// Record only: NonStandard 15x15x23, mode index (0,0,11), 256 solves at \f$S=1\f$.
     TEST(TimeStepRecords, OddNonStandard) {
         endpoint<NonStandardSolverPeriodic>({15, 15, 23});
     }

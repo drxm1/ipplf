@@ -1,5 +1,7 @@
 /** @file TwoWaveState.h
  * @brief Exact lattice histories and a row-scaled two-root reflection fit.
+ * @details Used by ReflectionRun.h (the Mur reflection tests), test_open_gauge_records.cpp
+ * and test_open_beam.cpp (fit() only). MurReflection.DISABLED_Holdout also runs this code.
  */
 #pragma once
 #include <vector>
@@ -61,10 +63,9 @@ namespace chdr::solver::test::reflection {
 
     /** @brief Fit both exact lattice roots and return reflected/incident amplitude.
      * @details Rows are divided by their larger root magnitude. The two-column
-     * least-squares model is the wave decomposition of Jones and Parrott (1988),
-     * "Evaluation of a multi-point method for determining acoustic impedance",
-     * Analysis, equations (1)-(3). Accumulation and the 2x2 Hermitian solve use
-     * long double; the requested coefficient refers to the first input layer.
+     * least-squares model is the wave decomposition of
+     * [jones1988MultiPointImpedance, Analysis, equations (1)-(3)]. Accumulation and the 2x2
+     * Hermitian solve use long double; the requested coefficient refers to the first input layer.
      */
     inline Complex fit(const std::vector<Complex>& values, Complex theta) {
         using Wide     = std::complex<long double>;

@@ -3,6 +3,20 @@
  * @details Global-index snapshots and independent reductions are compared by
  * the CTest fixture. Monitor residuals are normalized before comparison; a
  * near-zero residual is never used as its own relative-error denominator.
+ *
+ * The suite RankCases writes owned fields for the one-rank against two-rank comparison of
+ * chdr.solver.ranks (compare_ranks.py). All cases use R2 and a split along x.
+ * - GaugeWaves: the discrete gauge wave of Waves.h, \f$\mathbf k=2\pi(1,2,2)\f$, collocated,
+ *   on Standard 32 by 32 by 32 and NonStandard 32 by 32 by 48 cells (unit box), for
+ *   \f$\lceil 20\pi/(\omega\Delta t)\rceil\f$ steps (ten periods).
+ * - MonitorSeams and NyquistMonitorSeams: three monitored steps on rough analytic data,
+ *   without and with Nyquist content, for collocated Standard 16 by 16 by 16, collocated
+ *   NonStandard 16 by 16 by 24 and staggered Standard 16 by 16 by 16 cells. These cases also
+ *   write the normalized residuals and the residual norms of Monitors.
+ *
+ * In the process, each case asserts only the final identities at \f$10^{-12}\f$; the record
+ * comparison in chdr.solver.ranks is the check. CTest runs the suite as
+ * chdr.solver.rank_cases.serial and chdr.solver.rank_cases.mpi2.
  */
 #include <gtest/gtest.h>
 
@@ -105,7 +119,7 @@ namespace chdr::solver::test {
      * The discrete wave and reconstruction are defined in Waves.h, from
      * [fallahi2020mithra20fullwavesimulation, Eqs. (3.17), (3.24)] and
      * [christlieb2024GaugeConserving, section 3.1, proof of Theorem 3.5].
-     * T2 names these evolved discrete-gauge records.
+     * gaugeRankRecord writes the final state as a rank record.
      */
     template <class SolverType>
     void evolveGaugeRankCase(SolverType& solver, const GaugeWave& wave) {
@@ -133,15 +147,20 @@ namespace chdr::solver::test {
         recordState(NS ? "T2-NS" : "T2-Std", solver);
     }
 
+    /// Ten periods of the R2 discrete gauge wave on Standard 32 by 32 by 32 and NonStandard
+    /// 32 by 32 by 48 cells; writes the final states.
     TEST(RankCases, GaugeWaves) {
         gaugeRankRecord<StandardSolverPeriodic>();
         gaugeRankRecord<NonStandardSolverPeriodic>();
     }
+    /// Three monitored steps on rough data for three solver variants; writes the states and
+    /// the residual records.
     TEST(RankCases, MonitorSeams) {
         monitorRankRecord<StandardSolverPeriodic>(SpatialDiscretization::Collocated);
         monitorRankRecord<NonStandardSolverPeriodic>(SpatialDiscretization::Collocated);
         monitorRankRecord<StandardSolverPeriodic>(SpatialDiscretization::Staggered);
     }
+    /// As MonitorSeams, with added data that change sign from cell to cell in x, y and z.
     TEST(RankCases, NyquistMonitorSeams) {
         monitorRankRecord<StandardSolverPeriodic>(SpatialDiscretization::Collocated, true);
         monitorRankRecord<NonStandardSolverPeriodic>(SpatialDiscretization::Collocated, true);

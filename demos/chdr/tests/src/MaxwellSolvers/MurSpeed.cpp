@@ -1,3 +1,18 @@
+/** @file MurSpeed.cpp
+ * @brief Weights of the second-order Mur face, edge and corner structs of AbsorbingBC.h at a
+ * general speed.
+ * @details Spacing (1.25, 0.8, 1), \f$\Delta t = 0.3\f$, speeds 0.6, 1 and 1.2. The face struct
+ * runs for the 3 normals and both inward signs, the edge struct for the 3 edge orientations,
+ * and the corner struct for its 17 weights and their ratios to \f$C_0\f$. Every weight must
+ * match the closed form in BoundaryOracles.h within \f$4\epsilon\f$ times the largest absolute
+ * oracle weight of the struct. At speed 1, and for the default constructors, the bits of every
+ * weight must equal an in-test copy of the original unit-speed constructor arithmetic (IPPL
+ * 5ce8e37ed).
+ *
+ * Reference: exact lattice value; regression record (bitwise). CTest entries:
+ * chdr.src.MurSpeed.serial and chdr.src.MurSpeed.mpi2. The test builds no layout and uses no
+ * communicator, so the mpi2 entry repeats the serial arithmetic on each rank.
+ */
 #include "Ippl.h"
 
 #include <bit>
@@ -155,6 +170,8 @@ namespace {
     }
 }  // namespace
 
+/// Face weights for the 3 normals and both signs, and edge weights for the 3 orientations, at
+/// speeds 0.6, 1 and 1.2 and for the default constructors.
 TEST(MurSpeed, FaceAndEdgeWeights) {
     checkFace<0, 1, 2>();
     checkFace<1, 0, 2>();
@@ -165,6 +182,7 @@ TEST(MurSpeed, FaceAndEdgeWeights) {
 }
 
 /// The corner oracle supplies both raw and normalized coefficients in the constructor's order.
+/// The test checks the 17 weights and their ratios to the first weight at speeds 0.6, 1 and 1.2.
 TEST(MurSpeed, CornerWeightsAndRatios) {
     using Corner       = second_order_abc_corner<double, true, true, true>;
     const auto shipped = shippedCorner(spacing, dt);

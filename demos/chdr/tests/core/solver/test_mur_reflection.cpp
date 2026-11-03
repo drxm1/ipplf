@@ -1,5 +1,21 @@
 /** @file test_mur_reflection.cpp
  * @brief Exact two-wave continuation, sensitive controls and MPI witnesses for Mur faces.
+ * @details Each row of OpenBoxCases.h starts from an exact incident-plus-reflected lattice
+ * state (TwoWaveState.h) and advances 30 steps. Box: 40 normal cells, Mur faces on x,
+ * periodic y and z, split along z on two ranks, R2 in both readings. The 13 rows are 6 vacuum
+ * rows, 5 rows at \f$\varepsilon_r = 2.13\f$ with matched Mur speed and 2 vacuum rows with
+ * h = (1.25, 0.8, 1). The step is 0.5; the two anisotropic rows use 0.5029188806044014.
+ * The reference is the exact lattice value of the discrete reflection coefficient of Mur's
+ * condition, discreteReflection() in ReflectionOracles.h. Pass: the absolute coefficient error
+ * and the cell error on layers 0 to 9 (relative to the exact maximum on these layers) are each
+ * at most 1e-11. Controls: a kernel Mur speed scaled by \f$1 + 10^{-6}\f$ and, on row v60, the
+ * old halo order must exceed 1e-11 in at least one criterion. verifyRanks() replays each run
+ * without a control on MPI_COMM_SELF: cells within 1e-13, projections within 1e-12. In the
+ * serial entry this replay compares a run with an identical run.
+ *
+ * CTest: chdr.solver.mur.reflection.serial and chdr.solver.mur.reflection.mpi2
+ * (MurReflection.ExactTwoWaveRows). chdr.solver.mur.holdout selects
+ * MurReflection.DISABLED_Holdout and is disabled; see that test.
  */
 #include <gtest/gtest.h>
 
@@ -58,7 +74,11 @@ namespace chdr::solver::test::reflection {
         return error / scale;
     }
 
-    /// Replay on global rank zero with MPI_COMM_SELF, without modifying global communicators.
+    /** @brief Replay on global rank zero with MPI_COMM_SELF, without modifying global
+     * communicators.
+     * @details Cells must agree within 1e-13 and projections within 1e-12. On one rank the
+     * replay repeats an identical run, so the check then tests only determinism.
+     */
     void verifyRanks(const Case& row, SpatialDiscretization reading, bool magnetic,
                      AJFourFieldsType& source, const Result& distributed) {
         RankAgreement report{};
@@ -85,9 +105,10 @@ namespace chdr::solver::test::reflection {
     /** @brief Check one prescribed row and both deliberately defective finishes.
      * @details The two passing criteria are absolute reflection-coefficient error
      * and normalized cell error, each at most 1e-11: above the measured 4.2e-14 cell
-     * round-off floor and below the 1.3e-6 speed-control error. Each speed perturbation must
-     * fail at least one criterion. The stale-wrap control uses the vacuum 60-degree
-     * row; its one-rank run retains the serial periodic-wrap defect.
+     * round-off floor and below the 1.3e-6 speed-control error. Each control (speed scaled by
+     * \f$1 + 10^{-6}\f$, old halo order) must fail at least one criterion. The stale-wrap
+     * control uses the vacuum 60-degree row; its one-rank run retains the serial
+     * periodic-wrap defect.
      */
     void checkPotentialCase(const Case& row, SpatialDiscretization reading, bool controls) {
         auto fields = makeBoxFieldContainer(row.cells(), row.lengths(), 2, {false, true, true});
@@ -115,6 +136,10 @@ namespace chdr::solver::test::reflection {
         }
     }
 
+    /** @brief Check the 13 rows of OpenBoxCases.h in both readings, with both controls.
+     * Pass: coefficient and cell errors at most 1e-11 without a control, above 1e-11 with
+     * each control, and the MPI_COMM_SELF replay within 1e-13 (cells) and 1e-12 (projections).
+     */
     TEST(MurReflection, ExactTwoWaveRows) {
         for (const auto& row : cases)
             for (auto reading :
@@ -126,6 +151,12 @@ namespace chdr::solver::test::reflection {
      * @details The two modes use a separate permittivity, aspect ratio and integer
      * periods. Their expressions are evaluated only if this disabled test is
      * explicitly selected. The propagating row also checks both field polarizations.
+     * Rows: \f$\varepsilon_r = 3.1\f$, h = (1.15, 1, 0.85),
+     * \f$\Delta t = 0.9\sqrt{\varepsilon_r/\sum_d h_d^{-2}}\f$, staggered R2; one propagating row
+     * (36 z cells) and one evanescent row (19 z cells). Criteria: those of checkPotentialCase()
+     * without controls (1e-11), the field rows of checkFieldReflection() (1e-10 and 1e-9) and
+     * the rank replay (1e-13). This test was the held-out final acceptance check of the Mur
+     * reflection tests, on two ranks; its CTest entry chdr.solver.mur.holdout is disabled.
      */
     TEST(MurReflection, DISABLED_Holdout) {
         const std::array<double, 3> h{1.15, 1, .85};

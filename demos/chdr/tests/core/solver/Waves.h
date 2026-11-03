@@ -1,5 +1,10 @@
 /** @file Waves.h
- * @brief Analytic generators; samples use global positions and explicit labels.
+ * @brief Exact discrete gauge wave GaugeWave for the gauge-cancellation and gauge-growth tests.
+ * @details test_levels.cpp, test_gauge_growth.cpp and test_ranks.cpp load this wave. The
+ * caller supplies the global position and the LevelContract time label of each sample.
+ * For this wave the reconstructed B is zero; E is zero for R2 and R2Prime and equals
+ * r1Electric() for R1 (see GaugeWave). test_levels.cpp compares E and B with these exact
+ * lattice values, not with a continuum approximation.
  */
 #pragma once
 

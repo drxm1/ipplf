@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Check YAML/SI field and spectrum publication, without a new accuracy claim.
 
+Each of chdr-vacuum-wave, interface-movies and planar-interface runs one case twice on one
+rank: once in code units (4 steps, or the default run of the plane case) and once for the
+equal SI duration, with a length scale of 2 mm and a charge-density scale of 3e-6 C/m^3.
+Every SI number (record factors, VTK origin, spacing and time labels, E_raw, B_raw, CSV
+columns, plane spectra) must equal the code-unit number times its factor within a relative
+tolerance of 2e-12. File names, step lists, extents and record fields must be equal, and the
+time step of the run record must equal the VTK dt exactly. CTest entry: chdr.input.runs.si,
+which exists only when CMake finds Python 3.
+
 Scale substitutions: fitzpatrick2014ClassicalElectromagnetism, Eqs. (1.1), (1.3),
 (1.11)-(1.16), (4.70), (6.85); constants: mohr2025Codata2022, Table XXXIII.
 The expectations below are independent of the C++ conversion helpers.

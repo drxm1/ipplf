@@ -1,5 +1,13 @@
 /** @file test_open_gauge_records.cpp
  * @brief Record gauge and Gauss residuals after componentwise Mur reflection.
+ * @details Rows v30 and v60 of OpenBoxCases.h (vacuum, 40 normal cells, Mur on x, periodic y
+ * and z), staggered R2, TMT and pure-gauge incidence, 30 steps. The test prints 8
+ * gauge-record lines: the gauge residual \f$G = \delta_t\phi + D_-\cdot\mathbf A\f$ and the
+ * Gauss residual \f$D_-\cdot\mathbf E\f$ at layers 0 and 3, next to the plane-wave prediction
+ * of reflectedGaugeResidual() in ReflectionOracles.h. It asserts nothing (regression record)
+ * and skips on more than one rank.
+ *
+ * CTest: chdr.solver.open.record.gauge (serial only, label record).
  */
 #include <gtest/gtest.h>
 
@@ -16,7 +24,7 @@ namespace chdr::solver::test {
          * @details TMT has \f$\phi=0,\ A_x=K_z,\ A_z=K_x\f$; pure gauge has
          * \f$\phi=iW,\ A_x=-iK_x,\ A_z=iK_z\f$ for unit gauge function amplitude.
          * These satisfy the incident vacuum gauge on the Standard lattice
-         * [Chew (2014), section 2, Eq. (11); Ryu et al. (2016), Appendix A].
+         * [chew2014generalizedgauge, section 2, Eq. (11); ryu2016potentialfdtd, Appendix A].
          * TwoWaveState supplies the unchanged oracle roots and componentwise reflection.
          */
         struct GaugeState {
@@ -54,7 +62,8 @@ namespace chdr::solver::test {
 
         /** @brief Gauge at integer time and Gauss at half time from the completed array ghosts.
          * @details Backward face-to-centre differences give \f$G=\delta_t\phi+D_-\cdot A\f$
-         * and \f$D_-\cdot E\f$ [Ryu et al. (2016), Appendix A; Chew (2014), Eqs. (9),(11)].
+         * and \f$D_-\cdot E\f$ [ryu2016potentialfdtd, Appendix A; chew2014generalizedgauge,
+         * Eqs. (9), (11)].
          * Evaluate the row documented by staggeredDetail::electricAt at owned and backward
          * neighbor indices: \f$E_d=-(A_d[n]-A_d[n-1])/\Delta t-D_{+,d}\phi[n-1]\f$.
          * It has time label \f$t_{n-1/2}\f$ and needs only the same closed potential ghosts.
@@ -116,7 +125,7 @@ namespace chdr::solver::test {
                     1., theta * (j + .5) + kz * row.h_m[2] / 2 - row.omega_m * 30 * row.dt_m);
                 const auto expected = gauge * phase;
                 // Interior Gauss = -delta_t G, hence iW G at half time (deduction from
-                // the staggered symbols; Christlieb et al. (2025), Theorem 3.5).
+                // the staggered symbols; christlieb2024GaugeConserving, Theorem 3.5).
                 const auto gauss =
                     Complex(0, w) * expected * std::polar(1., row.omega_m * row.dt_m / 2);
                 std::cout << "gauge-record " << row.name_m
@@ -132,6 +141,8 @@ namespace chdr::solver::test {
         }
     }  // namespace
 
+    /// Print 8 gauge-record lines (rows v30 and v60, TMT and pure gauge, layers 0 and 3).
+    /// Asserts nothing; skips on more than one rank.
     TEST(OpenGaugeRecords, VacuumRepresentatives) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "This record uses one rank";

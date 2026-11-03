@@ -1,8 +1,31 @@
 /** @file test_timestep.cpp
- * @brief Check time-step selection and stable or unstable evolution.
+ * @brief Check time-step selection and stable or unstable evolution, in vacuum and in a
+ * homogeneous dielectric.
  * @details Bounds are derived in Operators.h from fallahi2020mithra20fullwavesimulation, Eqs.
  * (3.17), (3.19)-(3.20), (3.24). Tests compare the same initial data below and above the spectral
  * stability bound.
+ *
+ * The meshes are Standard 16 by 16 by 16 (unit box), Standard 20 by 24 by 16 (box 1 by 0.96
+ * by 1) and NonStandard 16 by 16 by 24 (unit box), split along x. The histories hold
+ * deterministic hash values in the scalar potential, with the global mean removed. The
+ * vacuum suites use R1 and compare with a host bound: \f$(\sum_d h_d^{-2})^{-1/2}\f$ for
+ * Standard, \f$h_z\f$ for NonStandard.
+ * - TimeStep: the safety factors 0.2, 0.9 and 0.98 give \f$\Delta t=S\,\Delta t_{\max}\f$ to
+ *   \f$10^{-15}\f$ relative. The factors 0, -1, 1.02 and NaN throw; Standard also refuses
+ *   1.0. A step change after a solve or after a history load throws. At
+ *   \f$1.02\,\Delta t_{\max}\f$, the maximum of \f$\lvert\phi\rvert\f$ over solves 2 to 60
+ *   must be at least \f$10^3\f$ times its value after solve 1.
+ * - TimeStepLong: at \f$0.98\,\Delta t_{\max}\f$, the maximum of \f$\lvert\phi\rvert\f$ over
+ *   the last 1000 of 10000 solves must be at most twice the maximum over the first 1000.
+ * - MediumTimeStep and MediumTimeStepLong: the same factor, growth and envelope rules for
+ *   \f$\varepsilon=2.13\f$ and 4 on the two Standard meshes, with R2 and the Homogeneous
+ *   update, against the medium bound of mediumMaxStableTimeStep in MediumOracles.h.
+ *
+ * The vacuum runs also require the final identities at \f$10^{-12}\f$ after the last solve.
+ * The bounds are exact lattice values; the refusals and the envelope rules are
+ * self-consistency checks. CTest entries, each serial and mpi2: chdr.solver.timestep,
+ * chdr.solver.long.timestep.{StandardBounded,AnisotropicBounded,NonStandardBounded},
+ * chdr.solver.medium.TimeStep and chdr.solver.medium.long.TimeStep.
  */
 #include <gtest/gtest.h>
 #include <iostream>
@@ -183,9 +206,9 @@ namespace {
         }
     }
 
-    /// @brief Apply the same frozen growth/upper-envelope comparisons after global observations.
+    /// @brief Require last/first at most 2 (bounded) or at least \f$10^3\f$ (unstable).
     void expectEnvelope(const Envelope& envelope, bool bounded) {
-        // "A8" labels the observed stable or unstable potential-amplitude envelope.
+        // Rank 0 prints the envelope ratio last/first to the test log.
         if (ippl::Comm->rank() == 0)
             std::cout << "A8 bounded=" << bounded << " ratio=" << envelope.last_m / envelope.first_m
                       << '\n';
@@ -196,7 +219,8 @@ namespace {
         }
     }
 
-    /// @brief Build a stable owner, set the deliberately checked or unchecked experiment, and run.
+    /// @brief Set 0.98 or 1.02 times maxStableTimeStep with the unchecked setter, load the
+    /// random histories and compare the envelope.
     template <class PotentialSolverBase>
     void stability(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
                    bool bounded) {
@@ -211,11 +235,15 @@ namespace {
         expectEnvelope(envelope, bounded);
     }
 
+    /// On the three meshes, the accepted factors match the host bound to \f$10^{-15}\f$, the
+    /// invalid factors and steps throw, and after a solve every step change throws.
     TEST(TimeStep, ValidatesRangesAndInitialization) {
         checkSetters<StandardSolverPeriodic>({16, 16, 16}, {1, 1, 1});
         checkSetters<StandardSolverPeriodic>({20, 24, 16}, {1, 0.96, 1});
         checkSetters<NonStandardSolverPeriodic>({16, 16, 24}, {1, 1, 1});
     }
+    /// On 8 by 8 by 8 cells with R2, loadHistory and evaluateInitialFields lock the step, and
+    /// initialize() unlocks it.
     TEST(TimeStep, LoadedAndReconstructedHistoriesLockStep) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
@@ -233,17 +261,23 @@ namespace {
         solver.initialize();
         EXPECT_NO_THROW(solver.setSafetyFactor(0.8));
     }
+    /// At \f$1.02\,\Delta t_{\max}\f$ on each of the three meshes, the maximum of
+    /// \f$\lvert\phi\rvert\f$ grows at least \f$10^3\f$-fold from solve 1 to solves 2 to 60.
     TEST(TimeStep, GrowsAboveBound) {
         stability<StandardSolverPeriodic>({16, 16, 16}, {1, 1, 1}, false);
         stability<StandardSolverPeriodic>({20, 24, 16}, {1, 0.96, 1}, false);
         stability<NonStandardSolverPeriodic>({16, 16, 24}, {1, 1, 1}, false);
     }
+    /// Standard 16 by 16 by 16 at \f$0.98\,\Delta t_{\max}\f$: over 10000 solves, the late
+    /// maximum is at most twice the early maximum.
     TEST(TimeStepLong, StandardBounded) {
         stability<StandardSolverPeriodic>({16, 16, 16}, {1, 1, 1}, true);
     }
+    /// As StandardBounded on Standard 20 by 24 by 16 cells (box 1 by 0.96 by 1).
     TEST(TimeStepLong, AnisotropicBounded) {
         stability<StandardSolverPeriodic>({20, 24, 16}, {1, 0.96, 1}, true);
     }
+    /// As StandardBounded on NonStandard 16 by 16 by 24 cells.
     TEST(TimeStepLong, NonStandardBounded) {
         stability<NonStandardSolverPeriodic>({16, 16, 24}, {1, 1, 1}, true);
     }
@@ -281,11 +315,16 @@ namespace {
                   << " alpha=" << solver.formulationParameters().alpha_m << '\n';
         expectEnvelope(envelope, bounded);
     }
+    /// For \f$\varepsilon=2.13,4\f$ on both Standard meshes: the setter matches the medium
+    /// bound to \f$10^{-15}\f$, invalid factors throw, and at 1.02 times the bound the maximum
+    /// of \f$\lvert\phi\rvert\f$ grows at least \f$10^3\f$-fold within 60 solves.
     TEST(MediumTimeStep, BoundAndUnstableGrowth) {
         for (double eps : {2.13, 4.0})
             for (bool anisotropic : {false, true})
                 mediumStability(eps, anisotropic, false);
     }
+    /// The same four cases at safety factor 0.98: over 10000 solves, the late maximum is at
+    /// most twice the early maximum.
     TEST(MediumTimeStepLong, Bounded) {
         for (double eps : {2.13, 4.0})
             for (bool anisotropic : {false, true})

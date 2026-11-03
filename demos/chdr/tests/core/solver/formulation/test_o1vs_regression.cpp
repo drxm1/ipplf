@@ -1,5 +1,23 @@
 /** @file test_o1vs_regression.cpp
  * @brief Vacuum bit patterns, uniform-medium source scaling and admissibility.
+ * @details Tests of the O1-VS material formulation (MaterialFormulation::O1VS) with the
+ * Standard stencil, staggered R2. equivalent() uses 8 x 6 x 10 cells, h = (1, 1.3, 0.8),
+ * safety factor 0.9, split along x on two ranks, random initial potentials and fresh random
+ * sources in each step (RandomFields.h).
+ * - VacuumBits, OpenVacuumBits: at \f$\varepsilon_r \equiv 1\f$ and \f$\alpha = 1\f$, O1-VS
+ *   gives A_n, E and B bit for bit equal to the owner-free vacuum ChdrSolver over 256 steps,
+ *   in a periodic box and in a box with Mur on x and z, for random and for signed-zero data
+ *   (bitwise regression).
+ * - UniformMedium: at \f$\varepsilon_r = 2.13\f$, A_n of O1-VS matches the Homogeneous
+ *   formulation within 1e-13 of the reference maximum over 20 steps.
+ * - Refusals: validateMaterialUpdate() refuses \f$\alpha = 2\f$ on an open layout,
+ *   \f$\alpha\f$ = 0.5 and NaN, NonStandard, collocated, R1, \f$\varepsilon_r\f$ = 0.5 and
+ *   1e155, and a non-finite map; for \f$\alpha = 2\f$ at \f$\varepsilon_r\f$ = 1 and 2.13,
+ *   Monitors::beforeSolve() throws std::logic_error.
+ * - FiniteHarmonicFace: the x-face harmonic mean of 9e153 and 1e154 stays finite.
+ *
+ * CTest: chdr.solver.formulation.o1vs.serial and chdr.solver.formulation.o1vs.mpi2 run the
+ * executable test-chdr-formulation without a filter, so each entry runs all five tests.
  */
 #include <array>
 #include <gtest/gtest.h>
@@ -87,19 +105,35 @@ namespace {
                   << '\n';
         EXPECT_LE(error, epsilon == 1 ? 0 : 1e-13);
     }
+    /// Periodic box, \f$\varepsilon_r \equiv 1\f$: A_n, E and B of O1-VS equal the vacuum
+    /// ChdrSolver bit for bit over 256 steps, for random and for signed-zero data.
     TEST(O1VS, VacuumBits) {
         equivalent(1, false);
         equivalent(1, true);
     }
+    /// As VacuumBits, in a box with Mur on x and z and periodic y.
     TEST(O1VS, OpenVacuumBits) {
         equivalent(1, false, {false, true, false});
         equivalent(1, true, {false, true, false});
     }
+    /// Periodic box, \f$\varepsilon_r = 2.13\f$: A_n of O1-VS matches Homogeneous within 1e-13
+    /// of the reference maximum over 20 steps.
     TEST(O1VS, UniformMedium) {
         equivalent(2.13, false);
     }
 
-    /// Exercise each refusal independently using cached metadata before any solver construction.
+    /** @brief Refuse invalid configurations from cached metadata before any solver
+     * construction, then refuse the vacuum monitors on solvers with \f$\alpha = 2\f$.
+     * @details Open axes require \f$\alpha = 1\f$, because otherwise transverse and
+     * longitudinal waves have different speeds [chew2014generalizedgauge, section 2, text
+     * after Eq. (22)]. \f$\varepsilon_r = 10^{155}\f$ is refused because
+     * \f$\chi = \alpha\varepsilon^2\f$ [chew2014generalizedgauge, Eq. (18)] overflows.
+     * The refusals are not all independent: the non-finite-map row keeps minimum and maximum
+     * 1e155 from the row before it, and that value is refused anyway, so the row does not
+     * test the finiteness flag on its own. The monitor part builds two solvers with
+     * \f$\alpha = 2\f$, at \f$\varepsilon_r\f$ = 1 and 2.13; Monitors::beforeSolve() must throw
+     * std::logic_error for both.
+     */
     TEST(O1VS, Refusals) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8});
         material::MapStatistics stats;
@@ -146,6 +180,8 @@ namespace {
             EXPECT_THROW(monitor.beforeSolve(solver), std::logic_error);
         }
     }
+    /// The x-face harmonic mean of the permittivities 9e153 (cells with x index below 4) and
+    /// 1e154 (other cells) must be finite in every owned cell.
     TEST(O1VS, FiniteHarmonicFace) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 6, 10});
         initializeFieldStorage(fields);

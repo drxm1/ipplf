@@ -4,6 +4,8 @@
  * Every rank copies its field view to a host mirror, packs owned cells only,
  * and sends plain doubles with their global component indices. Rank zero
  * restores x/y/z/component order and checks ownership before writing a record.
+ * test_gather.cpp checks gatherOwned and orderValues; compare_ranks.py compares the
+ * records of the one-rank and the two-rank run.
  */
 #pragma once
 #include "Ippl.h"

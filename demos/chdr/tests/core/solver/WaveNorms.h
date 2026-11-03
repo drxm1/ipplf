@@ -28,10 +28,11 @@ namespace chdr::solver::test {
 
     /** @brief Difference used by the continuum norm, independently of Monitors.
      * @details Collocated divergence uses the centred difference; the staggered
-     * face-to-centre divergence uses the backward compact difference. The latter
+     * face-to-centre divergence uses the backward staggered difference. The latter
      * samples each face component at the centre where charge is defined.
-     * The centred difference is the direct symmetric Taylor quotient
-     * [fallahi2020mithra20fullwavesimulation, Eqs. (3.13)-(3.14)]. The compact
+     * The centred difference is the symmetric first-difference quotient of the field
+     * reconstruction [fallahi2020mithra20fullwavesimulation, Eq. (3.53), within
+     * Eqs. (3.50)-(3.55)]. The staggered
      * quotient is a deduction from the face/centre placement and discrete
      * divergence in [ryu2016potentialfdtd, Appendix A, Eqs. (19)-(24)].
      * @tparam FieldView Three-dimensional view with a component-indexable value at each index.
@@ -145,7 +146,7 @@ namespace chdr::solver::test {
             /** @brief Gauss and gauge samples at their respective contract labels.
              * @details Charge is sampled at E's comparison time, including the R1
              * control. Gauge uses the contract's vector interpolation weight.
-             * This is a continuum-error diagnostic, not the type-A Gauss identity.
+             * This is a continuum-error diagnostic, not the exact Gauss identity of Monitors.
              * Reference: christlieb2024GaugeConserving, Eqs. (25)-(29).
              * epsilon_m is the uniform relative permittivity supplied by the independent
              * constraintFactor oracle. It multiplies E's divergence in Gauss's law and

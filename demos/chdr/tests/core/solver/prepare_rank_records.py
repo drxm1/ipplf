@@ -1,4 +1,12 @@
-"""Create fresh fixture directories, retaining only the immediately preceding run."""
+"""Create fresh fixture directories, retaining only the immediately preceding run.
+
+Usage: prepare_rank_records.py ROOT. The script moves ROOT/serial and ROOT/mpi2
+of an earlier run to ROOT/previous-ranks and creates empty ROOT/serial and
+ROOT/mpi2. CTest runs it as chdr.solver.ranks.prepare and
+chdr.solver.medium.ranks.prepare, the fixture setup before the record producers.
+It checks nothing; the empty directories make a missing producer output fail the
+comparison in compare_ranks.py.
+"""
 from pathlib import Path
 import sys
 import shutil

@@ -1,5 +1,13 @@
 /** @file test_mur_faces.cpp
  * @brief Check the Mur face description of ChdrSolver and its physical speed conversion.
+ * @details Box: 8 x 6 x 10 cells, unit spacing, split along z on two ranks.
+ * DescriptionSurvivesStorageReset uses four periodicity patterns: all periodic, all open,
+ * x open, and x and y open. PhysicalSpeedConversion opens x and sets a uniform relative
+ * permittivity 2.13. The checks are exact (EXPECT_EQ) or require an exception; there is no
+ * numerical tolerance. The references are the layout and the closed form of the speed slot:
+ * the kernel Mur speed is the physical speed times the refractive index
+ * \f$n = \sqrt{\varepsilon_r}\f$, and the matched speed is exactly 1.
+ * CTest: chdr.solver.mur.faces.serial and chdr.solver.mur.faces.mpi2 (filter MurFaces.*).
  */
 #include <gtest/gtest.h>
 
@@ -7,8 +15,11 @@
 
 namespace chdr::solver::test {
     /** @brief Require the boundary description and its speed to survive a storage reset.
+     * For each layout, the lower face of each axis is periodic or Mur as the layout says,
+     * and initialize() leaves the face kinds and speeds unchanged.
      * Each topology is constructed identically on every rank. Unsupported
-     * NonStandard open boxes must throw before entering a halo collective.
+     * NonStandard open boxes (the three layouts with a Mur axis) must throw
+     * IpplException before entering a halo collective.
      */
     TEST(MurFaces, DescriptionSurvivesStorageReset) {
         for (auto axes : {std::array{true, true, true}, std::array{false, false, false},
@@ -39,6 +50,9 @@ namespace chdr::solver::test {
      * The expected kernel factor follows directly from the physical/internal
      * timestep ratio; Mur weights depend on speed times timestep
      * [mur1981AbsorbingBoundaryFdtd, section IV, equation (16)].
+     * At \f$\varepsilon_r = 2.13\f$ the matched speed slot is exactly 1.0, and
+     * MurSpeed::physical(0.7) stores exactly \f$0.7\sqrt{2.13}\f$, also after initialize().
+     * Speeds 0 and NaN throw std::invalid_argument.
      */
     TEST(MurFaces, PhysicalSpeedConversion) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 6, 10}, 2, {false, true, true});

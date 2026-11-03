@@ -1,7 +1,26 @@
 /** @file test_staggered.cpp
  * @brief Staggered difference composition, component positions and Standard staggered-R2
  * identities.
- * @details Cartesian identities specialize [clemens2001FiniteIntegration,
+ * @details All tests use the staggered reading and a split along x; all tests except
+ * NonStandardReadingRefused use the Standard stencil. The evolving tests use R2.
+ * - RandomCompositionAndIdentities: on hash noise with Nyquist content (12 by 10 by 8 cells,
+ *   unit box), the backward staggered divergence of the forward staggered gradient equals
+ *   the 7-point Laplacian to \f$10^{-12}\f$. Over 6 monitored steps, the div B, raw div B,
+ *   Gauss and three Faraday residuals stay at most \f$10^{-12}\f$ cellwise.
+ * - SpatialOffsetsReachHistoryAndSource: linear samples land at the component positions and
+ *   time labels of LevelContract to \f$10^{-15}\f$ relative; R1 and R2Prime are refused.
+ * - ConservingAndPlantedContinuity: the continuity monitor returns 0 for a conserving
+ *   charge and the planted rate 0.125, each to \f$10^{-12}\f$.
+ * - NonStandardReadingRefused: the NonStandard stencil with the staggered reading is refused.
+ * - GaugeAxial, GaugeObliqueSmall, GaugeObliqueTenPeriods: for discrete gauge waves, the
+ *   maxima of E and B stay at most \f$10^{-12}\f$ of the centred scalar-gradient maximum,
+ *   and the final identities hold at \f$10^{-12}\f$.
+ *
+ * The composition, the positions and the gauge waves compare with exact lattice values; the
+ * identities and the refusals are self-consistency checks. CTest runs the suite ChdrStaggered
+ * as chdr.solver.staggered.serial and chdr.solver.staggered.mpi2.
+ *
+ * Cartesian identities specialize [clemens2001FiniteIntegration,
  * Eqs. (18)-(24)]. CompactGaugeWave defines the signed space/time differences
  * used to construct the discrete counterpart of a purely longitudinal potential
  * with zero E and B [chew2014generalizedgauge, section 7, Eqs. (76)-(80)] (deduction).
@@ -31,6 +50,8 @@ namespace {
     using namespace chdr::diagnostics;
     constexpr double TWO_PI = 2.0 * Kokkos::numbers::pi_v<double>;
 
+    /// Hash noise of the global cell index, plus a checkerboard term and a term that changes
+    /// sign from cell to cell in x, so that the data have content at the Nyquist wave number.
     void fillStaggeredNoise(AJFourFieldsType& field, unsigned seed) {
         const auto view  = field.getView();
         const auto local = field.getLayout().getLocalNDIndex();
@@ -81,6 +102,8 @@ namespace {
             EXPECT_LE(component.cell_m, 1e-12);
     }
 
+    /// On hash noise (12 by 10 by 8 cells), the two-pass staggered Laplacian equals the 7-point
+    /// Laplacian, and 6 monitored steps keep the discrete identities at \f$10^{-12}\f$.
     TEST(ChdrStaggered, RandomCompositionAndIdentities) {
         auto fields = makeBoxFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
@@ -145,6 +168,8 @@ namespace {
         }
     }
 
+    /// Histories and source on 8 by 8 by 8 cells sit at the face positions and time labels of
+    /// LevelContract to \f$10^{-15}\f$; E and B offsets are exact; R1 and R2Prime throw.
     TEST(ChdrStaggered, SpatialOffsetsReachHistoryAndSource) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
@@ -183,6 +208,8 @@ namespace {
             });
     }
 
+    /// With \f$\Delta t=0.0125\f$ on 12 by 10 by 8 cells, the staggered continuity monitor
+    /// returns 0 for a conserving charge and 0.125 for the planted rate, to \f$10^{-12}\f$.
     TEST(ChdrStaggered, ConservingAndPlantedContinuity) {
         auto fields = makeBoxFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
@@ -207,6 +234,7 @@ namespace {
         }
     }
 
+    /// The NonStandard stencil with the staggered reading makes the constructor throw.
     TEST(ChdrStaggered, NonStandardReadingRefused) {
         auto fields = makeBoxFieldContainer({8, 8, 12}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
@@ -333,12 +361,17 @@ namespace {
             std::cout << "R2s gauge max E/B = " << error << '\n';
     }
 
+    /// \f$\mathbf k=2\pi(0,0,1)\f$ on 8 by 8 by 64 cells (box \f$1/8\times1/8\times1\f$),
+    /// 128 steps: E and B stay at most \f$10^{-12}\f$ of the scalar-gradient maximum.
     TEST(ChdrStaggered, GaugeAxial) {
         checkGaugeWave({8, 8, 64}, {0.125, 0.125, 1.0}, {0.0, 0.0, TWO_PI}, 128);
     }
+    /// As GaugeAxial with \f$\mathbf k=2\pi(8,8,1)\f$, one period across each box length.
     TEST(ChdrStaggered, GaugeObliqueSmall) {
         checkGaugeWave({8, 8, 64}, {0.125, 0.125, 1.0}, {8 * TWO_PI, 8 * TWO_PI, TWO_PI}, 128);
     }
+    /// \f$\mathbf k=2\pi(1,2,2)\f$ on 32 by 32 by 32 cells of the unit box for
+    /// \f$\lceil 20\pi/(\omega\Delta t)\rceil\f$ steps (ten periods), same bound.
     TEST(ChdrStaggered, GaugeObliqueTenPeriods) {
         checkGaugeWave({32, 32, 32}, {1.0, 1.0, 1.0}, {TWO_PI, 2 * TWO_PI, 2 * TWO_PI}, 0);
     }

@@ -7,8 +7,10 @@ Solvers require one ghost layer, three global cells on open axes,
 and two owned cells per rank and axis. Periodic templates retain their
 field boundary conditions, including on nonperiodic layouts.
 
-`OpenFaceClosure` and `OpenFaceClosureMPI` run the same checks on one and
-two ranks. Run them with `ctest -R '^OpenFaceClosure' --output-on-failure`.
+The CTest entries `chdr.src.OpenFaceClosure.serial` and
+`chdr.src.OpenFaceClosure.mpi2` run the same checks on one and two ranks. Run
+them with
+`ctest --test-dir build -R '^chdr\.src\.OpenFaceClosure\.' --output-on-failure`.
 The independent forty-coefficient polynomial checks the inherited electric
 field and current-level magnetic curl on the outermost layer. Each error
 is at most `1e-13` of its positive analytic maximum over the whole box.
@@ -17,6 +19,9 @@ The polynomial fixture splits along z and compares every owned field component
 with a separate serial field, normalized by its nonzero maximum. It also records
 binary64 equality, including signed zero. The explicit x-split thin partition
 checks the full tensor extension at both time levels.
+`BothStepsCloseTheNewLevel` sets both histories to the constant 2 and runs one
+step of the Standard and of the NonStandard stencil. The lower y ghost of the
+new level must then be 2 within `1e-13`.
 The periodic test checks both histories against analytically wrapped samples.
 
 The citation keys in `OuterLayerOracles.h` denote:

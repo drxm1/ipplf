@@ -1,5 +1,19 @@
 /** @file test_mur_medium.cpp
  * @brief Compare matched homogeneous absorption with the internal vacuum step.
+ * @details Box: 16 x 16 x 16 cells, unit spacing, split along z on two ranks, collocated R1.
+ * Initial potentials come from the NumPy fixture medium (seed 271828), see
+ * RandomPotentialHistoryFixture.h.
+ * - MatchedMediumEqualsInternalVacuumStep: with Mur on all six faces, the Homogeneous update
+ *   at \f$\Delta t = 0.5\f$ and \f$\varepsilon_r\f$ = 2.13 or 3.7 must give A_np1 bit for bit
+ *   equal to the vacuum kernel at \f$0.5/\sqrt{\varepsilon_r}\f$, after each of 256 steps.
+ *   A vacuum run with the kernel Mur speed \f$1/\sqrt{\varepsilon_r}\f$ must differ at least
+ *   once. Reference: the vacuum kernel (bitwise regression).
+ * - SpeedControlPreservesStateAndClosure: in three periodicity patterns and both finish
+ *   orders, the test-only kernel Mur speed 1.6 leaves the step, the face kinds and the speeds
+ *   unchanged, and only the old finish order leaves open-face ghosts incomplete.
+ *   Reference: self-consistency.
+ *
+ * CTest: chdr.solver.mur.medium.serial and chdr.solver.mur.medium.mpi2 (filter MurMedium.*).
  */
 #include <cstring>
 #include <gtest/gtest.h>
@@ -12,7 +26,8 @@
 
 namespace chdr::solver::test {
     /** @brief Compare a medium step with the same vacuum kernel at its internal timestep.
-     * Both source-free trajectories load the same independent random histories.
+     * All three source-free trajectories (medium, vacuum reference, vacuum control) load the
+     * same independent random histories and run 256 steps with Mur on all faces.
      * Identical histories and closures isolate the speed policy;
      * setting the kernel speed to the inverse refractive index is a control.
      * Potentials must agree bitwise, since both calls execute the same recurrence
@@ -84,6 +99,10 @@ namespace chdr::solver::test {
      * Include a non-unit planar speed to detect accidental descriptor normalization.
      * The control speed exceeds the production guard deliberately; this test exercises
      * the existing negative-control bypass, not an admissible propagation configuration.
+     * Layouts: all periodic and x open (physical speed 0.8), all open (matched speed);
+     * step 0.25, control speed 1.6. After step() and after initialize(), the step, the face
+     * kinds and the speeds are unchanged. Ghosts are complete except after the old finish
+     * order on a layout with a Mur face. Control speeds 0 and infinity throw IpplException.
      */
     TEST(MurMedium, SpeedControlPreservesStateAndClosure) {
         for (auto axes : {std::array{true, true, true}, std::array{false, true, true},

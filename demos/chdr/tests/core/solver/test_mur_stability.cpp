@@ -1,5 +1,25 @@
 /** @file test_mur_stability.cpp
  * @brief Check long-run potential envelopes from fixed inner-cell random histories.
+ * @details Initial potentials come from the NumPy fixtures stability-open (16 x 16 x 16
+ * cells) and stability-mixed (16 x 8 x 16, y periodic), seed 81413. Mur faces on all open
+ * axes, matched Mur speed, collocated R1, split along z on two ranks. The envelope ratio is
+ * the potential maximum over the last tenth of the steps divided by the maximum over the
+ * first tenth. The rule is a self-consistency bound with no lower limit, so it does not
+ * detect excessive damping.
+ * - InnerDataEnvelope: two layers at open faces zeroed. On one rank, 16 cases and 10000
+ *   steps; ratio at most 2. On two ranks, 4 cases (unit spacing, safety factor 0.98) and 1000
+ *   steps; ratio at most 2, window maxima within 1e-12 and cells within 1e-13 of an
+ *   MPI_COMM_SELF replay.
+ * - MismatchedSpeedControl: kernel Mur speed \f$\sqrt{2.13}\f$ at \f$\varepsilon_r = 2.13\f$;
+ *   the ratio must be at least 1e6 (negative control). It skips on more than one rank.
+ * - MurStabilityRecords.AllCellDrift: random data on all cells, vacuum, safety factor 0.98,
+ *   10000 steps; prints the envelope ratio, \f$Q_N/Q_0\f$ and the mean step increment and
+ *   asserts nothing. It skips on more than one rank.
+ *
+ * CTest: chdr.solver.mur.stability.serial and chdr.solver.mur.stability.mpi2
+ * (InnerDataEnvelope, label long); chdr.solver.mur.stability-control.serial (label long);
+ * chdr.solver.mur.stability-control.mpi2 is disabled, because the test skips on two ranks;
+ * chdr.solver.open.record.all-cell-drift (serial only, label record).
  */
 #include <gtest/gtest.h>
 
@@ -100,6 +120,9 @@ namespace chdr::solver::test {
      * physical steps. The MPI subset uses cubic cells and the near-CFL step: four fixtures,
      * each split along z.
      * Exact NumPy data use seed 81413, independent histories and component-major global order.
+     * Pass: last-tenth maximum at most 2 times the first-tenth maximum (10000 steps on one
+     * rank, 1000 on two); on two ranks also window maxima within 1e-12 and cells within 1e-13
+     * of the MPI_COMM_SELF replay.
      */
     TEST(MurStability, InnerDataEnvelope) {
         for (bool periodicY : {false, true})
@@ -117,6 +140,8 @@ namespace chdr::solver::test {
     /** Physical Mur speed one in the dielectric gives kernel speed \f$\sqrt{\varepsilon_r}\f$.
      * This violates the supported boundary-speed interval. The 1e6 floor is far below this
      * fixture's measured growth of 1.9e22 and separates it from the bounded matched runs.
+     * Case: all-open 16 x 16 x 16 cells, unit spacing, safety factor 0.98, 10000 steps.
+     * The test skips on more than one rank.
      */
     TEST(MurStability, MismatchedSpeedControl) {
         if (ippl::Comm->size() != 1)
@@ -128,7 +153,7 @@ namespace chdr::solver::test {
      * \sum_{d,\mathrm{links}}(D_d^+\bar\psi_q)^2]\f$ with
      * \f$\bar\psi=(\psi^k+\psi^{k-1})/2\f$. Links include periodic closing links and omit
      * links beyond physical faces. This chosen diagnostic uses the difference operators of
-     * Kreiss, Petersson and Ystrom (2002), Eq. (1.4); it is not their conserved energy.
+     * [kreiss2002SecondOrderWave, Eq. (1.4)]; it is not their conserved energy.
      */
     double positivePotentialNorm(OpenStandardSolver& solver) {
         const auto a = solver.A_n.getView(), b = solver.A_nm1.getView();
@@ -166,7 +191,9 @@ namespace chdr::solver::test {
     }
 
     /// Unrestricted initial boundary data: report affine drift and the independently defined Q
-    /// ratio.
+    /// ratio. Fixture stability-open on all cells (no zeroed layers), vacuum, all faces Mur,
+    /// safety factor 0.98, 10000 steps. Prints the envelope ratio, \f$Q_N/Q_0\f$ and the mean
+    /// step increment per component; asserts nothing. Skips on more than one rank.
     TEST(MurStabilityRecords, AllCellDrift) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "This record uses one rank";

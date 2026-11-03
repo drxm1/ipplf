@@ -2,8 +2,17 @@
  * @brief The construction contract of ChdrSolver, and its evolution against IPPL's Standard
  * solver on the periodic vacuum-wave setup.
  * @details The oracle is IPPL's Standard solver invoked with the same initial histories. This
- * regression checks the field bindings of ChdrSolver and its solve counting; the vacuum-wave
- * tests separately establish the physical wave reference.
+ * regression checks the field bindings of ChdrSolver and its solve counting. It does not
+ * compare with the continuum wave; the vacuum-wave program tests do that.
+ *
+ * MatchesBaseSolverOnTheVacuumWave evolves the +z vacuum plane wave with R1 on 8 by 8 by 64
+ * cells (box \f$1/8\times1/8\times1\f$, split along z) for 128 steps. After each step, E and
+ * B of ChdrSolver must equal E and B of the Standard solver exactly (maximum difference 0).
+ * The other tests check the label times of LevelContract, the equality of B from
+ * evaluateInitialFields and from evaluate_EB for R2, and the refusal of a halo width of 2,
+ * of rebinding, of distinct layout owners and (two ranks only) of a split that leaves one
+ * rank with one cell along x. CTest runs the suite ChdrSolverContract as
+ * chdr.solver.contract.serial and chdr.solver.contract.mpi2.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>
@@ -87,6 +96,8 @@ namespace {
         EXPECT_EQ(chdrSolver.completedSolves(), 0);
     }
 
+    /// With R1, E and B of ChdrSolver equal those of the Standard solver exactly after each of
+    /// 128 steps; initialize() then resets the solve count to 0.
     TEST(ChdrSolverContract, MatchesBaseSolverOnTheVacuumWave) {
         auto baseFields = makeVacuumWaveBox();
         auto chdrFields = makeVacuumWaveBox();
@@ -102,6 +113,8 @@ namespace {
         compareBaseEvolution(base, chdrSolver, baseFields, chdrFields);
     }
 
+    /// For R1, E has a label only when phi is taken as zero (offset -1 half step). After 3
+    /// solves with \f$\Delta t=0.125\f$, B is at time 0.375 and E at time 0.3125.
     TEST(ChdrSolverContract, DeclaresMixedElectricLabel) {
         const LevelContract contract{EBReconstructionConvention::R1};
         EXPECT_THROW(contract.halfStepLabel(Quantity::Electric), std::invalid_argument);
@@ -110,6 +123,7 @@ namespace {
         EXPECT_EQ(contract.labelTime(Quantity::Electric, 3, 0.125, true), 0.3125);
     }
 
+    /// An E field with two ghost layers makes the constructor throw IpplException.
     TEST(ChdrSolverContract, RefusesUnsupportedHaloWidth) {
         auto fields = makeVacuumWaveBox();
         initializeFieldStorage(fields);
@@ -120,6 +134,9 @@ namespace {
                      IpplException);
     }
 
+    /// The constructor needs an explicit reconstruction (LevelContract defaults to R2).
+    /// setSources and setEMFields throw IpplException, and computeRawMagneticField refuses the
+    /// bound E or B as output.
     TEST(ChdrSolverContract, RequiresExplicitChoiceAndFixedBindings) {
         static_assert(!std::is_constructible_v<ChdrSolver<StandardSolverPeriodic>,
                                                AJFourFieldsType&, EMFieldsType&, EMFieldsType&>);
@@ -134,6 +151,8 @@ namespace {
         EXPECT_THROW(solver.computeRawMagneticField(fields.getB()), IpplException);
     }
 
+    /// Source and B from one container and E from a second container make the constructor
+    /// throw IpplException.
     TEST(ChdrSolverContract, RejectsDistinctLayoutOwners) {
         auto first  = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         auto second = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
@@ -144,6 +163,8 @@ namespace {
                      IpplException);
     }
 
+    /// For R2, B from evaluateInitialFields equals B from a later evaluate_EB exactly, and the
+    /// solve count stays 0.
     TEST(ChdrSolverContract, InitialFieldsHonorSelectedReconstruction) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);
@@ -159,6 +180,8 @@ namespace {
         EXPECT_EQ(solver.completedSolves(), 0);
     }
 
+    /// On \f$p\ge2\f$ ranks, \f$2p-1\f$ cells along x leave one rank with one cell, and the
+    /// constructor throws std::runtime_error on every rank. The test skips on one rank.
     TEST(ChdrSolverContract, CollectivelyRefusesInsufficientLocalOwnership) {
         const int ranks = ippl::Comm->size();
         if (ranks < 2)

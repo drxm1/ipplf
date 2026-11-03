@@ -130,9 +130,11 @@ namespace chdr::solver::test {
     }
 
     /** @brief Stable identifiers for source-free, sourced and held wave records.
-     * @details T3 means the mixed source-free wave, T4 the sourced Lorenz wave,
-     * and H1 the independently held anisotropic case. The remaining fields are
-     * stencil, reconstruction enum, reading enum and refinement count.
+     * @details The first field names the wave family: the mixed source-free wave, the
+     * sourced Lorenz wave or the independently held anisotropic case. The remaining fields
+     * are stencil, reconstruction enum, reading enum and refinement count. Medium names
+     * hold direction, gamma, reading enum and refinement count instead. compare_ranks.py
+     * expects the names of the vacuum ladder states, so their format must not change.
      */
     template <class SolverType>
     std::string waveCaseName(int n, const WaveOptions& options) {

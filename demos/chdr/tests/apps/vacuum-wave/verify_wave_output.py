@@ -1,4 +1,17 @@
 #!/usr/bin/env pvpython
+## @file verify_wave_output.py
+# @brief CTest entry chdr.vacuum.readback: VTK readback of the 15 field frames of
+# chdr.vacuum.propagation (five frames, at times 0, 0.25, 0.5, 0.75 and 1, per run).
+# @details For each run of wave-runs.json, the CSV rows must pass check_rows() and
+# check_phase() of wave_checks.py. Each frame must have the expected extent, piece
+# extents, origin, spacing 1/nz, times, dt, step and normalization 1, and hold every owned
+# cell once.
+# E and B must agree with the discrete fields of the scalar recurrence within 1e-10. The
+# continuum relative L2 errors must be at most 0.01 (coarse) or 0.003 (fine) and equal the
+# CSV values within 1e-12. The coarse-to-fine ratio of the largest errors must lie in
+# [3, 5]. The two-rank fields (sorted by global cell index) and CSV diagnostics must agree
+# with one rank within 1e-11. The references follow Fallahi, MITHRA 2.0
+# [fallahi2020mithra20fullwavesimulation, Eqs. (3.8)-(3.17)].
 """Read every owned wave cell with VTK and compare to independent discrete/continuum fields.
 
 References: Fallahi, MITHRA 2.0, arXiv:2009.13645v1, (3.8)-(3.17).

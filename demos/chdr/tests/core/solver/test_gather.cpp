@@ -1,5 +1,13 @@
 /** @file test_gather.cpp
- * @brief Global index order, exact ownership and NaN halo exclusion in rank dumps.
+ * @brief Global index order, exact ownership and NaN halo exclusion in rank records.
+ * @details gatherOwned (RankRecords.h) collects the values of every rank record that
+ * compare_ranks.py reads. OwnedIndexOrderAndGhostExclusion fills an 8 by 10 by 12
+ * four-component field with its flattened global index on owned cells and NaN in the halo,
+ * and splits it along x, y and z in turn. Rank 0 must receive exactly the values 0 to 3839
+ * in x, y, z, component order, and every other rank an empty array.
+ * RepeatedNaNIndexStillFailsOwnership requires that orderValues throws std::runtime_error
+ * for the index list {0, 0}; it makes no MPI call. Both checks are exact. CTest runs the
+ * suite RankGather as chdr.solver.gather.serial and chdr.solver.gather.mpi2.
  */
 #include <gtest/gtest.h>
 
@@ -54,10 +62,13 @@ namespace chdr::solver::test {
         EXPECT_EQ(mismatch, 0);
     }
 
+    /// For each split axis, rank 0 receives the owned values 0 to 3839 in global order and no
+    /// halo value; other ranks receive nothing.
     TEST(RankGather, OwnedIndexOrderAndGhostExclusion) {
         for (unsigned split = 0; split < SpatialDim; ++split)
             checkGatherSplit(split);
     }
+    /// A repeated global index throws std::runtime_error, also when its value is NaN.
     TEST(RankGather, RepeatedNaNIndexStillFailsOwnership) {
         const rankDetail::PackedValues repeated{{0, 0},
                                                 {std::numeric_limits<double>::quiet_NaN(), 1.0}};

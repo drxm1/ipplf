@@ -1,5 +1,15 @@
 /** @file test_statistics.cpp
  * @brief Independent small-array checks of distributed field statistics.
+ * @details The tests check statisticsDetail::pairwiseSums() and ownedStatistics() of
+ * OwnedStatistics.h and its two consumers rankDetail::statistics() and serialSnapshot().
+ * Every comparison is exact (EXPECT_EQ, no tolerance) against values that the test states
+ * in closed form: the leaves \f$2^{53},1,1,1,1\f$ sum to \f$2^{53}+4\f$; integer fields with
+ * NaN ghosts give closed-form maxima, absolute sums and square sums. A NaN in an owned cell
+ * must make the maximum infinite and both sums non-finite. The two leaf tests make no MPI
+ * call, so on two ranks each rank repeats the serial result; only the two-rank entry has
+ * more than one owned block in the field tests.
+ *
+ * CTest entries: chdr.solver.statistics.{serial,mpi2} (label unit, timeout 60 s).
  */
 #include "SerialReference.h"
 #include "core/base/SpatialDimension.h"
@@ -34,6 +44,7 @@ namespace {
         EXPECT_EQ(sums[1], 15.0);
     }
 
+    /// Zero leaves give the sums (0, 0); one leaf (3, 0.25) is returned unchanged.
     TEST(StableStatistics, EmptyAndSingleLeaf) {
         EXPECT_EQ(statisticsDetail::pairwiseSums(StatisticPairs("empty statistic fixture", 0)),
                   (std::array<double, 2>{0.0, 0.0}));
@@ -80,6 +91,8 @@ namespace {
         EXPECT_EQ(serialSnapshot(field).reductions_m, exact);
     }
 
+    /// Integer fields on 3x3x3r cells (r ranks, split along z) with NaN ghosts: the
+    /// four-component J and the three-component E give the closed-form statistics exactly.
     TEST(StableStatistics, OddOwnedBlocksExcludeNaNGhosts) {
         const int ranks = ippl::Comm->size();
         auto fields     = makeBoxFieldContainer({3, 3, 3 * ranks}, {1.0, 1.0, 1.0}, 2);
@@ -88,6 +101,8 @@ namespace {
         checkIntegerValues(fields.getE(), 27 * ranks);
     }
 
+    /// NaN in every owned cell of a 4x4x4 field: the maximum is infinite and both sums are
+    /// non-finite.
     TEST(StableStatistics, OwnedNaNCannotDisappearFromMaximum) {
         auto fields = makeBoxFieldContainer({4, 4, 4}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);

@@ -4,6 +4,22 @@
  * [christlieb2024GaugeConserving, Lemma 3.3, Theorem 3.5] and
  * [clemens2001FiniteIntegration, Eqs. (18)-(24)]. Fixtures use global integer
  * indices so decomposition cannot change the input bit patterns.
+ *
+ * Configuration: periodic boxes of unit length per axis (Standard 12 by 10 by 8 cells,
+ * NonStandard 8 by 8 by 12 cells, zero-data and lifecycle cases 8 by 8 by 8 and
+ * 12 by 10 by 8 cells) with R1, R2 and R2Prime (collocated reading). The data add a hash
+ * of the global cell index, the checkerboard \f$(-1)^{x+y+z}\f$ and the x-Nyquist mode
+ * \f$(-1)^x\f$. Tolerances: the normalized residuals (cell residual divided by its
+ * uncancelled absolute scale, maximum over cells) of the discrete divergence of output and
+ * raw B and of the three Faraday components are at most \f$10^{-12}\f$ over six monitor
+ * steps; a planted E error raises a normalized Faraday residual above \f$10^{-6}\f$. For a
+ * planted continuity residual \f$p = 0, 0.125, -0.125\f$, the maximum of the continuity
+ * residual equals \f$\lvert p\rvert\f$ and its L2 norm equals \f$\lvert p\rvert\sqrt{960}\f$,
+ * each within \f$10^{-12}\f$ of its scale; the signed cell values match \f$p\f$ in a separate
+ * check. Reference: exact lattice value (discrete identities at round-off) and the
+ * refusal of a wrong call order (std::logic_error).
+ *
+ * CTest: chdr.diagnostics.monitors.serial and chdr.diagnostics.monitors.mpi2.
  */
 #include <cstdint>
 #include <gtest/gtest.h>
@@ -108,9 +124,12 @@ namespace {
                        EBReconstructionConvention::R2Prime})
             checkReconstruction<PotentialSolverBase>(cells, r);
     }
+    /// Standard stencil, 12 by 10 by 8 cells, R1, R2 and R2Prime: normalized divergence and
+    /// Faraday residuals at most 1e-12; a planted E error gives a residual above 1e-6.
     TEST(ChdrMonitors, RandomNyquistStandard) {
         checkBasicIdentities<StandardSolverPeriodic>({12, 10, 8});
     }
+    /// NonStandard stencil, 8 by 8 by 12 cells: the same checks.
     TEST(ChdrMonitors, RandomNyquistNonStandard) {
         checkBasicIdentities<NonStandardSolverPeriodic>({8, 8, 12});
     }
@@ -142,6 +161,8 @@ namespace {
             });
     }
 
+    /// afterSolve() before the first monitor step throws std::logic_error. On zero data
+    /// (8 by 8 by 8 cells, R2) every reported residual is exactly 0.
     TEST(ChdrMonitors, ZeroNormalizationAndOrderingGuard) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);
@@ -192,6 +213,10 @@ namespace {
         }
     }
 
+    /// R1, R2 and R2Prime on 12 by 10 by 8 cells, planted continuity residual
+    /// \f$p = 0, 0.125, -0.125\f$: the maximum equals \f$\lvert p\rvert\f$ and the L2 norm
+    /// \f$\lvert p\rvert\sqrt{960}\f$, each within \f$10^{-12}\f$ of its scale; the signed
+    /// cell values match \f$p\f$ in a separate check.
     TEST(ChdrMonitors, LifecycleConservingAndPlantedContinuity) {
         for (auto ebReconstructionConvention :
              {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
@@ -199,6 +224,9 @@ namespace {
             checkLifecycleContinuity(ebReconstructionConvention);
     }
 
+    /// Continuity is unavailable at the first monitor step, after a solve without a monitor
+    /// step and after initialize(); evaluate() after initialize() throws std::logic_error.
+    /// seedPreviousSource() makes continuity available again.
     TEST(ChdrMonitors, SparseAndReloadedSourcesAreUnavailable) {
         auto fields = makeBoxFieldContainer({8, 8, 8}, {1, 1, 1});
         initializeFieldStorage(fields);

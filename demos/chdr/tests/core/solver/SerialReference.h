@@ -1,7 +1,13 @@
 /** @file SerialReference.h
  * @brief Compare a distributed wave run with a rank-zero MPI_COMM_SELF execution.
- * @details The retained output tag "A9 communicator-self witness" identifies
- * records of the maximum per-cell and reduction-relative differences.
+ * @details For each comparison, rank zero prints one communicator-self witness line with
+ * the largest per-cell difference and the largest statistic difference.
+ * verifySerialReference() requires the first to be at most \f$10^{-13}\f$ and the second
+ * at most \f$10^{-12}\f$. Users:
+ * test_serial_reference.cpp, the \f$N=32\f$ replay of the medium ladders and the disabled
+ * holdouts in Convergence.h, the disabled medium holdout of test_dispersion.cpp and,
+ * through SerialFields, the Mur and open-box tests; test_statistics.cpp checks
+ * serialSnapshot().
  */
 #pragma once
 

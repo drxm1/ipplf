@@ -6,8 +6,23 @@
  * but the forcing uses IPPL's positive source sign: the printed MITHRA update
  * has the opposite sign. The sign is fixed by the wave equations (3.6)-(3.7).
  * Every term is exercised [salari2000CodeVerificationMms, section 3.1].
- * T1 identifies these manufactured-source records; the negative control
- * shifts charge sampling by half a step.
+ * The negative control shifts charge sampling by half a step.
+ *
+ * Manufactured runs R1, R2 and R2Prime, collocated, at the default step, on Standard 16 by
+ * 16 by 16 and NonStandard 16 by 16 by 24 cells (unit box, split along x). Over 256 solves,
+ * all four potential components must stay within \f$10^{-12}\f$ of the exact samples,
+ * relative to the sample maximum of each step, and the final identities must hold at
+ * \f$10^{-12}\f$. The negative control must miss by at least \f$10^{-3}\f$ after one solve.
+ * Each passing run writes its final state as a rank record for chdr.solver.ranks. CTest runs
+ * the suite as chdr.solver.manufactured.serial and chdr.solver.manufactured.mpi2.
+ *
+ * MediumManufactured runs R2 with the Homogeneous update at \f$\varepsilon=2.13\f$ and 4, in
+ * both readings, on 16 by 16 by 16 cells at safety factor \f$\sqrt3/2\f$. With the physical
+ * sources of physicalSourceFactor, the potentials must follow the history to \f$10^{-12}\f$
+ * over 256 solves; four wrong source conventions must miss by at least \f$10^{-3}\f$ after
+ * one solve. Each passing run writes its final state for chdr.solver.medium.ranks. CTest runs
+ * the suite as chdr.solver.medium.Manufactured.serial and chdr.solver.medium.Manufactured.mpi2.
+ * The reference of both suites is an exact lattice value.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <algorithm>
@@ -249,9 +264,13 @@ namespace chdr::solver::test {
             runManufactured<PotentialSolverBase>(ebReconstructionConvention, true);
         }
     }
+    /// R1, R2 and R2Prime on Standard 16 by 16 by 16 cells: 256 solves stay within
+    /// \f$10^{-12}\f$ of the history; the half-step charge shift misses by at least
+    /// \f$10^{-3}\f$.
     TEST(Manufactured, StandardLabelsAndNegativeControls) {
         manufacturedLabels<StandardSolverPeriodic>();
     }
+    /// As StandardLabelsAndNegativeControls on NonStandard 16 by 16 by 24 cells.
     TEST(Manufactured, NonStandardLabelsAndNegativeControls) {
         manufacturedLabels<NonStandardSolverPeriodic>();
     }
@@ -297,6 +316,8 @@ namespace chdr::solver::test {
                         solver);
         }
     }
+    /// For \f$\varepsilon=2.13,4\f$ in both readings, control 0 stays within \f$10^{-12}\f$ over
+    /// 256 solves, and controls 1 to 4 miss by at least \f$10^{-3}\f$ after one solve.
     TEST(MediumManufactured, PhysicalSourcesAndControls) {
         for (double eps : {2.13, 4.0})
             for (auto reading :

@@ -1,7 +1,19 @@
 /** @file test_compact.cpp
- * @brief Natural-position staggered derivative symbols and component-offset metadata.
+ * @brief Natural-position symbols of the forward and backward staggeredDifference.
  * @details Signed half-cell symbols follow by Fourier substitution into
  * [ryu2016potentialfdtd, Appendix A, Eqs. (19)-(20)] (deduction).
+ *
+ * The test samples \f$\sin(\mathbf k\cdot\mathbf x)\f$ at cell centres, with
+ * \f$\mathbf k=2\pi(1,2,-1)\f$, on 12 by 10 by 8 cells of the unit box (split along x). On
+ * each axis d, the forward and the backward difference must equal
+ * \f$\frac{2}{h_d}\sin(k_dh_d/2)\cos(\theta\pm k_dh_d/2)\f$, where \f$\theta\f$ is the phase
+ * at the cell centre, to \f$10^{-12}\f$ relative to the symbol. A nonfinite value fails. The
+ * reference is an exact lattice value. Each rank samples the mode at its own local indices
+ * and reads no field or halo value; on two ranks each rank samples a shorter local x range,
+ * and MPI_Allreduce combines the maximum errors. The suite name keeps "compact", the earlier
+ * name of the staggered
+ * difference. CTest runs the suite CompactOperators as chdr.solver.compact.serial and
+ * chdr.solver.compact.mpi2.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>
@@ -52,6 +64,8 @@ namespace {
         }
     };
 
+    /// The forward and backward staggeredDifference of one sampled mode equal the signed
+    /// half-cell symbol on all three axes to \f$10^{-12}\f$.
     TEST(CompactOperators, NaturalPositionSingleModeSymbols) {
         auto fields = makeBoxFieldContainer({12, 10, 8}, {1.0, 1.0, 1.0}, 0);
         initializeFieldStorage(fields);

@@ -4,6 +4,14 @@
  * identifier. Host verification includes the whole allocated view, so stale
  * faces, edges and corners remain visible. No numerical interpolation or
  * tolerance is used: the required copy error is exactly zero.
+ *
+ * CopiesEveryHaloCell builds the four-potential of a StandardSolverPeriodic on 12 by 14 by 16
+ * cells (box 1 by 1.5 by 2) with makeBoxFieldContainer, split along x, y and z in turn. After
+ * preparePotentialHalo, every allocated cell must equal the periodic copy of its identifier;
+ * the layout must have one ghost layer and be periodic on all axes. RejectsInvalidGeometry
+ * requires std::invalid_argument for split axis 3, for one cell along x and for a zero box
+ * length. CTest runs the suite BoxSetup as chdr.solver.setup.serial and
+ * chdr.solver.setup.mpi2; only the two-rank entry has a seam between ranks.
  */
 #include <cmath>
 #include <gtest/gtest.h>
@@ -82,11 +90,13 @@ namespace {
         EXPECT_TRUE(fields.getFL().isAllPeriodic_m);
     }
 
+    /// For each split axis, every owned and ghost cell holds the exact periodic identifier.
     TEST(BoxSetup, CopiesEveryHaloCell) {
         for (unsigned axis = 0; axis < 3; ++axis)
             checkSplitAxis(axis);
     }
 
+    /// Split axis 3, one cell along x and a zero box length throw std::invalid_argument.
     TEST(BoxSetup, RejectsInvalidGeometry) {
         EXPECT_THROW(makeBoxFieldContainer({8, 8, 8}, {1, 1, 1}, 3), std::invalid_argument);
         EXPECT_THROW(makeBoxFieldContainer({1, 8, 8}, {1, 1, 1}), std::invalid_argument);

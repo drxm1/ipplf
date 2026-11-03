@@ -1,3 +1,20 @@
+/** @file FDTDBoundary.cpp
+ * @brief Face description FDTDBoundary of the FDTD potential solvers and its validation by
+ * validateBoundary().
+ * @details The layouts split along \f$z\f$; the default box has 6 by 5 by 4 cells. For all 8
+ * axis patterns, FDTDBoundary::fromLayout() must mark exactly the faces of open axes as Mur
+ * faces of speed 1, and InteriorBounds::contains() must agree on every owned cell with the
+ * oracle murFaceMask() of BoundaryOracles.h. validateBoundary() must accept the speeds 0.8 and
+ * 1.2 on the two faces of one open axis. It must throw IpplException for the speeds 0, -1,
+ * \f$\sqrt{2}\f$, 2, infinity and NaN, for unequal speeds where open faces meet, for a face kind
+ * that contradicts the layout, and for ghost width 0 or 2 in any of the three fields. It must
+ * also throw for 2 cells on an open axis, for 1 cell on a periodic axis and for a domain that
+ * starts at index 1.
+ *
+ * Reference: refusal; exact lattice value (cell sets). CTest entries:
+ * chdr.src.FDTDBoundary.serial and chdr.src.FDTDBoundary.mpi2. Only the mpi2 entry checks the
+ * refusal of a 6 by 5 by 3 box whose \f$z\f$ split leaves one rank one cell.
+ */
 #include "Ippl.h"
 
 #include "MaxwellSolvers/FDTDBoundary.h"
@@ -42,6 +59,8 @@ namespace {
     }
 }  // namespace
 
+/// For all 8 axis patterns of the 6 by 5 by 4 box, face kinds, Mur mask and speed 1 follow the
+/// layout, and InteriorBounds::contains() equals the oracle on every owned cell.
 TEST(FDTDBoundary, DescriptionAndInteriorOwnership) {
     for (unsigned bits = 0; bits < 8; ++bits)
         checkDescription({bool(bits & 1), bool(bits & 2), bool(bits & 4)}, {6, 5, 4});
@@ -95,6 +114,7 @@ TEST(FDTDBoundary, RejectFaceMismatchAndGhostWidths) {
 
 /** Three global samples support extrapolation; two local samples support Mur's next-level
  * reads. The three-cell split gives one rank only one cell, and both ranks must reject it.
+ * The split case runs only on two ranks.
  */
 TEST(FDTDBoundary, RejectUnsupportedDomains) {
     auto tooShort     = makeLayout({false, true, true}, {2, 5, 4});

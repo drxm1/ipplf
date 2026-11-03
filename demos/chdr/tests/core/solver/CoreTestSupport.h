@@ -1,5 +1,7 @@
 /** @file CoreTestSupport.h
- * @brief Small device-reduction and host-snapshot helpers shared by the core audits.
+ * @brief Small device-reduction and host-snapshot helpers shared by the ChdrSolver tests.
+ * @details makeTestSolver builds the vacuum or the Homogeneous ChdrSolver; localMaximum and
+ * globalMaximum reduce a cell observation over owned cells; copyToHost keeps a host copy.
  */
 #pragma once
 #include <limits>

@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+## @file run_wave_checks.py
+# @brief CTest entry chdr.vacuum.propagation: three full-period runs of chdr-vacuum-wave
+# and the checks of their CSV output.
+# @details The runs are coarse on one rank (8 by 8 by 64 cells, 128 steps), fine on one
+# rank (16 by 16 by 128 cells, 256 steps) and coarse on two ranks, each with --output and
+# limited to 120 s. wave_checks.compare_csv_runs() checks every CSV row against the
+# independent scalar recurrence, the continuum errors and their refinement ratio, and the
+# two-rank CSV against the one-rank CSV within 1e-11. The source hashes before and after
+# the runs must be equal. The manifest wave-runs.json is the input of
+# chdr.vacuum.readback.
 """Run the fixed coarse, fine and two-rank benchmark; verify all CSV rows.
 
 Expected quantities and tolerances follow README.md and wave_checks.py's cited
@@ -30,7 +40,7 @@ def arguments():
 
 
 def fingerprint(binary):
-    """Hash the sources of these tests, of the driver under apps/vacuum-wave, and the binary."""
+    """Hash the test sources, the chdr-vacuum-wave sources (apps/vacuum-wave) and the binary."""
     here = Path(__file__).resolve().parent
     trees = (here, here.parents[2] / 'apps' / 'vacuum-wave')
     paths = [p for tree in trees for p in tree.rglob('*') if p.is_file()

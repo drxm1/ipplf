@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+## @file run_cli_checks.py
+# @brief CTest entry chdr.vacuum.cli: 13 command lines of chdr-vacuum-wave.
+# @details Six command lines must exit with status 0: --steps 0, --fine --steps 0,
+# --timer-fences on --steps 0, --debug --steps 0, and --steps 0 and --steps 1 with
+# --output. Six invalid arguments on one rank and --steps 999 on two ranks must exit with
+# a status other than 0 and 124 and print "rank " (one rank) or "--steps exceeds the
+# one-period benchmark" (two ranks) to standard error. Each run is limited to 120 s. The
+# source hashes before and after the runs must be equal. The record cli-checks.json is the
+# manifest that chdr.vacuum.readback.partial reads.
 """Exercise the actual driver CLI, including a coordinated MPI rejection.
 
 This checks parsing and process exit status. Mid-run numerical gates are tested
@@ -43,7 +52,7 @@ def cases(args):
 
 
 def output_path(directory, options):
-    """Resolve a supplied field directory against the recorded driver working directory."""
+    """Resolve a supplied field directory against the recorded working directory of the run."""
     if '--output' not in options:
         return None
     index = options.index('--output') + 1

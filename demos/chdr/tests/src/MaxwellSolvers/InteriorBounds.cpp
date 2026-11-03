@@ -1,3 +1,19 @@
+/** @file InteriorBounds.cpp
+ * @brief Cells written by the interior stencils of StandardFDTDSolver and NonStandardFDTDSolver,
+ * and the constructor policy of the boundary modes periodic, absorbing and configured.
+ * @details The box has 6 by 5 by 4 cells of spacing (1, 1.25, 0.5) and splits along \f$z\f$.
+ * With unit source, zero histories and no boundary update, one step must write exactly
+ * \f$\Delta t^2\f$ into every component of the cells with oracle mask 0 (murFaceMask() in
+ * BoundaryOracles.h) and leave the sentinel \f$-17\f$ in all other owned cells, for all 8 axis
+ * patterns. Two static_assert checks fix the constructor overloads. The other tests check that
+ * the solver keeps its copy of the description through initialize(), that the fixed modes
+ * keep their all-face meaning, and that invalid descriptions and two-ghost storage throw
+ * IpplException before any halo exchange.
+ *
+ * Reference: exact lattice value; refusal. CTest entries: chdr.src.InteriorBounds.serial and
+ * chdr.src.InteriorBounds.mpi2. Only the mpi2 entry checks the refusal of a 6 by 5 by 3 box
+ * whose \f$z\f$ split leaves one rank one cell.
+ */
 #include <gtest/gtest.h>
 #include <type_traits>
 
@@ -55,6 +71,8 @@ namespace {
     }
 }  // namespace
 
+/// For all 8 axis patterns and both stencils, one step writes \f$\Delta t^2\f$ exactly into the
+/// cells with oracle mask 0 and leaves the sentinel -17 in every face, edge and corner cell.
 TEST(InteriorBounds, BothStencilsWriteOnlyInterior) {
     for (unsigned pattern = 0; pattern < 8; ++pattern) {
         SCOPED_TRACE(pattern);
@@ -84,6 +102,8 @@ void checkBoundaryPersistence() {
     }
 }
 
+/// Both stencils, open x and Mur speed 0.8: kinds and speeds survive initialize(), and every
+/// potential level keeps NO_FACE on the lower x face and PERIODIC_FACE on the lower y face.
 TEST(InteriorBounds, BoundarySelectionSurvivesInitialize) {
     checkBoundaryPersistence<fdtd_test::Standard<ippl::configured>>();
     checkBoundaryPersistence<fdtd_test::NonStandard<ippl::configured>>();
@@ -109,6 +129,8 @@ void checkFixedModes() {
     }
 }
 
+/// Both stencils: periodic has Mur mask 0 and absorbing has mask 63 on an open layout, and
+/// absorbing throws IpplException on a layout with a periodic axis.
 TEST(InteriorBounds, FixedModesDoNotDeriveFaceKinds) {
     checkFixedModes<fdtd_test::Standard>();
     checkFixedModes<fdtd_test::NonStandard>();
@@ -117,6 +139,7 @@ TEST(InteriorBounds, FixedModesDoNotDeriveFaceKinds) {
 /** Solver entry points must reject invalid storage on every rank before halo communication.
  * The three-cell z split is thin on only one rank. Inconsistent descriptions
  * fail during construction; malformed histories must not enter fillHalo.
+ * The thin split runs only on two ranks.
  */
 TEST(InteriorBounds, SolverRefusesBeforeCommunication) {
     using Solver = fdtd_test::Standard<ippl::absorbing>;

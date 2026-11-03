@@ -1,5 +1,13 @@
 /** @file OpenBoxCases.h
  * @brief Fixed integer-period boxes for the thirty-step reflection checks.
+ * @details The 13 rows of cases are 6 vacuum rows (names v...), 5 rows at
+ * \f$\varepsilon_r = 2.13\f$ with matched Mur speed (m...) and 2 vacuum rows with
+ * h = (1.25, 0.8, 1) (a...). The step is 0.5; the two anisotropic rows use
+ * 0.5029188806044014. A row name carries the incidence angle in degrees,
+ * \f$\arcsin(v\lvert\mathbf k_t\rvert/\omega)\f$ (for example v30, m43.252, a40), or, for an
+ * evanescent row, the ratio \f$v\lvert\mathbf k_t\rvert/\omega > 1\f$ (for example v1.05,
+ * m1.2, a1.2). Users: test_mur_reflection.cpp, test_mur_field_reflection.cpp,
+ * test_open_gauge_records.cpp and test_mur_refinement.cpp.
  */
 #pragma once
 #include "ReflectionOracles.h"

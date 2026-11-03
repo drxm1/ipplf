@@ -1,5 +1,9 @@
 /** @file RandomFields.h
- * @brief Decomposition-independent history and source samples for interface checks.
+ * @brief Decomposition-independent history and source samples for the O1-VS and
+ * interface-energy tests.
+ * @details randomize() computes each sample from a hash of its global cell index, component
+ * and seed, so the samples do not depend on the decomposition. Users:
+ * formulation/test_o1vs_regression.cpp and opt-in/diagnostics/test_interface_energy.cpp.
  */
 #pragma once
 #include "core/base/FieldContainer.h"

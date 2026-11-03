@@ -1,4 +1,15 @@
 #!/usr/bin/env pvpython
+## @file verify_partial_output.py
+# @brief CTest entry chdr.vacuum.readback.partial: VTK readback of the zero-step and
+# one-step output of chdr.vacuum.cli.
+# @details For the cases output-initial (--steps 0) and output-first-step (--steps 1) of
+# cli-checks.json, the CSV rows must be steps 0 to the last step with timeA = step/128.
+# The series must list exactly wave-0.pvti (and wave-1.pvti) at the times step/128, each
+# with one piece. Each frame must pass check_frame() of verify_wave_output.py: discrete
+# error at most 1e-10, continuum relative L2 error at most 0.01, and equal to the CSV
+# value within 1e-12. check_phase() of wave_checks.py compares the CSV Fourier
+# coefficients with the scalar recurrence within 1e-10. The references follow Fallahi,
+# MITHRA 2.0 [fallahi2020mithra20fullwavesimulation, Eqs. (3.8)-(3.17)].
 """Read the CLI's output-enabled zero/one-step cases with the actual VTK reader.
 
 The full-period checker remains unchanged. We reuse its independent frame and

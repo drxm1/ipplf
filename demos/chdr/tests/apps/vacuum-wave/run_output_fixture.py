@@ -1,3 +1,12 @@
+## @file run_output_fixture.py
+# @brief Launcher of chdr.vacuum.output.serial, chdr.vacuum.output.mpi2 and the four
+# chdr.vacuum.output.failure entries.
+# @details In a fresh directory it runs the writer output_fixture.cpp (one or two ranks,
+# one case), then pvpython read_output_fixture.py if the writer exits with status 0. Each
+# command is limited to 90 s. The test passes only if both commands exit with status 0.
+# record.json holds the commands, exit statuses and the SHA-256 hashes of the fixture, the
+# reader, this script and core/output/FieldOutput.h. Without pvpython the script returns
+# 77, which CTest reports as a skip.
 """Run one writer/real-reader case in a fresh directory; retain commands and evidence."""
 import argparse
 import hashlib

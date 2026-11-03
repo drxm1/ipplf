@@ -1,5 +1,10 @@
 /** @file ReflectionRun.h
  * @brief Shared thirty-step trajectories and transverse projections for reflection tests.
+ * @details Used by test_mur_reflection.cpp and test_mur_field_reflection.cpp (CTest
+ * chdr.solver.mur.reflection.*, chdr.solver.mur.field-reflection.* and the disabled
+ * chdr.solver.mur.holdout). verifyRanks() is defined in test_mur_reflection.cpp and
+ * checkFieldReflection() in test_mur_field_reflection.cpp, so both files link together.
+ * MurReflection.DISABLED_Holdout also runs the code of this file.
  */
 #pragma once
 #include "OpenRunSupport.h"
@@ -27,9 +32,9 @@ namespace chdr::solver::test::reflection {
     }
 
     /** @brief Evolve both exact quadratures with normal or deliberately defective finishing.
-     * @details Control 1 changes only Mur speed by 1e-6; control 2 restores the
-     * original halo ordering. The physical step and component time labels come
-     * from ChdrSolver. Initial histories are prepared once, then solve() advances
+     * @details Control 1 changes only the kernel Mur speed, by the factor \f$1 + 10^{-6}\f$;
+     * control 2 restores the original halo ordering. The physical step and component time
+     * labels come from ChdrSolver. Initial histories are prepared once, then solve() advances
      * thirty times. No observation exchanges potentials or repairs control halos.
      * Mesh/layout owners must outlive this routine; source is identically zero.
      */
@@ -61,7 +66,7 @@ namespace chdr::solver::test::reflection {
      * temporal and normal phases, so fit() refers its coefficient to the first
      * supplied layer. Component offsets follow LevelContract; no interpolation
      * between staggered components is introduced. The wave-decomposition model
-     * is described by Jones and Parrott (1988), Analysis, equations (1)-(3).
+     * is described in [jones1988MultiPointImpedance, Analysis, equations (1)-(3)].
      */
     inline std::vector<Complex> project(const std::vector<Complex>& values, const Case& row,
                                         SpatialDiscretization reading, bool magnetic, bool field,

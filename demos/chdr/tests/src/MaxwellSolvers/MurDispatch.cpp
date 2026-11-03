@@ -1,3 +1,18 @@
+/** @file MurDispatch.cpp
+ * @brief Dispatch of the Mur face, edge and corner updates to the owned boundary cells of a
+ * StandardFDTDSolver with a configured FDTDBoundary.
+ * @details The box has 6 by 5 by 4 cells of spacing (1, 1.25, 0.5) and splits along \f$z\f$.
+ * For all 8 axis patterns, the test loads all three potential levels with an integer
+ * polynomial of the global cell index and calls applyBCs() once. Every owned cell with oracle
+ * mask 0 (murFaceMask() in BoundaryOracles.h) must keep its loaded value. Every face, edge and
+ * corner cell must equal exactly the output of the Mur struct that its mask selects. In the
+ * negative control, the dispatcher treats all 6 faces as open; on the 6 mixed patterns it must
+ * change periodic cells and write wrong values into open cells. MurSpeed.cpp checks the
+ * weights of the structs.
+ *
+ * Reference: self-consistency (routing against an independent mask). CTest entries:
+ * chdr.src.MurDispatch.serial and chdr.src.MurDispatch.mpi2.
+ */
 #include <gtest/gtest.h>
 
 #include "BoundaryOracles.h"
@@ -120,6 +135,8 @@ namespace {
     }
 }  // namespace
 
+/// For all 8 axis patterns, interior cells keep their values and boundary cells equal the
+/// output of their mask's struct; on the 6 mixed patterns the all-open control must fail.
 TEST(MurDispatch, EveryOpenFaceEdgeAndCorner) {
     for (unsigned pattern = 0; pattern < 8; ++pattern) {
         SCOPED_TRACE(pattern);

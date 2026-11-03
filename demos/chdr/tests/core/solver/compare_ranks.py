@@ -1,8 +1,15 @@
 """Compare owned fields and positive reductions in one-rank and two-rank records.
 
-Owned-cell differences use the field's maximum as their scale. Independent
-positive sums and maxima use a relative comparison. Residuals arrive already
-normalized by their absolute evaluation and therefore use an absolute comparison.
+Usage: compare_ranks.py SERIAL_DIR MPI2_DIR [--medium]. CTest runs it as
+chdr.solver.ranks (193 records) and, with --medium, as chdr.solver.medium.ranks
+(36 records), after all producer entries of the fixture. Both directories must
+hold exactly the expected set of records.
+
+Owned-cell differences use the field's maximum as their scale (tolerance 1e-13).
+Independent positive sums and maxima use a relative comparison (1e-12), as do
+the residual norms and the phase records. Residuals arrive already normalized by
+their absolute evaluation and therefore use an absolute comparison (1e-12). The
+count of bitwise equal field records is printed, not asserted.
 Continuum approximation errors are separate JSONL records and are not read here.
 """
 import json

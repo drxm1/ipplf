@@ -3,6 +3,15 @@
  * @details Wave symbols follow [fallahi2020mithra20fullwavesimulation,
  * Eqs. (3.17), (3.24)]; the centered symbol follows
  * [trefethen1996FiniteDifferenceSpectral, Eqs. (5.1.8)-(5.1.9), p. 195].
+ *
+ * The Standard and the NonStandard laplacian and the centeredDifference act on component 0,
+ * the cosine of \f$\mathbf k\cdot\mathbf x\f$, with \f$\mathbf k=2\pi(1,2,-5)\f$, on 12 by 16
+ * by 24 cells of the unit box (split along x). The Laplacians must equal their discrete
+ * symbol times the cosine, and the centred difference its symbol times the sine (component
+ * 1, the reference), to \f$10^{-12}\f$ relative to the symbol; a nonfinite value fails.
+ * The reference is an exact lattice value that independentSymbol evaluates without the
+ * production symbol helpers. CTest runs the suite Operators as chdr.solver.operators.serial
+ * and chdr.solver.operators.mpi2.
  */
 #include <gtest/gtest.h>
 #include <limits>
@@ -103,6 +112,8 @@ namespace {
         EXPECT_LE(error, 1e-12);
     }
 
+    /// Both Laplacians and the centred difference of one mode on unequal spacings equal the
+    /// independent symbols to \f$10^{-12}\f$.
     TEST(Operators, MatchFourierSymbols) {
         checkFourierStencil<Stencil::Standard>();
         checkFourierStencil<Stencil::NonStandard>();

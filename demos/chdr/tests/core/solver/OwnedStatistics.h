@@ -1,11 +1,17 @@
 /** @file OwnedStatistics.h
  * @brief Stable owned-cell maxima and nonnegative sums for field diagnostics.
  *
- * Collects three rank-local summaries of a field:
+ * ownedStatistics() computes three global statistics of the owned cells of a field
+ * (ghosts excluded):
  * 1. largest absolute value,
  * 2. sum of absolute values,
- * 3. sum of squared values
- * So this file provides statistics that are computed from rank-owned field cells.
+ * 3. sum of squared values.
+ *
+ * Each rank adds its cells in a balanced pairwise tree, so the rounding-error bound grows
+ * with the tree depth, about \f$\log_2 n\f$ for \f$n\f$ cells (see
+ * statisticsDetail::pairwiseSums() and [jeannerod2013ImprovedErrorBounds, p. 7]). MPI
+ * then combines the rank results with MAX and SUM. The rank comparisons of RankRecords.h
+ * and SerialReference.h use these statistics; test_statistics.cpp checks them.
  */
 #pragma once
 
