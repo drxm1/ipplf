@@ -24,8 +24,8 @@
 
 #include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/Monitors.h"
-#include "tests/core/solver/CoreTestSupport.h"
-#include "tests/core/solver/RandomFields.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/RandomFields.h"
 
 namespace {
     using namespace chdr;

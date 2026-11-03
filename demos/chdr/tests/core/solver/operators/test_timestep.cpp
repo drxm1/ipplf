@@ -31,12 +31,12 @@
 #include <iostream>
 #include <limits>
 
-#include "CoreTestSupport.h"
-#include "MediumOracles.h"
-#include "MonitorTestSupport.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
+#include "tests/core/solver/accuracy/MediumOracles.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
 
 static_assert(
     chdr::SpatialDim == 3,

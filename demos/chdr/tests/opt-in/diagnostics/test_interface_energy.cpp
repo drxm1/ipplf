@@ -27,8 +27,8 @@
 #include "core/material/PlanarSlab.h"
 #include "core/solver/BoxSetup.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
-#include "tests/core/solver/RandomFields.h"
-#include "tests/core/solver/SerialReference.h"
+#include "tests/core/solver/support/RandomFields.h"
+#include "tests/core/solver/support/SerialReference.h"
 
 namespace {
     using namespace chdr;

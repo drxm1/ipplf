@@ -32,10 +32,10 @@
 #include <type_traits>
 
 #include "ComovingPotentials.h"
-#include "MonitorTestSupport.h"
-#include "RankRecords.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
+#include "tests/core/solver/support/RankRecords.h"
 
 static_assert(
     chdr::SpatialDim == 3,

@@ -1,5 +1,5 @@
 # Single-root phase checks and the full direction/safety-factor records.
-target_sources(test-chdr-solver PRIVATE test_dispersion.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_dispersion.cpp)
 chdr_solver_test(dispersion "Dispersion.*")
 chdr_solver_rank_producer(dispersion)
 chdr_solver_test(record.dispersion "RecordDispersion.*")

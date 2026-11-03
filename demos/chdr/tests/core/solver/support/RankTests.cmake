@@ -1,8 +1,9 @@
 # Comparison fixture: every producer completes before the record reader.
 if(Python3_Interpreter_FOUND)
-  add_test(NAME chdr.solver.ranks.prepare
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/prepare_rank_records.py"
-                   "${CHDR_SOLVER_RECORD_ROOT}")
+  add_test(
+    NAME chdr.solver.ranks.prepare
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/support/prepare_rank_records.py"
+            "${CHDR_SOLVER_RECORD_ROOT}")
   set_tests_properties(
     chdr.solver.ranks.prepare PROPERTIES FIXTURES_SETUP chdr_solver_rank_generation TIMEOUT 10
                                          LABELS "chdr;solver;unit;ranks")
@@ -33,7 +34,7 @@ chdr_solver_rank_producer(manufactured)
 chdr_solver_rank_producer(rank_cases)
 if(MPIEXEC_EXECUTABLE AND Python3_Interpreter_FOUND)
   add_test(NAME chdr.solver.ranks
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compare_ranks.py"
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/support/compare_ranks.py"
                    "${CHDR_SOLVER_RECORD_ROOT}/serial" "${CHDR_SOLVER_RECORD_ROOT}/mpi2")
   set_tests_properties(chdr.solver.ranks PROPERTIES FIXTURES_REQUIRED chdr_solver_ranks TIMEOUT 60
                                                     LABELS "chdr;solver;unit;ranks")

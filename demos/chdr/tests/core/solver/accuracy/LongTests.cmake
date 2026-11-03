@@ -1,5 +1,6 @@
 # Full ladders, anisotropic cases and ten-period gauge histories.
-target_sources(test-chdr-solver PRIVATE test_gauge_growth.cpp test_convergence_long.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_gauge_growth.cpp
+                                        accuracy/test_convergence_long.cpp)
 chdr_solver_test(long.GaugeGrowth.StaggeredRecord "LongGaugeGrowth.StaggeredRecord")
 foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
   foreach(family IN ITEMS Convergence GaugeGrowth)

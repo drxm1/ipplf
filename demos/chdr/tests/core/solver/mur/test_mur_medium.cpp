@@ -18,11 +18,11 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "CoreTestSupport.h"
 #include "OpenRunSupport.h"
-#include "RandomPotentialHistoryFixture.h"
-#include "RankRecords.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/RandomPotentialHistoryFixture.h"
+#include "tests/core/solver/support/RankRecords.h"
 
 namespace chdr::solver::test {
     /** @brief Compare a medium step with the same vacuum kernel at its internal timestep.

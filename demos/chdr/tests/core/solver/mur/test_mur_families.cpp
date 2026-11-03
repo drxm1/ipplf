@@ -21,11 +21,11 @@
 #include <gtest/gtest.h>
 
 #include "OpenRunSupport.h"
-#include "RankRecords.h"
-#include "RankWitness.h"
 #include "ReflectionOracles.h"
-#include "SerialReference.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/support/RankRecords.h"
+#include "tests/core/solver/support/RankWitness.h"
+#include "tests/core/solver/support/SerialReference.h"
 #include "tests/src/MaxwellSolvers/OuterLayerTest.h"
 
 namespace chdr::solver::test {

@@ -13,10 +13,10 @@
  *
  * CTest entries: chdr.solver.serial_reference.{serial,mpi2} (label unit, timeout 60 s).
  */
-#include "LorenzWave.h"
 #include "SerialReference.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/accuracy/LorenzWave.h"
 
 static_assert(
     chdr::SpatialDim == 3,

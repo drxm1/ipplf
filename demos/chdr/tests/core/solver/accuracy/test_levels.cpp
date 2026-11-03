@@ -23,11 +23,11 @@
 #include <iostream>
 #include <limits>
 
-#include "CoreTestSupport.h"
-#include "MonitorTestSupport.h"
 #include "Waves.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
 
 static_assert(chdr::SpatialDim == 3,
               "test_levels.cpp requires three spatial dimensions for its Cartesian implementation");

@@ -32,13 +32,13 @@
 #include <iostream>
 
 #include "LorenzWave.h"
-#include "MonitorTestSupport.h"
-#include "RankRecords.h"
 #include "Waves.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/Monitors.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
+#include "tests/core/solver/support/RankRecords.h"
 
 static_assert(
     chdr::SpatialDim == 3,

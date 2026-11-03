@@ -6,7 +6,7 @@
  * test_open_gauge_records.cpp and ReflectionRun.h.
  */
 #pragma once
-#include "CoreTestSupport.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/src/MaxwellSolvers/ShippedOrderSolver.h"
 
 namespace chdr::solver::test {

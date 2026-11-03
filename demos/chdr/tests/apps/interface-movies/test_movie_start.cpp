@@ -25,7 +25,7 @@
 #include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/diagnostics/AlignedFieldEnergy.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
-#include "tests/core/solver/CoreTestSupport.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
 
 namespace {
     using namespace chdr;

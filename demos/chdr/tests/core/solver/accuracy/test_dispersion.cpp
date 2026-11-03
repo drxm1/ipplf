@@ -37,14 +37,14 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "CoreTestSupport.h"
 #include "MediumOracles.h"
-#include "MonitorTestSupport.h"
-#include "RankRecords.h"
-#include "SerialReference.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
+#include "tests/core/solver/support/RankRecords.h"
+#include "tests/core/solver/support/SerialReference.h"
 
 static_assert(
     chdr::SpatialDim == 3,

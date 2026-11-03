@@ -31,14 +31,14 @@
 #include <iostream>
 #include <utility>
 
-#include "CoreTestSupport.h"
 #include "MediumOracles.h"
-#include "MonitorTestSupport.h"
-#include "RankRecords.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
 #include "core/solver/operators/Operators.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
+#include "tests/core/solver/support/RankRecords.h"
 
 static_assert(
     chdr::SpatialDim == 3,

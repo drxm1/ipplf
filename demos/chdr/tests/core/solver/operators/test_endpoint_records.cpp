@@ -23,10 +23,10 @@
 #include <iomanip>
 #include <iostream>
 
-#include "MonitorTestSupport.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
+#include "tests/core/solver/support/MonitorTestSupport.h"
 
 static_assert(
     chdr::SpatialDim == 3,

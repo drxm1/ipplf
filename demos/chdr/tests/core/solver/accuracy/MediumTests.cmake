@@ -1,5 +1,5 @@
 # Each material family has an explicit filter and a separate record directory.
-target_sources(test-chdr-solver PRIVATE test_medium_guard.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_medium_guard.cpp)
 function(chdr_solver_medium_test suite filter)
   chdr_solver_test(medium.${suite} "${filter}" ${ARGN})
   foreach(variant serial mpi2)
@@ -58,8 +58,8 @@ endforeach()
 if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
   set(mediumRoot "${CHDR_SOLVER_RECORD_ROOT}/medium-ranks")
   add_test(NAME chdr.solver.medium.ranks.prepare
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/prepare_rank_records.py"
-                   "${mediumRoot}")
+           COMMAND "${Python3_EXECUTABLE}"
+                   "${CMAKE_CURRENT_SOURCE_DIR}/support/prepare_rank_records.py" "${mediumRoot}")
   set_tests_properties(
     chdr.solver.medium.ranks.prepare PROPERTIES FIXTURES_SETUP chdr_medium_generation TIMEOUT 10
                                                 LABELS "chdr;solver;unit;ranks")
@@ -73,7 +73,7 @@ if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
     endforeach()
   endforeach()
   add_test(NAME chdr.solver.medium.ranks
-           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compare_ranks.py"
+           COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/support/compare_ranks.py"
                    "${mediumRoot}/serial" "${mediumRoot}/mpi2" --medium)
   set_tests_properties(
     chdr.solver.medium.ranks PROPERTIES FIXTURES_REQUIRED chdr_medium_ranks TIMEOUT 60 LABELS

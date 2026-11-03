@@ -19,10 +19,10 @@
  */
 #include <gtest/gtest.h>
 
-#include "RankWitness.h"
 #include "ReflectionRun.h"
-#include "SerialReference.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/support/RankWitness.h"
+#include "tests/core/solver/support/SerialReference.h"
 
 namespace chdr::solver::test::reflection {
     /** @brief Compare every sample in the first ten layers with exact continuation.

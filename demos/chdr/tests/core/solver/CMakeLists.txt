@@ -1,5 +1,5 @@
 include(AddIpplTest)
-add_ippl_test(test-chdr-solver COMPILE_ONLY SOURCES test_solver_contract.cpp)
+add_ippl_test(test-chdr-solver COMPILE_ONLY SOURCES operators/test_solver_contract.cpp)
 target_link_libraries(test-chdr-solver PRIVATE chdr-core chdr-diagnostics chdr-testing)
 target_compile_options(test-chdr-solver PRIVATE -UNDEBUG)
 target_link_libraries(test-chdr-solver PRIVATE nlohmann_json::nlohmann_json)
@@ -12,8 +12,8 @@ function(chdr_solver_skip name reason)
   set_tests_properties(chdr.solver.${name} PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP:" LABELS
                                                       "chdr;solver;unit;unavailable")
 endfunction()
-target_sources(test-chdr-solver PRIVATE test_compact.cpp)
-target_sources(test-chdr-solver PRIVATE test_staggered.cpp)
+target_sources(test-chdr-solver PRIVATE operators/test_compact.cpp)
+target_sources(test-chdr-solver PRIVATE operators/test_staggered.cpp)
 
 # Register both rank counts unless a suite requests only one of them.
 function(chdr_solver_test suite filter)
@@ -43,11 +43,11 @@ endfunction()
 chdr_solver_test(contract "ChdrSolverContract.*")
 chdr_solver_test(compact "CompactOperators.*" SERIAL_ONLY)
 chdr_solver_test(staggered "ChdrStaggered.*")
-target_sources(test-chdr-solver PRIVATE test_setup.cpp)
+target_sources(test-chdr-solver PRIVATE operators/test_setup.cpp)
 chdr_solver_test(setup "BoxSetup.*")
-target_sources(test-chdr-solver PRIVATE test_operators.cpp)
+target_sources(test-chdr-solver PRIVATE operators/test_operators.cpp)
 chdr_solver_test(operators "Operators.*")
-target_sources(test-chdr-solver PRIVATE test_timestep.cpp)
+target_sources(test-chdr-solver PRIVATE operators/test_timestep.cpp)
 chdr_solver_test(timestep "TimeStep.*")
 foreach(case StandardBounded AnisotropicBounded NonStandardBounded)
   chdr_solver_test(long.timestep.${case} "TimeStepLong.${case}")
@@ -59,7 +59,7 @@ foreach(case StandardBounded AnisotropicBounded NonStandardBounded)
   endif()
 endforeach()
 
-target_sources(test-chdr-solver PRIVATE test_open_gauge_records.cpp)
+target_sources(test-chdr-solver PRIVATE mur/test_open_gauge_records.cpp)
 function(chdr_open_record name filter)
   add_test(NAME chdr.solver.open.record.${name} COMMAND test-chdr-solver --gtest_filter=${filter})
   set_tests_properties(
@@ -69,33 +69,33 @@ endfunction()
 chdr_open_record(gauge OpenGaugeRecords.VacuumRepresentatives)
 chdr_open_record(zero-ghost MurOuterLayerRecords.ZeroGhostMagnitude)
 chdr_open_record(all-cell-drift MurStabilityRecords.AllCellDrift)
-target_sources(test-chdr-solver PRIVATE test_gather.cpp)
+target_sources(test-chdr-solver PRIVATE support/test_gather.cpp)
 chdr_solver_test(gather "RankGather.*")
-target_sources(test-chdr-solver PRIVATE test_manufactured.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_manufactured.cpp)
 chdr_solver_test(manufactured "Manufactured.*")
-target_sources(test-chdr-solver PRIVATE test_ranks.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_ranks.cpp)
 chdr_solver_test(rank_cases "RankCases.*")
-include(RankTests.cmake)
-include(ConvergenceTests.cmake)
+include(support/RankTests.cmake)
+include(accuracy/ConvergenceTests.cmake)
 chdr_solver_test(wave_norms "WaveNorms.*")
-include(LongTests.cmake)
-include(DispersionTests.cmake)
-target_sources(test-chdr-solver PRIVATE test_endpoint_records.cpp)
+include(accuracy/LongTests.cmake)
+include(accuracy/DispersionTests.cmake)
+target_sources(test-chdr-solver PRIVATE operators/test_endpoint_records.cpp)
 chdr_solver_test(record.endpoint "TimeStepRecords.*")
-target_sources(test-chdr-solver PRIVATE test_serial_reference.cpp)
+target_sources(test-chdr-solver PRIVATE support/test_serial_reference.cpp)
 chdr_solver_test(serial_reference "SerialReference.*")
-target_sources(test-chdr-solver PRIVATE test_statistics.cpp)
+target_sources(test-chdr-solver PRIVATE support/test_statistics.cpp)
 chdr_solver_test(statistics "StableStatistics.*")
-target_sources(test-chdr-solver PRIVATE test_levels.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_levels.cpp)
 chdr_solver_test(levels "Levels.*")
-target_sources(test-chdr-solver PRIVATE test_equivalence.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_equivalence.cpp)
 chdr_solver_test(equivalence "LevelEquivalence.*")
 foreach(case ObliqueStandard ObliqueNonStandard AxialNonStandardStable
              AxialNonStandardBoundaryRecord)
   chdr_solver_test(gauge.${case} "GaugeCancellation.${case}")
 endforeach()
 
-target_sources(test-chdr-solver PRIVATE test_comoving.cpp)
+target_sources(test-chdr-solver PRIVATE accuracy/test_comoving.cpp)
 chdr_solver_test(comoving "Comoving.*")
 foreach(variant serial mpi2)
   if(TEST chdr.solver.comoving.${variant})
@@ -107,10 +107,11 @@ foreach(variant serial mpi2)
     )
   endif()
 endforeach()
-include(StaggeredTests.cmake)
-include(MediumTests.cmake)
-target_sources(test-chdr-solver PRIVATE test_mur_reflection.cpp test_mur_field_reflection.cpp
-                                        test_mur_refinement.cpp)
+include(accuracy/StaggeredTests.cmake)
+include(accuracy/MediumTests.cmake)
+target_sources(
+  test-chdr-solver PRIVATE mur/test_mur_reflection.cpp mur/test_mur_field_reflection.cpp
+                           mur/test_mur_refinement.cpp)
 chdr_solver_test(mur.reflection "MurReflection.ExactTwoWaveRows")
 foreach(variant serial mpi2)
   if(TEST chdr.solver.mur.reflection.${variant})
@@ -123,7 +124,7 @@ chdr_solver_test(mur.records "MurReflectionRefinement.CodeConfirmedRows" SERIAL_
 set_tests_properties(chdr.solver.mur.refinement.serial chdr.solver.mur.records.serial
                      PROPERTIES LABELS "chdr;solver;record")
 chdr_solver_test(mur.anisotropic "MurReflection.AnisotropicMedium" MPI2_ONLY)
-target_sources(test-chdr-solver PRIVATE test_mur_faces.cpp test_mur_medium.cpp)
+target_sources(test-chdr-solver PRIVATE mur/test_mur_faces.cpp mur/test_mur_medium.cpp)
 set(randomPotentialHistoryFixtureDirectory
     "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")
 add_custom_command(
@@ -131,9 +132,10 @@ add_custom_command(
          "${randomPotentialHistoryFixtureDirectory}/stability-open.bin"
          "${randomPotentialHistoryFixtureDirectory}/stability-mixed.bin"
   COMMAND
-    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/GenerateRandomPotentialHistoryFixtures.py"
+    "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/support/GenerateRandomPotentialHistoryFixtures.py"
     "${randomPotentialHistoryFixtureDirectory}"
-  DEPENDS GenerateRandomPotentialHistoryFixtures.py
+  DEPENDS support/GenerateRandomPotentialHistoryFixtures.py
   VERBATIM)
 add_custom_target(
   chdr-random-potential-history-fixtures
@@ -146,10 +148,10 @@ target_compile_definitions(
   PRIVATE CHDR_RANDOM_POTENTIAL_HISTORY_FIXTURE_DIR="${randomPotentialHistoryFixtureDirectory}")
 chdr_solver_test(mur.faces "MurFaces.*")
 chdr_solver_test(mur.medium "MurMedium.*")
-target_sources(test-chdr-solver PRIVATE test_mur_outer_layer.cpp)
+target_sources(test-chdr-solver PRIVATE mur/test_mur_outer_layer.cpp)
 chdr_solver_test(mur.outer-layer "MurOuterLayer.*")
-target_sources(test-chdr-solver PRIVATE test_open_beam.cpp)
-target_sources(test-chdr-solver PRIVATE test_mur_stability.cpp test_mur_families.cpp)
+target_sources(test-chdr-solver PRIVATE mur/test_open_beam.cpp)
+target_sources(test-chdr-solver PRIVATE mur/test_mur_stability.cpp mur/test_mur_families.cpp)
 chdr_solver_test(mur.families "MurEdgeCornerFamilies.*")
 chdr_solver_test(mur.stability "MurStability.InnerDataEnvelope")
 chdr_solver_test(mur.stability-control "MurStability.MismatchedSpeedControl" SERIAL_ONLY)
