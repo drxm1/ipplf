@@ -133,7 +133,7 @@ decomposition; the last bits of `l2_m` and `scaleL2_m` can (deduction).
   material solver is accepted; `O1VS.VacuumBits` shows that
   the O1-VS update then reproduces the vacuum potentials and fields bit for bit. The refusal
   occurs before any input is captured; it rejects the diagnostic, not the solver. Medium tests
-  evaluate their own gauge and Gauss residuals (`tests/core/solver/WaveNorms.h`).
+  evaluate their own gauge and Gauss residuals (`tests/core/solver/accuracy/WaveNorms.h`).
 - Write the source and make the potential halos valid before `beforeSolve`. It copies `A_nm1`,
   the output E and the source; at count zero it first calls `reconstructEB()`. `afterSolve`
   evaluates the step and keeps its source for the next continuity residual; `advance` calls

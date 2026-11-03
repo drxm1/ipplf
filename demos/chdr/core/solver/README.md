@@ -66,7 +66,7 @@ retains its scalar value and private workspace. Record `formulationName()`,
 `formulationParameters().alpha_m` and `homogeneousPermittivity()` beside stencil,
 spatial reading and reconstruction. Medium tests cover source scaling, phase,
 stability and continuum convergence using independent expected values in
-`tests/core/solver/MediumOracles.h`. Rank comparisons repeat the same update on one and two ranks.
+`tests/core/solver/accuracy/MediumOracles.h`. Rank comparisons repeat the same update on one and two ranks.
 
 ## Periodic and Mur boundaries
 
@@ -322,8 +322,10 @@ discrete recurrence (deduction from Eq. (3.24)).
 
 ## Tests and evidence
 
-The solver tests are in `demos/chdr/tests/core/solver` and build the executable
-`test-chdr-solver` with `BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS`.
+The solver tests are in `demos/chdr/tests/core/solver`. The directories
+`support`, `operators`, `accuracy` and `mur` each build an executable named
+`test-chdr-solver-<directory>` with `BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS`.
+The [test index](../../tests/README.md) lists every entry and its source files.
 The project Nix configuration also enables CHDR, FEL, FFT and SOLVERS with
 SERIAL and OPENMP. Use at most two compiler jobs for local development.
 
@@ -334,7 +336,9 @@ configuring. For an existing configured build, enable the relevant modules with:
 cmake -S . -B build -DBUILD_TESTING=ON -DIPPL_ENABLE_UNIT_TESTS=ON \
   -DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_FEL=ON \
   -DIPPL_ENABLE_FFT=ON -DIPPL_ENABLE_SOLVERS=ON
-cmake --build build --parallel 2 --target test-chdr-solver test-chdr-formulation
+cmake --build build --parallel 2 --target test-chdr-solver-support \
+  test-chdr-solver-operators test-chdr-solver-accuracy test-chdr-solver-mur \
+  test-chdr-formulation
 ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
   -LE 'long|record' --output-on-failure -j1
 ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
@@ -352,7 +356,7 @@ The CTests separate bounded unit checks, long ladders and records. Tests run
 on one and two MPI ranks with one OpenMP thread per rank. Numerical assertions
 use global reductions. Rank fixtures compare global-index owned-cell dumps,
 including the source/potential seam cases. The rank-invariance field-statistic
-checks (`tests/core/solver/OwnedStatistics.h`) use balanced pairwise local sums
+checks (`tests/core/solver/support/OwnedStatistics.h`) use balanced pairwise local sums
 before their plain-double MPI sum. This keeps their rounding depth logarithmic
 in the cell count; the fixed sum over at most four components adds a bounded
 local depth (deduction from [Jeannerod and Rump, p. 7][roundoff]). The evolved
@@ -388,7 +392,7 @@ cells. Its two-rank entries carry the `long` label. The collocated case checks
 field/Gauss convergence, discrete identities and rank agreement; the staggered
 case checks finiteness and records the orders, identities and rank differences.
 The exact inputs and
-numerical assertions are defined in `Convergence.h` and the named test bodies.
+numerical assertions are defined in `tests/core/solver/accuracy/Convergence.h` and the named test bodies.
 
 The four upstream Maxwell examples remain compile-only. The Standard example's
 update, dispersion and rank claims are covered here by `Manufactured`,

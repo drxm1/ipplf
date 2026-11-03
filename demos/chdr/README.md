@@ -35,7 +35,7 @@ This directory holds the ChDR code of my master's project:
 Every header is included by its path from this directory, for example
 `#include "core/solver/ChdrSolver.h"`, `#include "opt-in/diagnostics/Monitors.h"`,
 `#include "apps/vacuum-wave/VacuumSetup.h"` or
-`#include "tests/core/solver/CoreTestSupport.h"`. A bare include such as
+`#include "tests/core/solver/support/CoreTestSupport.h"`. A bare include such as
 `#include "ChdrSolver.h"` does not compile. The CMake targets export this
 directory as their include root:
 
