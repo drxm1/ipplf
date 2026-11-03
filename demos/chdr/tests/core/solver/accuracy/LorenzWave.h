@@ -6,9 +6,9 @@
  * WaveNorms.h compares with the solver output in the ladders of Convergence.h.
  */
 #pragma once
-#include "MediumOracles.h"
-#include "PeriodicMode.h"
 #include "core/base/SpatialDimension.h"
+#include "tests/core/solver/accuracy/MediumOracles.h"
+#include "tests/core/solver/accuracy/PeriodicMode.h"
 
 static_assert(chdr::SpatialDim == 3,
               "LorenzWave.h requires three spatial dimensions for its Cartesian implementation");

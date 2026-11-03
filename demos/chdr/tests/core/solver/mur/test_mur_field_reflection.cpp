@@ -16,8 +16,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "ReflectionRun.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/ReflectionRun.h"
 
 namespace chdr::solver::test::reflection {
     namespace {

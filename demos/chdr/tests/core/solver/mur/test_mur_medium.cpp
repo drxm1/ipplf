@@ -18,8 +18,8 @@
 #include <cstring>
 #include <gtest/gtest.h>
 
-#include "OpenRunSupport.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/OpenRunSupport.h"
 #include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/core/solver/support/RandomPotentialHistoryFixture.h"
 #include "tests/core/solver/support/RankRecords.h"

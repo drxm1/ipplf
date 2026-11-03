@@ -14,12 +14,12 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "LorenzWave.h"
-#include "WaveNorms.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
 #include "opt-in/diagnostics/Monitors.h"
+#include "tests/core/solver/accuracy/LorenzWave.h"
+#include "tests/core/solver/accuracy/WaveNorms.h"
 #include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/core/solver/support/RankRecords.h"
 #include "tests/core/solver/support/SerialReference.h"

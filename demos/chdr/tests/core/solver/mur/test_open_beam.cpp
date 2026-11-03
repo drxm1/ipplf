@@ -21,8 +21,8 @@
 #include <complex>
 #include <gtest/gtest.h>
 
-#include "TwoWaveState.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/TwoWaveState.h"
 #include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/core/solver/support/RankWitness.h"
 #include "tests/core/solver/support/SerialReference.h"

@@ -18,7 +18,7 @@
  * AnisotropicConvergence.StaggeredRecord runs as
  * chdr.solver.long.anisotropic.StaggeredRecord.mpi2.
  */
-#include "Convergence.h"
+#include "tests/core/solver/accuracy/Convergence.h"
 
 namespace chdr::solver::test {
     /// Mixed and sourced wave, staggered R2, \f$N=16,32,64\f$: orders at least 1.8 on

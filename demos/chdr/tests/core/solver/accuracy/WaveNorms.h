@@ -12,11 +12,11 @@
 #include <stdexcept>
 #include <utility>
 
-#include "LorenzWave.h"
-#include "MediumOracles.h"
 #include "core/base/FieldContainer.h"
 #include "core/base/LevelContract.h"
 #include "core/base/SpatialDimension.h"
+#include "tests/core/solver/accuracy/LorenzWave.h"
+#include "tests/core/solver/accuracy/MediumOracles.h"
 
 static_assert(chdr::SpatialDim == 3,
               "WaveNorms.h requires three spatial dimensions for its Cartesian implementation");

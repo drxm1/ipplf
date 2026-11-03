@@ -7,9 +7,9 @@
  * MurReflection.AnisotropicMedium also runs the code of this file.
  */
 #pragma once
-#include "OpenRunSupport.h"
-#include "TwoWaveState.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/OpenRunSupport.h"
+#include "tests/core/solver/mur/TwoWaveState.h"
 #include "tests/core/solver/support/RankRecords.h"
 
 namespace chdr::solver::test::reflection {

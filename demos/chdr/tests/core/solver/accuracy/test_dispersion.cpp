@@ -37,10 +37,10 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "MediumOracles.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
+#include "tests/core/solver/accuracy/MediumOracles.h"
 #include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/core/solver/support/MonitorTestSupport.h"
 #include "tests/core/solver/support/RankRecords.h"

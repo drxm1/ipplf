@@ -19,8 +19,8 @@
 #include <string>
 #include <vector>
 
-#include "OwnedStatistics.h"
 #include "core/base/SpatialDimension.h"
+#include "tests/core/solver/support/OwnedStatistics.h"
 
 static_assert(chdr::SpatialDim == 3,
               "RankRecords.h requires three spatial dimensions for its Cartesian implementation");

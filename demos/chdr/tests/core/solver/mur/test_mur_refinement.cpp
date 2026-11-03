@@ -15,7 +15,7 @@
 #include <iostream>
 #include <string_view>
 
-#include "OpenBoxCases.h"
+#include "tests/core/solver/mur/OpenBoxCases.h"
 
 namespace chdr::solver::test::reflection {
     namespace {

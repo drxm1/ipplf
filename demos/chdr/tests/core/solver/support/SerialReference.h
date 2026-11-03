@@ -18,12 +18,12 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "CoreTestSupport.h"
-#include "OwnedStatistics.h"
-#include "RankRecords.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
+#include "tests/core/solver/support/OwnedStatistics.h"
+#include "tests/core/solver/support/RankRecords.h"
 
 static_assert(
     chdr::SpatialDim == 3,

@@ -10,7 +10,7 @@
  * test_open_gauge_records.cpp and test_mur_refinement.cpp.
  */
 #pragma once
-#include "ReflectionOracles.h"
+#include "tests/core/solver/mur/ReflectionOracles.h"
 
 namespace chdr::solver::test::reflection {
     /** @brief One source-free mode, with physical time step and permittivity.

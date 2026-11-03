@@ -1,9 +1,8 @@
 # Exercise the face/edge reconstruction with the same analytic waves and error checks as the
 # collocated reading; keep its long ladder out of the quick suite.
-target_sources(test-chdr-solver PRIVATE accuracy/test_staggered_convergence.cpp)
-chdr_solver_test(convergence.staggered "StaggeredConvergence.*")
+chdr_solver_test(test-chdr-solver-accuracy convergence.staggered "StaggeredConvergence.*")
 chdr_solver_rank_producer(convergence.staggered)
-chdr_solver_test(long.staggered "LongStaggeredConvergence.*")
+chdr_solver_test(test-chdr-solver-accuracy long.staggered "LongStaggeredConvergence.*")
 foreach(variant IN ITEMS serial mpi2)
   if(TEST chdr.solver.long.staggered.${variant})
     set_tests_properties(

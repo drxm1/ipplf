@@ -11,9 +11,9 @@
  *
  * CTest entries: chdr.solver.statistics.{serial,mpi2} (label unit, timeout 60 s).
  */
-#include "SerialReference.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/support/SerialReference.h"
 
 static_assert(
     chdr::SpatialDim == 3,

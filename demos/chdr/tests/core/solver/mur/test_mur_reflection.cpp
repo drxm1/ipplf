@@ -19,8 +19,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "ReflectionRun.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/ReflectionRun.h"
 #include "tests/core/solver/support/RankWitness.h"
 #include "tests/core/solver/support/SerialReference.h"
 

@@ -31,10 +31,10 @@
  */
 #include <complex>
 
-#include "Convergence.h"
-#include "LorenzWave.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/accuracy/Convergence.h"
+#include "tests/core/solver/accuracy/LorenzWave.h"
 
 static_assert(
     chdr::SpatialDim == 3,

@@ -11,9 +11,9 @@
  */
 #include <gtest/gtest.h>
 
-#include "OpenRunSupport.h"
-#include "TwoWaveState.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/OpenRunSupport.h"
+#include "tests/core/solver/mur/TwoWaveState.h"
 
 namespace chdr::solver::test {
     namespace {

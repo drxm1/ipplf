@@ -20,9 +20,9 @@
 #include <complex>
 #include <gtest/gtest.h>
 
-#include "OpenRunSupport.h"
-#include "ReflectionOracles.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/mur/OpenRunSupport.h"
+#include "tests/core/solver/mur/ReflectionOracles.h"
 #include "tests/core/solver/support/RankRecords.h"
 #include "tests/core/solver/support/RankWitness.h"
 #include "tests/core/solver/support/SerialReference.h"

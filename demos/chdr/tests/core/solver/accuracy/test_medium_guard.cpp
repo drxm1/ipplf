@@ -19,12 +19,12 @@
  */
 #include <gtest/gtest.h>
 
-#include "MediumCases.h"
-#include "MediumOracles.h"
 #include "core/solver/BoxSetup.h"
 #include "core/solver/ChdrSolver.h"
 #include "core/solver/formulation/MaterialFormulation.h"
 #include "opt-in/diagnostics/Monitors.h"
+#include "tests/core/solver/accuracy/MediumCases.h"
+#include "tests/core/solver/accuracy/MediumOracles.h"
 
 namespace chdr::solver::test {
     using namespace chdr::diagnostics;

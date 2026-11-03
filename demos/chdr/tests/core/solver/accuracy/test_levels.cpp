@@ -23,9 +23,9 @@
 #include <iostream>
 #include <limits>
 
-#include "Waves.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/accuracy/Waves.h"
 #include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/core/solver/support/MonitorTestSupport.h"
 

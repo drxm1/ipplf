@@ -1,7 +1,6 @@
 # Each material family has an explicit filter and a separate record directory.
-target_sources(test-chdr-solver PRIVATE accuracy/test_medium_guard.cpp)
-function(chdr_solver_medium_test suite filter)
-  chdr_solver_test(medium.${suite} "${filter}" ${ARGN})
+function(chdr_solver_medium_test testTarget suite filter)
+  chdr_solver_test(${testTarget} medium.${suite} "${filter}" ${ARGN})
   foreach(variant serial mpi2)
     if(TEST chdr.solver.medium.${suite}.${variant})
       set_tests_properties(
@@ -24,31 +23,29 @@ function(chdr_solver_medium_test suite filter)
     endif()
   endforeach()
 endfunction()
-foreach(
-  suite
-  Validity
-  Guard
-  Equivalence
-  Manufactured
-  TimeStep
-  Dispersion
-  Source)
-  chdr_solver_medium_test(${suite} "Medium${suite}.*")
+foreach(suite Validity Guard Equivalence Manufactured Dispersion Source)
+  chdr_solver_medium_test(test-chdr-solver-accuracy ${suite} "Medium${suite}.*")
 endforeach()
+chdr_solver_medium_test(test-chdr-solver-operators TimeStep "MediumTimeStep.*")
 foreach(reading Collocated Staggered)
-  chdr_solver_medium_test(Convergence.${reading} "MediumConvergence.${reading}")
+  chdr_solver_medium_test(test-chdr-solver-accuracy Convergence.${reading}
+                          "MediumConvergence.${reading}")
 endforeach()
-chdr_solver_medium_test(long.Dispersion "MediumDispersionLong.*")
-chdr_solver_medium_test(record.Dispersion "MediumDispersionRecord.*")
-chdr_solver_medium_test(long.TimeStep "MediumTimeStepLong.*")
-chdr_solver_medium_test(long.anisotropic.Fields "MediumAnisotropic.Fields" MPI2_ONLY)
-chdr_solver_medium_test(anisotropic.Phase "MediumAnisotropic.Phase" MPI2_ONLY)
+chdr_solver_medium_test(test-chdr-solver-accuracy long.Dispersion "MediumDispersionLong.*")
+chdr_solver_medium_test(test-chdr-solver-accuracy record.Dispersion "MediumDispersionRecord.*")
+chdr_solver_medium_test(test-chdr-solver-operators long.TimeStep "MediumTimeStepLong.*")
+chdr_solver_medium_test(test-chdr-solver-accuracy long.anisotropic.Fields
+                        "MediumAnisotropic.Fields" MPI2_ONLY)
+chdr_solver_medium_test(test-chdr-solver-accuracy anisotropic.Phase "MediumAnisotropic.Phase"
+                        MPI2_ONLY)
 if(TEST chdr.solver.medium.anisotropic.Phase.mpi2)
   set_tests_properties(chdr.solver.medium.anisotropic.Phase.mpi2 PROPERTIES TIMEOUT 180)
 endif()
 foreach(reading Collocated Staggered)
-  chdr_solver_medium_test(long.Convergence.${reading} "MediumConvergenceLong.${reading}")
-  chdr_solver_medium_test(long.Source.${reading} "MediumSourceLong.${reading}")
+  chdr_solver_medium_test(test-chdr-solver-accuracy long.Convergence.${reading}
+                          "MediumConvergenceLong.${reading}")
+  chdr_solver_medium_test(test-chdr-solver-accuracy long.Source.${reading}
+                          "MediumSourceLong.${reading}")
 endforeach()
 
 # The existing reader compares manufactured histories and measured mode phases. Continuum cases

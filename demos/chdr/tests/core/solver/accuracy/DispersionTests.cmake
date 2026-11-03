@@ -1,8 +1,7 @@
 # Single-root phase checks and the full direction/safety-factor records.
-target_sources(test-chdr-solver PRIVATE accuracy/test_dispersion.cpp)
-chdr_solver_test(dispersion "Dispersion.*")
+chdr_solver_test(test-chdr-solver-accuracy dispersion "Dispersion.*")
 chdr_solver_rank_producer(dispersion)
-chdr_solver_test(record.dispersion "RecordDispersion.*")
+chdr_solver_test(test-chdr-solver-accuracy record.dispersion "RecordDispersion.*")
 foreach(variant IN ITEMS serial mpi2)
   if(TEST chdr.solver.record.dispersion.${variant})
     set_tests_properties(

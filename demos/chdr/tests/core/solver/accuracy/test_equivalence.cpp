@@ -31,10 +31,10 @@
 #include <cstdint>
 #include <gtest/gtest.h>
 
-#include "LorenzWave.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
 #include "testing/Util.h"
+#include "tests/core/solver/accuracy/LorenzWave.h"
 #include "tests/core/solver/support/CoreTestSupport.h"
 #include "tests/core/solver/support/MonitorTestSupport.h"
 

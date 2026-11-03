@@ -31,9 +31,9 @@
 #include <limits>
 #include <type_traits>
 
-#include "ComovingPotentials.h"
 #include "core/base/SpatialDimension.h"
 #include "core/solver/BoxSetup.h"
+#include "tests/core/solver/accuracy/ComovingPotentials.h"
 #include "tests/core/solver/support/MonitorTestSupport.h"
 #include "tests/core/solver/support/RankRecords.h"
 

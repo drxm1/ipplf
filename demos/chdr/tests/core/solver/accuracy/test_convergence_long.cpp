@@ -13,8 +13,8 @@
  * a final acceptance check of earlier work; CTest now runs it as
  * chdr.solver.long.anisotropic.Collocated.mpi2.
  */
-#include "Convergence.h"
 #include "core/base/SpatialDimension.h"
+#include "tests/core/solver/accuracy/Convergence.h"
 
 static_assert(
     chdr::SpatialDim == 3,

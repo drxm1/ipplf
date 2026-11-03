@@ -1,7 +1,6 @@
 # Full ladders, anisotropic cases and ten-period gauge histories.
-target_sources(test-chdr-solver PRIVATE accuracy/test_gauge_growth.cpp
-                                        accuracy/test_convergence_long.cpp)
-chdr_solver_test(long.GaugeGrowth.StaggeredRecord "LongGaugeGrowth.StaggeredRecord")
+chdr_solver_test(test-chdr-solver-accuracy long.GaugeGrowth.StaggeredRecord
+                 "LongGaugeGrowth.StaggeredRecord")
 foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
   foreach(family IN ITEMS Convergence GaugeGrowth)
     set(costLabel long)
@@ -12,7 +11,8 @@ foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
       continue()
     endif()
     if(NOT stencil STREQUAL "StaggeredRecord")
-      chdr_solver_test(long.${family}.${stencil} "Long${family}.${stencil}")
+      chdr_solver_test(test-chdr-solver-accuracy long.${family}.${stencil}
+                       "Long${family}.${stencil}")
     endif()
     foreach(variant IN ITEMS serial mpi2)
       if(TEST chdr.solver.long.${family}.${stencil}.${variant})
@@ -35,7 +35,8 @@ foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
   endforeach()
 endforeach()
 foreach(reading Collocated StaggeredRecord)
-  chdr_solver_test(long.anisotropic.${reading} "AnisotropicConvergence.${reading}" MPI2_ONLY)
+  chdr_solver_test(test-chdr-solver-accuracy long.anisotropic.${reading}
+                   "AnisotropicConvergence.${reading}" MPI2_ONLY)
   if(TEST chdr.solver.long.anisotropic.${reading}.mpi2)
     set_tests_properties(
       chdr.solver.long.anisotropic.${reading}.mpi2
