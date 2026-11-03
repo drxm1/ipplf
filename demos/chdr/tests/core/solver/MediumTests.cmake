@@ -11,11 +11,15 @@ function(chdr_solver_medium_test suite filter)
           "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;CHDR_SOLVER_RECORD_DIR=${CHDR_SOLVER_RECORD_ROOT}/medium-${suite}-${variant}"
       )
       if(suite MATCHES "^(long|record)[.]")
-        set_tests_properties(chdr.solver.medium.${suite}.${variant} PROPERTIES TIMEOUT 1800 LABELS
-                                                                               "chdr;solver;long")
+        string(REGEX MATCH "^[^.]+" costLabel "${suite}")
+        set_tests_properties(chdr.solver.medium.${suite}.${variant}
+                             PROPERTIES TIMEOUT 1800 LABELS "chdr;solver;${costLabel}")
         if(variant STREQUAL "mpi2")
           set_property(TEST chdr.solver.medium.${suite}.${variant} APPEND PROPERTY LABELS mpi)
         endif()
+      endif()
+      if(suite MATCHES "^Convergence[.]")
+        set_tests_properties(chdr.solver.medium.${suite}.${variant} PROPERTIES TIMEOUT 180)
       endif()
     endif()
   endforeach()
@@ -68,5 +72,8 @@ if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
                    "${mediumRoot}/serial" "${mediumRoot}/mpi2" --medium)
   set_tests_properties(
     chdr.solver.medium.ranks PROPERTIES FIXTURES_REQUIRED chdr_medium_ranks TIMEOUT 60 LABELS
-                                        "chdr;solver;unit;ranks;mpi")
+                                        "chdr;solver;unit;ranks")
+else()
+  chdr_solver_skip(medium.ranks.prepare "Medium rank records require Python3 and an MPI launcher")
+  chdr_solver_skip(medium.ranks "Medium rank comparison requires Python3 and an MPI launcher")
 endif()

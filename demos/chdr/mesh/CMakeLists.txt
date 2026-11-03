@@ -82,7 +82,7 @@ if(BUILD_TESTING)
                 "${CMAKE_CURRENT_BINARY_DIR}/test-serial" "${CMAKE_CURRENT_BINARY_DIR}/test-mpi2")
       set_tests_properties(chdr.mesh.serial PROPERTIES FIXTURES_SETUP ChdrSerial)
       set_tests_properties(chdr.mesh.mpi2 PROPERTIES FIXTURES_SETUP ChdrMpi2)
-      set_tests_properties(chdr.mesh.compare PROPERTIES LABELS "chdr;mesh;mpi" FIXTURES_REQUIRED
+      set_tests_properties(chdr.mesh.compare PROPERTIES LABELS "chdr;mesh" FIXTURES_REQUIRED
                                                         "ChdrSerial;ChdrMpi2" TIMEOUT 60)
       add_test(
         NAME chdr.mesh.brick.compare
@@ -93,7 +93,7 @@ if(BUILD_TESTING)
       set_tests_properties(chdr.mesh.brick.serial PROPERTIES FIXTURES_SETUP ChdrBrickSerial)
       set_tests_properties(chdr.mesh.brick.mpi2 PROPERTIES FIXTURES_SETUP ChdrBrickMpi2)
       set_tests_properties(
-        chdr.mesh.brick.compare PROPERTIES LABELS "chdr;mesh;mpi" FIXTURES_REQUIRED
+        chdr.mesh.brick.compare PROPERTIES LABELS "chdr;mesh" FIXTURES_REQUIRED
                                            "ChdrBrickSerial;ChdrBrickMpi2" TIMEOUT 60)
     endif()
   endif()

@@ -36,7 +36,7 @@ if(MPIEXEC_EXECUTABLE AND Python3_Interpreter_FOUND)
            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compare_ranks.py"
                    "${CHDR_SOLVER_RECORD_ROOT}/serial" "${CHDR_SOLVER_RECORD_ROOT}/mpi2")
   set_tests_properties(chdr.solver.ranks PROPERTIES FIXTURES_REQUIRED chdr_solver_ranks TIMEOUT 60
-                                                    LABELS "chdr;solver;unit;ranks;mpi")
+                                                    LABELS "chdr;solver;unit;ranks")
 else()
   chdr_solver_skip(ranks "Rank comparison requires Python3 and an MPI launcher")
 endif()

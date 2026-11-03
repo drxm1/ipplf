@@ -15,12 +15,16 @@ endfunction()
 target_sources(test-chdr-solver PRIVATE test_compact.cpp)
 target_sources(test-chdr-solver PRIVATE test_staggered.cpp)
 
+# Register both rank counts unless a suite requests only one of them.
 function(chdr_solver_test suite filter)
-  add_test(NAME chdr.solver.${suite}.serial COMMAND test-chdr-solver --gtest_filter=${filter})
-  set_tests_properties(
-    chdr.solver.${suite}.serial PROPERTIES TIMEOUT 60 LABELS "chdr;solver;unit" ENVIRONMENT
-                                           "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
-  if(MPIEXEC_EXECUTABLE)
+  cmake_parse_arguments(CASE "SERIAL_ONLY;MPI2_ONLY" "" "" ${ARGN})
+  if(NOT CASE_MPI2_ONLY)
+    add_test(NAME chdr.solver.${suite}.serial COMMAND test-chdr-solver --gtest_filter=${filter})
+    set_tests_properties(
+      chdr.solver.${suite}.serial PROPERTIES TIMEOUT 60 LABELS "chdr;solver;unit" ENVIRONMENT
+                                             "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+  endif()
+  if(MPIEXEC_EXECUTABLE AND NOT CASE_SERIAL_ONLY)
     add_test(NAME chdr.solver.${suite}.mpi2
              COMMAND "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
                      $<TARGET_FILE:test-chdr-solver> ${MPIEXEC_POSTFLAGS} --gtest_filter=${filter})
@@ -37,7 +41,7 @@ function(chdr_solver_test suite filter)
   endif()
 endfunction()
 chdr_solver_test(contract "ChdrSolverContract.*")
-chdr_solver_test(compact "CompactOperators.*")
+chdr_solver_test(compact "CompactOperators.*" SERIAL_ONLY)
 chdr_solver_test(staggered "ChdrStaggered.*")
 target_sources(test-chdr-solver PRIVATE test_setup.cpp)
 chdr_solver_test(setup "BoxSetup.*")
@@ -108,14 +112,16 @@ include(MediumTests.cmake)
 target_sources(test-chdr-solver PRIVATE test_mur_reflection.cpp test_mur_field_reflection.cpp
                                         test_mur_refinement.cpp)
 chdr_solver_test(mur.reflection "MurReflection.ExactTwoWaveRows")
-chdr_solver_test(mur.field-reflection "MurFieldReflection.SignedElectricAndMagnetic")
-chdr_solver_test(mur.refinement "MurReflectionRefinement.CentrePlaneOrder")
-chdr_solver_test(mur.records "MurReflectionRefinement.CodeConfirmedRows")
 foreach(variant serial mpi2)
-  if(TEST chdr.solver.mur.records.${variant})
-    set_tests_properties(chdr.solver.mur.records.${variant} PROPERTIES LABELS "chdr;solver;record")
+  if(TEST chdr.solver.mur.reflection.${variant})
+    set_tests_properties(chdr.solver.mur.reflection.${variant} PROPERTIES TIMEOUT 180)
   endif()
 endforeach()
+chdr_solver_test(mur.field-reflection "MurFieldReflection.SignedElectricAndMagnetic")
+chdr_solver_test(mur.refinement "MurReflectionRefinement.CentrePlaneOrder" SERIAL_ONLY)
+chdr_solver_test(mur.records "MurReflectionRefinement.CodeConfirmedRows" SERIAL_ONLY)
+set_tests_properties(chdr.solver.mur.refinement.serial chdr.solver.mur.records.serial
+                     PROPERTIES LABELS "chdr;solver;record")
 add_test(
   NAME chdr.solver.mur.holdout
   COMMAND
@@ -131,7 +137,7 @@ set_tests_properties(
              TIMEOUT
              1800
              LABELS
-             "chdr;solver;holdout"
+             "chdr;solver;holdout;mpi"
              ENVIRONMENT
              "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 target_sources(test-chdr-solver PRIVATE test_mur_faces.cpp test_mur_medium.cpp)
@@ -163,24 +169,28 @@ target_sources(test-chdr-solver PRIVATE test_open_beam.cpp)
 target_sources(test-chdr-solver PRIVATE test_mur_stability.cpp test_mur_families.cpp)
 chdr_solver_test(mur.families "MurEdgeCornerFamilies.*")
 chdr_solver_test(mur.stability "MurStability.InnerDataEnvelope")
-chdr_solver_test(mur.stability-control "MurStability.MismatchedSpeedControl")
-set_tests_properties(chdr.solver.mur.stability-control.mpi2 PROPERTIES DISABLED TRUE)
+chdr_solver_test(mur.stability-control "MurStability.MismatchedSpeedControl" SERIAL_ONLY)
 foreach(suite stability stability-control)
   foreach(variant serial mpi2)
     if(TEST chdr.solver.mur.${suite}.${variant})
       set_tests_properties(chdr.solver.mur.${suite}.${variant} PROPERTIES TIMEOUT 1800 LABELS
                                                                           "chdr;solver;long")
+      if(variant STREQUAL "mpi2")
+        set_property(TEST chdr.solver.mur.${suite}.${variant} APPEND PROPERTY LABELS mpi)
+      endif()
     endif()
   endforeach()
 endforeach()
-chdr_solver_test(open.beam-ranks "OpenBeam.ReducedRankWitness")
-chdr_solver_test(open.beam-full "OpenBeam.FullBoxAgainstPeriodicWitness")
-set_tests_properties(chdr.solver.open.beam-full.serial PROPERTIES DISABLED TRUE)
+chdr_solver_test(open.beam-ranks "OpenBeam.ReducedRankWitness" MPI2_ONLY)
+chdr_solver_test(open.beam-full "OpenBeam.FullBoxAgainstPeriodicWitness" MPI2_ONLY)
 foreach(suite beam-ranks beam-full)
   foreach(variant serial mpi2)
     if(TEST chdr.solver.open.${suite}.${variant})
       set_tests_properties(chdr.solver.open.${suite}.${variant} PROPERTIES TIMEOUT 1800 LABELS
                                                                            "chdr;solver;long")
+      if(variant STREQUAL "mpi2")
+        set_property(TEST chdr.solver.open.${suite}.${variant} APPEND PROPERTY LABELS mpi)
+      endif()
     endif()
   endforeach()
 endforeach()

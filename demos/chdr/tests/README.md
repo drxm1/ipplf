@@ -18,7 +18,7 @@ Configure IPPL with `-DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_FEL=ON
 ```sh
 ctest --test-dir build -R '^chdr\.' -LE 'long|record' --output-on-failure   # fast set
 ctest --test-dir build -R '^chdr\.' -L long --output-on-failure             # ladders and long runs
-ctest --test-dir build -R '^chdr\.' -L record -V                            # entries that print records
+ctest --test-dir build -R '^chdr\.' -L record -V                            # reference functions and records
 ```
 
 The entries are named `chdr.<unit>.<suite>[.<variant>]`. The variant `serial`
@@ -27,23 +27,29 @@ mesh entries `chdr.mesh.mpi2` and `chdr.mesh.brick.mpi2` use two threads per
 rank and declare four processors).
 CTest counts the declared processors of each entry against `--parallel`.
 
-We ran all 226 entries once with `--parallel 16` on a 16-core AMD Ryzen 9
-9950X3D (RelWithDebInfo, GCC 15.3, Open MPI 5.0.10, Kokkos 5.2.2). The 222
-enabled entries passed in 682 s of wall time. The "Time" columns below give
-the wall time of each entry in that run, while other entries ran at the same
-time; a pair `a / b` gives the serial and the `mpi2` variant. Each GoogleTest
-entry needs about 1.6 s to start, so this is the smallest time in the tables.
-The 39 `long` entries that ran add up to 5178 s of entry time, the 183 others
-to 741 s. The fast set alone (176 enabled entries) runs in 57 s with
-`--parallel 16`.
+The current registration has 211 entries, including two disabled former
+holdouts; 164 enabled entries belong to the fast selection above. The timing
+columns retain the baseline run of 2026-11-03, before the registration cleanup:
+222 of 226 entries ran and passed in 682 s with `--parallel 16` on a 16-core
+AMD Ryzen 9 9950X3D (RelWithDebInfo, GCC 15.3, Open MPI 5.0.10, Kokkos 5.2.2).
+The former fast set had 176 enabled entries and ran in 57 s. These are
+historical measurements, not timings of the current selection. A pair `a / b`
+gives the serial and `mpi2` variant. Entry times include contention from the
+other tests running at the same time and will grow on slower machines.
 
-Labels: `long` marks ladders and long trajectories, `record` marks entries
-that print records, `holdout` and `reserved` mark the disabled holdout
-entries, `unavailable` marks entries registered as skipped because Python, an
-MPI launcher or ParaView is missing, and `mpi` marks most two-rank entries.
-On the machine above, 22 of the 39 `long` entries finish in less than one
-minute, and the labels `mpi` and `record` are not set on every entry they
-describe; the "Labels" columns show the labels as registered.
+The `long` label describes work: roughly \f$10^8\f$ cell-steps (cells times
+solves, summed over all runs of an entry), or long trajectories of 10000 steps
+or ten wave periods. Existing classifications are retained rather than changed
+to match timings on this machine. The `record` label selects record generation
+and checks of reference functions that do not evolve the solver; these entries
+can still check finiteness or the reference functions. The `holdout` and
+`reserved` labels identify the two disabled former acceptance cases.
+`unavailable` identifies skipped placeholders when a required interpreter,
+MPI launcher or reader is absent. The `mpi` label identifies entries that
+launch multiple MPI ranks, including launches inside Python scripts; a
+one-process comparator does not carry it. A grouped row lists the union of
+its variants' labels. The timeout is 180 s for `medium.Convergence.*` and
+`mur.reflection.*`.
 
 ## How to read the tables
 
@@ -55,7 +61,7 @@ describe; the "Labels" columns show the labels as registered.
 | continuum analytic | a closed-form solution of the continuous equations; the tolerance is a discretization error or an observed order of convergence |
 | self-consistency | an identity, an invariant, a contract, or the equality of two code paths; "refusal" marks checks that a wrong input throws |
 | one against two ranks | the same run on one rank and on two ranks |
-| regression record | equality with a frozen code path ("bitwise"), or a record that the test only prints |
+| regression record | exact numerical or bitwise equality with a frozen code path, or a record that the test only prints |
 | smoke | the program runs to the end and writes the expected files |
 
 Most evolving solver tests also require, after their last solve, that the
@@ -69,11 +75,10 @@ step: \f$\Delta t=h/2\f$ on cubic Standard cells and \f$\Delta t=h_z\f$ for
 NonStandard. R1, R2 and R2Prime are the E and B reconstruction conventions of
 `ChdrSolver`; "collocated" and "staggered" are its two spatial readings.
 
-Four entries are disabled: `chdr.solver.mur.holdout` and
-`chdr.interface.reserved` were the held-out final acceptance checks of earlier
-work, `chdr.solver.mur.stability-control.mpi2` would skip on two ranks, and
-`chdr.solver.open.beam-full.serial` needs two ranks. Four further disabled
-GoogleTests, also former holdouts, have no CTest entry:
+Two entries are disabled: `chdr.solver.mur.holdout` and
+`chdr.interface.reserved`, the former held-out final acceptance checks of
+earlier work. Four further disabled GoogleTests, also former holdouts, have
+no CTest entry:
 `DISABLED_Holdout.Collocated`, `DISABLED_Holdout.StaggeredRecord`,
 `MediumHoldout.DISABLED_Fields` and `MediumHoldout.DISABLED_Phase`.
 
@@ -82,14 +87,14 @@ GoogleTests, also former holdouts, have no CTest entry:
 | Directory | Entries | Test code (files, lines) | Time sum (s), all / fast set |
 |---|---|---|---|
 | `src/FieldLayout` | 2 | 1, 188 | 3 / 3 |
-| `src/MaxwellSolvers` | 14 | 14, 1726 | 34 / 34 |
+| `src/MaxwellSolvers` | 12 | 14, 1726 | 30 / 30 |
 | `core/material` | 6 | 5, 421 | 10 / 10 |
 | `core/simulation` | 2 | 1, 124 | 3 / 3 |
 | `core/input` | 2 | 2, 352 | 14 / 14 |
-| `core/solver` | 152 | 55, 8394 | 5349 / 463 |
+| `core/solver` | 146 | 55, 8394 | 5251 / 458 |
 | `core/solver/formulation` | 2 | 1, 167 | 4 / 4 |
-| `opt-in/diagnostics` | 15 | 7, 1373 | 32 / 32 |
-| `apps/vacuum-wave` | 15 | 13, 1917 | 79 / 79 |
+| `opt-in/diagnostics` | 11 | 7, 1373 | 23 / 23 |
+| `apps/vacuum-wave` | 12 | 13, 1917 | 74 / 74 |
 | `apps/planar-interface` | 5 | 2, 372 | 364 / 8 |
 | `apps/interface-movies` | 3 | 1, 119 | 17 / 17 |
 | `../mesh` | 7 | 2, 714 | 7 / 7 |
@@ -98,8 +103,9 @@ GoogleTests, also former holdouts, have no CTest entry:
 "Test code" counts the C++ and Python files of the directory itself (CMake
 files excluded). These counts, and the line counts in the "Source (lines)"
 columns below, refer to commit `ade845ffe`, before the comment pass that
-followed this index. The time sums add the wall times of the entries; they are
-not the time of a parallel run.
+followed this index. The time sums add the baseline wall times of the retained
+entries, grouped by the current labels; they are not a new run or the time of
+a parallel run.
 
 ## `src/FieldLayout`: per-axis periodic layouts
 
@@ -128,12 +134,11 @@ suites in more detail. Run the tests with
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
-| `chdr.src.HaloOrder.serial` | `HaloOrder.cpp` (70), `HaloOrderMixed.cpp` (97) · `HaloOrder.*Drift` (3 tests) | On one rank, potentials started at \f$\psi^{-1}=-1\f$, \f$\psi^0=0\f$ stay at \f$\psi=k\f$ after step \f$k\f$ over 64 steps, with the largest error divided by 64 at most `1e-12`, in two all-absorbing boxes and one box open in x; the old-order control must miss by at least `1e-2` in the mixed box. | exact lattice value | `unit` | 2.3 |
-| `chdr.src.HaloOrder.mpi2` | as above, `HaloOrderPulse.cpp` (97) · `HaloOrder.*` (6 tests) | The drift checks on two ranks, and a Gaussian pulse over 256 steps that crosses the rank seam and matches a one-rank solver to `1e-13` of its maximum; the old-order control differs by at least `1e-3`. | exact lattice value; one against two ranks | `unit`, `mpi` | 5.0 |
+| `chdr.src.HaloOrder.mpi2` | `HaloOrder.cpp` (70), `HaloOrderMixed.cpp` (97), `HaloOrderPulse.cpp` (97) · `HaloOrder.*` (6 tests) | The affine drift checks on one and two ranks: the scaled error is at most `1e-12` over 64 steps, and the old-order control misses in the mixed box. A Gaussian pulse over 256 steps crosses the rank seam and matches a one-rank solver to `1e-13` of its maximum; the old-order control differs by at least `1e-3`. | exact lattice value; one against two ranks | `unit`, `mpi` | 5.0 |
 | `chdr.src.OpenBoundaryRegression.{serial,mpi2}` | `OpenBoundaryRegression.cpp` (143) · `OriginalOrder` | Over 256 steps from fixed pseudo-random histories, the potentials, E, raw B and averaged B are bitwise equal to those of the old finishing order with the same kernels, in periodic and all-absorbing Standard and NonStandard boxes; the absorbing boxes exclude the outermost owned E and B layer and run on `MPI_COMM_SELF` in both entries, so only the periodic cases use two ranks. | regression record (bitwise) | `unit`, `mpi` | 5.7 / 5.3 |
 | `chdr.src.OpenFaceClosure.{serial,mpi2}` | `OpenFaceClosure.cpp` (130) · `OpenFaceClosure` (4 tests) | After `prepareHistories()`, E and raw B on the outermost layer match a 40-coefficient polynomial oracle to `1e-13` of the analytic maximum, zero ghosts miss by at least 0.1, and one step of either stencil closes the ghosts of the new level; `mpi2` also compares two ranks with a one-rank replay. | exact lattice value; one against two ranks | `unit`, `mpi` | 1.6 / 1.6 |
 | `chdr.src.FDTDBoundary.{serial,mpi2}` | `FDTDBoundary.cpp` (120) · `FDTDBoundary` (4 tests) | `fromLayout` marks exactly the faces of open axes as Mur faces of speed 1 for all 8 axis patterns, and `validateBoundary` refuses invalid speeds, mismatched face kinds, wrong ghost widths, too few cells and (two ranks) a rank with one cell. | refusal; exact lattice value (cell sets) | `unit`, `mpi` | 1.6 / 1.6 |
-| `chdr.src.MurSpeed.{serial,mpi2}` | `MurSpeed.cpp` (194) · `MurSpeed` (2 tests) | The face, edge and corner Mur weights at speeds 0.6, 1 and 1.2 match the closed forms to \f$4\epsilon\f$ times the largest weight, and at speed 1 their bits equal the original unit-speed arithmetic. | exact lattice value; regression record (bitwise) | `unit`, `mpi` | 1.6 / 1.6 |
+| `chdr.src.MurSpeed.serial` | `MurSpeed.cpp` (194) · `MurSpeed` (2 tests) | The face, edge and corner Mur weights at speeds 0.6, 1 and 1.2 match the closed forms to \f$4\epsilon\f$ times the largest weight, and at speed 1 their bits equal the original unit-speed arithmetic. | exact lattice value; regression record (bitwise) | `unit` | 1.6 |
 | `chdr.src.InteriorBounds.{serial,mpi2}` | `InteriorBounds.cpp` (163) · `InteriorBounds` (5 tests, 2 compile-time checks) | One step of either stencil without the boundary update writes \f$\Delta t^2\f$ into exactly the interior cells of the oracle mask for all 8 axis patterns; the solver constructors refuse invalid descriptions before any communication. | exact lattice value; refusal | `unit`, `mpi` | 1.6 / 1.6 |
 | `chdr.src.MurDispatch.{serial,mpi2}` | `MurDispatch.cpp` (139) · `EveryOpenFaceEdgeAndCorner` | After `applyBCs()`, every face, edge and corner cell equals the output of the Mur struct that its mask selects and interior cells keep their values; an all-open dispatch must fail on the mixed patterns. | self-consistency (routing against an independent mask) | `unit`, `mpi` | 1.6 / 1.6 |
 
@@ -171,8 +176,8 @@ advances every ChDR run. The expected call lists follow from the contract of
 keys and types, partial overrides, the SI scale factors and the conversion of
 an SI duration to steps. `check_runs.py` runs `chdr-vacuum-wave`,
 `interface-movies` and `planar-interface` once in code units and once in SI
-units and compares every published number; its entry exists only when CMake
-finds Python 3. Run both with
+units and compares every published number; without Python 3, CMake keeps
+the entry as an `unavailable` placeholder. Run both with
 `ctest --test-dir build -R '^chdr\.input\.' --output-on-failure`.
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
@@ -182,7 +187,7 @@ finds Python 3. Run both with
 
 ## `core/solver`: the potential solver
 
-`test-chdr-solver` is one executable for all suites of this directory (152
+`test-chdr-solver` is one executable for all suites of this directory (146
 entries). The sections below group the entries by subject. Run a subject with
 the pattern given in its section, or all fast entries with
 `ctest --test-dir build -R '^chdr\.solver\.' -LE 'long|record' --output-on-failure`.
@@ -198,7 +203,7 @@ staggered difference. Run them with
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
 | `chdr.solver.contract.{serial,mpi2}` | `test_solver_contract.cpp` (173) · `ChdrSolverContract` (7 tests) | With R1, `ChdrSolver` gives E and B exactly equal to IPPL's Standard solver (maximum difference zero) after each of 128 steps of a vacuum plane wave; it declares the label times, honours the selected reconstruction and refuses a halo width of 2, rebinding, distinct layout owners and (two ranks) a rank with one cell. | regression record (exact numerical equality); refusal | `unit`, `mpi` | 1.7 / 1.6 |
-| `chdr.solver.compact.{serial,mpi2}` | `test_compact.cpp` (72) · `CompactOperators` | The forward and backward `staggeredDifference` of one sampled sine mode equal the signed half-cell symbol on each axis to `1e-12`. | exact lattice value | `unit`, `mpi` | 1.6 / 1.6 |
+| `chdr.solver.compact.serial` | `test_compact.cpp` (72) · `CompactOperators` | The forward and backward `staggeredDifference` of one sampled sine mode equal the signed half-cell symbol on each axis to `1e-12`. | exact lattice value | `unit` | 1.6 |
 | `chdr.solver.staggered.{serial,mpi2}` | `test_staggered.cpp` (345) · `ChdrStaggered` (7 tests) | In the staggered reading with R2, the two-pass Laplacian equals the 7-point Laplacian on rough data, the discrete identities and the continuity monitor hold to `1e-12`, discrete gauge waves give E and B at most `1e-12` of the gradient scale, and R1, R2Prime and NonStandard are refused. | exact lattice value; self-consistency (identities, refusal) | `unit`, `mpi` | 2.2 / 2.0 |
 | `chdr.solver.setup.{serial,mpi2}` | `test_setup.cpp` (95) · `BoxSetup` (2 tests) | After `preparePotentialHalo`, every allocated cell of the four-potential (faces, edges, corners) equals the periodic copy of its integer identifier, for each split axis; invalid geometries throw. | exact lattice value; refusal | `unit`, `mpi` | 1.6 / 1.6 |
 | `chdr.solver.operators.{serial,mpi2}` | `test_operators.cpp` (111) · `Operators` | The Standard and NonStandard `laplacian` and the `centeredDifference` of one mode on unequal spacings equal an independently coded Fourier symbol to `1e-12`. | exact lattice value | `unit`, `mpi` | 1.6 / 1.6 |
@@ -231,7 +236,7 @@ launcher, CMake registers the two script entries with the label `unavailable`.
 | `chdr.solver.manufactured.{serial,mpi2}` | `test_manufactured.cpp` (307) · `Manufactured` (2 tests) | For R1, R2 and R2Prime, 256 solves driven by a sampled discrete manufactured source keep all four potentials within `1e-12` of the exact samples; a charge sampled half a step late misses by at least `1e-3`. | exact lattice value | `unit`, `mpi` | 11.6 / 7.1 |
 | `chdr.solver.rank_cases.{serial,mpi2}` | `test_ranks.cpp` (150) · `RankCases` (3 tests) | Writes the fields of two ten-period gauge-wave runs (Standard, NonStandard) and of six monitor runs on rough data (three configurations, with and without Nyquist content) for the rank comparison; in process it asserts only the final identities. | one against two ranks (producer) | `unit`, `mpi` | 3.9 / 3.0 |
 | `chdr.solver.ranks.prepare` | `prepare_rank_records.py` (18) | Moves earlier records aside and creates empty record directories; it checks nothing. | smoke (fixture setup) | `unit`, `ranks` | 0.0 |
-| `chdr.solver.ranks` | `compare_ranks.py` (156) | The one-rank and two-rank directories hold the same 193 records, and they agree per cell to `1e-13` of the field maximum and in maxima, sums, residuals and phases to `1e-12`. | one against two ranks | `unit`, `ranks`, `mpi` | 10.3 |
+| `chdr.solver.ranks` | `compare_ranks.py` (156) | The one-rank and two-rank directories hold the same 193 records, and they agree per cell to `1e-13` of the field maximum and in maxima, sums, residuals and phases to `1e-12`. | one against two ranks | `unit`, `ranks` | 10.3 |
 
 ### Refinement ladders and wave norms
 
@@ -265,7 +270,7 @@ solve. Run them with
 | `chdr.solver.convergence.staggered.{serial,mpi2}` | `test_staggered_convergence.cpp` (27) · `StaggeredConvergence.Quick` | The mixed and the sourced wave with R2 in the staggered reading on \f$N=16,32,64\f$: E, B and Gauss orders at least 1.8 on (32, 64), and for the sourced wave the gauge order at least 1.8 when the fine gauge error exceeds `1e-12`; it also writes rank records. | continuum analytic | `unit`, `mpi` | 6.0 / 3.9 |
 | `chdr.solver.long.staggered.{serial,mpi2}` | as above · `LongStaggeredConvergence.Standard` | The staggered ladders on \f$N=16\f$ to 128 with the same rules on both pairs. | continuum analytic | `long`, `mpi` | 95.9 / 54.0 |
 | `chdr.solver.long.GaugeGrowth.{Standard,NonStandard}.{serial,mpi2}` | `test_gauge_growth.cpp` (186) · `LongGaugeGrowth` | Over ten periods with R2, collocated, the largest gauge-residual norm in the last period is at most 1.05 times the largest in the first; for the exact discrete gauge wave the first norm equals its closed form and the ratio equals 1 to `1e-12`. | self-consistency; exact lattice value | `long`, `mpi` | 3.1 / 2.5, 5.7 / 3.8 |
-| `chdr.solver.long.GaugeGrowth.StaggeredRecord.{serial,mpi2}` | as above · `LongGaugeGrowth.StaggeredRecord` | Writes the gauge-residual history of the discrete gauge wave in the staggered reading; it asserts only finite norms and the final identities. | regression record (prints only) | `long`, `mpi` | 2.4 / 2.1 |
+| `chdr.solver.long.GaugeGrowth.StaggeredRecord.{serial,mpi2}` | as above · `LongGaugeGrowth.StaggeredRecord` | Writes the gauge-residual history of the discrete gauge wave in the staggered reading; it asserts only finite norms and the final identities. | regression record (prints only) | `record`, `mpi` | 2.4 / 2.1 |
 
 ### Gauge-wave cancellation and level equivalence
 
@@ -297,8 +302,8 @@ R1 and the collocated reading. Run them with
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
 | `chdr.solver.dispersion.{serial,mpi2}` | `test_dispersion.cpp` (422) · `Dispersion` (2 tests) | For 19 modes (Standard \f$N=32\f$, NonStandard \f$N_z=24\f$, two or three safety factors), the measured phase per step equals the discrete relation to `1e-12`, and the NonStandard axial phase velocity at \f$S=1\f$ equals 1; it writes 19 rank records. | exact lattice value | `unit`, `mpi` | 2.4 / 2.1 |
-| `chdr.solver.record.dispersion.serial` | as above · `RecordDispersion` (2 tests) | The same rule on 37 finer cases (Standard \f$N=64\f$, NonStandard \f$N_z=24,48,96\f$); writes one phase-velocity record per case. | exact lattice value; regression record | `record` | 34.7 |
-| `chdr.solver.record.dispersion.mpi2` | as above | The same 37 cases on two ranks. | exact lattice value; regression record | `record`, `mpi` | 18.3 |
+| `chdr.solver.record.dispersion.serial` | as above · `RecordDispersion` (2 tests) | The same rule on 37 finer cases (Standard \f$N=64\f$, NonStandard \f$N_z=24,48,96\f$); writes one phase-velocity record per case. | exact lattice value; regression record | `long` | 34.7 |
+| `chdr.solver.record.dispersion.mpi2` | as above | The same 37 cases on two ranks. | exact lattice value; regression record | `long`, `mpi` | 18.3 |
 | `chdr.solver.record.endpoint.{serial,mpi2}` | `test_endpoint_records.cpp` (174) · `TimeStepRecords` (4 tests) | At the stability bound \f$S=1\f$, prints the amplitude of the highest periodic scalar mode for 256 steps beside the host recurrence; it asserts only finite values and the final identities. | regression record (prints only) | `unit`, `mpi` | 2.4 / 2.1 |
 
 ### Rank-layout instruments and co-moving reconstruction
@@ -325,9 +330,10 @@ update for one uniform relative permittivity \f$\varepsilon\ge1\f$. Most medium
 suites live in the same source files as the vacuum suites. The update runs the
 vacuum kernel with \f$\Delta t/\sqrt\varepsilon\f$, so several medium entries
 measure the same numbers as a vacuum entry. Run the short entries with
-`ctest --test-dir build -R '^chdr\.solver\.medium\.' -LE long --output-on-failure`.
+`ctest --test-dir build -R '^chdr\.solver\.medium\.' -LE 'long|record' --output-on-failure`.
 Selecting `chdr.solver.medium.ranks` alone also runs its preparation and its two
-producers.
+producers. Without Python 3 or an MPI launcher, the two medium rank-script
+entries remain registered as `unavailable` placeholders.
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
@@ -340,12 +346,12 @@ producers.
 | `chdr.solver.medium.Source.{serial,mpi2}` | `test_convergence.cpp` (152) · `MediumSource` (2 tests) | A driven Lorenz-gauge wave at \f$\varepsilon=2.13\f$ reaches E and B orders of at least 1.8 on (32, 64) in both readings. | continuum analytic; one against two ranks | `unit`, `mpi` | 7.9 / 5.9 |
 | `chdr.solver.medium.Convergence.{Collocated,Staggered}.{serial,mpi2}` | `test_convergence.cpp` · `MediumConvergence` | Six source-free plane waves at speed \f$1/n\f$ reach E and B orders of at least 1.8 on (32, 64); the \f$N=32\f$ run is replayed on one rank. | continuum analytic; one against two ranks | `unit`, `mpi` | 31.2 / 22.5, 33.7 / 25.5 |
 | `chdr.solver.medium.long.Dispersion.{serial,mpi2}` | `test_dispersion.cpp` · `MediumDispersionLong` | The dispersion rule of `MediumDispersion` at \f$N=64\f$. | exact lattice value | `long`, `mpi` | 26.1 / 18.7 |
-| `chdr.solver.medium.record.Dispersion.{serial,mpi2}` | `test_dispersion.cpp` · `MediumDispersionRecord` | Prints phase-error-per-wavelength records for 48 cases (\f$N=16\f$ to 128, three directions, two step rules); it asserts only a nonzero amplitude. | regression record (prints only) | `long`, `mpi` | 506.6 / 342.8 |
+| `chdr.solver.medium.record.Dispersion.{serial,mpi2}` | `test_dispersion.cpp` · `MediumDispersionRecord` | Prints phase-error-per-wavelength records for 48 cases (\f$N=16\f$ to 128, three directions, two step rules); it asserts only a nonzero amplitude. | regression record (prints only) | `record`, `mpi` | 506.6 / 342.8 |
 | `chdr.solver.medium.long.TimeStep.{serial,mpi2}` | `test_timestep.cpp` · `MediumTimeStepLong` | At safety 0.98 over 10000 steps, the late maximum of random histories is at most twice the early maximum. | self-consistency (envelope bound) | `long`, `mpi` | 17.9 / 15.9 |
 | `chdr.solver.medium.long.Convergence.{Collocated,Staggered}.{serial,mpi2}` | `test_convergence.cpp` · `MediumConvergenceLong` | The six plane-wave ladders on \f$N=16\f$ to 128 with orders at least 1.8 on (32, 64) and (64, 128). | continuum analytic; one against two ranks | `long`, `mpi` | 482.4 / 322.9, 500.5 / 278.1 |
 | `chdr.solver.medium.long.Source.{Collocated,Staggered}.{serial,mpi2}` | `test_convergence.cpp` · `MediumSourceLong` | The driven-wave ladder on \f$N=16\f$ to 128 with orders at least 1.8 on both pairs. | continuum analytic; one against two ranks | `long`, `mpi` | 61.0 / 40.0, 68.0 / 34.3 |
 | `chdr.solver.medium.ranks.prepare` | `prepare_rank_records.py` (18) | Creates empty record directories under `runs/medium-ranks`; it checks nothing. | smoke (fixture setup) | `unit`, `ranks` | 0.0 |
-| `chdr.solver.medium.ranks` | `compare_ranks.py` (156) | The 36 medium records of one and two ranks agree per cell to `1e-13` of the field maximum and in sums and phases to `1e-12`. | one against two ranks | `unit`, `ranks`, `mpi` | 0.3 |
+| `chdr.solver.medium.ranks` | `compare_ranks.py` (156) | The 36 medium records of one and two ranks agree per cell to `1e-13` of the field maximum and in sums and phases to `1e-12`. | one against two ranks | `unit`, `ranks` | 0.3 |
 
 ### Mur faces and open boxes
 
@@ -359,25 +365,23 @@ Run the short entries with
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
-| `chdr.solver.mur.faces.{serial,mpi2}` | `test_mur_faces.cpp` (67) · `MurFaces` (2 tests) | Face kinds and speeds follow the layout and survive `initialize()`, NonStandard is refused on layouts with a Mur axis, and the matched and physical Mur speeds at \f$\varepsilon=2.13\f$ are exact. | refusal; exact lattice value (speed) | `unit`, `mpi` | 1.6 / 1.7 |
+| `chdr.solver.mur.faces.{serial,mpi2}` | `test_mur_faces.cpp` (67) · `MurFaces` (2 tests) | Lower-face kinds follow the layout, all face kinds and speeds survive `initialize()`, NonStandard is refused on layouts with a Mur axis, and the matched and physical Mur speeds at \f$\varepsilon=2.13\f$ are exact. | refusal; exact lattice value (speed) | `unit`, `mpi` | 1.6 / 1.7 |
 | `chdr.solver.mur.medium.{serial,mpi2}` | `test_mur_medium.cpp` (120) · `MurMedium` (2 tests) | In an all-Mur box, Homogeneous at \f$\Delta t\f$ equals the vacuum kernel at \f$\Delta t/\sqrt\varepsilon\f$ bit for bit over 256 steps; a test-only kernel speed leaves step, face kinds and speeds unchanged. | regression record (bitwise); self-consistency | `unit`, `mpi` | 2.4 / 2.1 |
 | `chdr.solver.mur.reflection.{serial,mpi2}` | `test_mur_reflection.cpp` (151) · `MurReflection.ExactTwoWaveRows` | After 30 steps from an exact two-wave state, the fitted reflection coefficient and the near-face cells match the discrete Mur prediction to `1e-11` for 13 rows (vacuum, \f$\varepsilon=2.13\f$, anisotropic cells); a perturbed speed and the old halo order miss. | exact lattice value; one against two ranks | `unit`, `mpi` | 28.9 / 17.3 |
 | `chdr.solver.mur.field-reflection.{serial,mpi2}` | `test_mur_field_reflection.cpp` (102) · `MurFieldReflection` | TE \f$E_y\f$ and TM averaged \f$B_y\f$ near the face match the incident-plus-reflected oracle to `1e-10`, with the correct signs. | exact lattice value; one against two ranks | `unit`, `mpi` | 2.0 / 1.9 |
-| `chdr.solver.mur.refinement.{serial,mpi2}` | `test_mur_refinement.cpp` (124) · `MurReflectionRefinement.CentrePlaneOrder` | Without a solver, the discrete Mur reflection converges to the continuum value with order in [1.9, 2.1] for 11 rows. | continuum analytic (oracle only) | `unit`, `mpi` | 1.7 / 1.7 |
-| `chdr.solver.mur.records.{serial,mpi2}` | `test_mur_refinement.cpp` · `MurReflectionRefinement.CodeConfirmedRows` | Without a solver, prints 117 reflection records (discrete and continuum coefficients); asserts nothing. | regression record (prints only) | `record` | 1.6 / 1.7 |
+| `chdr.solver.mur.refinement.serial` | `test_mur_refinement.cpp` (124) · `MurReflectionRefinement.CentrePlaneOrder` | Without a solver, the discrete Mur reflection converges to the continuum value with order in [1.9, 2.1] for 11 rows. | continuum analytic (oracle only) | `record` | 1.7 |
+| `chdr.solver.mur.records.serial` | `test_mur_refinement.cpp` · `MurReflectionRefinement.CodeConfirmedRows` | Without a solver, prints 117 reflection records (discrete and continuum coefficients); asserts nothing. | regression record (prints only) | `record` | 1.6 |
 | `chdr.solver.mur.outer-layer.{serial,mpi2}` | `test_mur_outer_layer.cpp` (195) · `MurOuterLayer` | On the outermost layers of open axes, E, averaged B and raw B of a polynomial fixture match their analytic values to `1e-13` in both readings with R2; zero ghosts miss by at least 0.1. | exact lattice value; one against two ranks | `unit`, `mpi` | 1.6 / 1.7 |
 | `chdr.solver.mur.families.{serial,mpi2}` | `test_mur_families.cpp` (181) · `MurEdgeCornerFamilies` (2 tests) | After 3 steps, the potentials in the causal region of a Mur edge or corner equal an exact sum of lattice plane waves to `1e-13` for 72 fixtures; the old finishing order must miss by at least `1e-3` on the mixed edge and on two ranks, and passes for the serial corner-zero control. | exact lattice value; one against two ranks | `unit`, `mpi` | 1.9 / 2.0 |
 | `chdr.solver.mur.stability.serial` | `test_mur_stability.cpp` (190) · `MurStability.InnerDataEnvelope` | For 16 open-box cases over 10000 steps, the late maximum of random potentials is at most twice the early maximum. | self-consistency (envelope bound) | `long` | 44.1 |
-| `chdr.solver.mur.stability.mpi2` | as above | Four of the cases for 1000 steps on two ranks, with the same rule and a one-rank replay to `1e-13`. | one against two ranks; self-consistency | `long` | 3.3 |
+| `chdr.solver.mur.stability.mpi2` | as above | Four of the cases for 1000 steps on two ranks, with the same rule and a one-rank replay to `1e-13`. | one against two ranks; self-consistency | `long`, `mpi` | 3.3 |
 | `chdr.solver.mur.stability-control.serial` | as above · `MurStability.MismatchedSpeedControl` | With a mismatched Mur speed in a dielectric, the late maximum is at least \f$10^6\f$ times the early maximum (negative control). | self-consistency (negative control) | `long` | 5.6 |
-| `chdr.solver.mur.stability-control.mpi2` | as above | Disabled: the test skips on two ranks. | — | `long` | disabled |
-| `chdr.solver.open.beam-ranks.{serial,mpi2}` | `test_open_beam.cpp` (188) · `OpenBeam.ReducedRankWitness` | A 300-step beam run in an all-Mur 40 by 80 by 200 box equals a one-rank replay to `1e-13`, and its face Fourier sums to `1e-12`. | one against two ranks | `long` | 92.6 / 70.1 |
-| `chdr.solver.open.beam-full.mpi2` | `test_open_beam.cpp` · `OpenBeam.FullBoxAgainstPeriodicWitness` | The reflection coefficient of the central plane-wave part of a Gaussian beam in a 40 by 160 by 400 all-Mur box differs from a transversely periodic witness by at most `1e-4`. | self-consistency (beam against periodic witness) | `long` | 312.6 |
-| `chdr.solver.open.beam-full.serial` | as above | Disabled: the full box runs on two ranks only. | — | `long` | disabled |
+| `chdr.solver.open.beam-ranks.mpi2` | `test_open_beam.cpp` (188) · `OpenBeam.ReducedRankWitness` | A 300-step beam run in an all-Mur 40 by 80 by 200 box equals a one-rank replay to `1e-13`, and its face Fourier sums to `1e-12`. | one against two ranks | `long`, `mpi` | 70.1 |
+| `chdr.solver.open.beam-full.mpi2` | `test_open_beam.cpp` · `OpenBeam.FullBoxAgainstPeriodicWitness` | The reflection coefficient of the central plane-wave part of a Gaussian beam in a 40 by 160 by 400 all-Mur box differs from a transversely periodic witness by at most `1e-4`. | self-consistency (beam against periodic witness) | `long`, `mpi` | 312.6 |
 | `chdr.solver.open.record.gauge` | `test_open_gauge_records.cpp` (142) · `OpenGaugeRecords` | Prints the gauge and Gauss residuals at a Mur face next to the plane-wave prediction; asserts nothing. | regression record (prints only) | `record` | 1.7 |
 | `chdr.solver.open.record.zero-ghost` | `test_mur_outer_layer.cpp` · `MurOuterLayerRecords` | Prints the raw-B error at an open face with zero ghosts at four resolutions; asserts nothing. | regression record (prints only) | `record` | 1.6 |
 | `chdr.solver.open.record.all-cell-drift` | `test_mur_stability.cpp` · `MurStabilityRecords` | Prints the envelope ratio of random data on all cells over 10000 steps; asserts nothing. | regression record (prints only) | `record` | 4.9 |
-| `chdr.solver.mur.holdout` | `test_mur_reflection.cpp` · `MurReflection.DISABLED_Holdout` | Disabled; the former held-out acceptance check: two reflection rows at \f$\varepsilon_r=3.1\f$ on anisotropic cells, two ranks. | — | `holdout` | disabled |
+| `chdr.solver.mur.holdout` | `test_mur_reflection.cpp` · `MurReflection.DISABLED_Holdout` | Disabled; the former held-out acceptance check: two reflection rows at \f$\varepsilon_r=3.1\f$ on anisotropic cells, two ranks. | — | `holdout`, `mpi` | disabled |
 
 ## `core/solver/formulation`: O1-VS
 
@@ -401,14 +405,12 @@ and compares the two output files. Run them with
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
-| `chdr.diagnostics.energy.serial` | `test_interface_energy.cpp` (118) · `InterfaceEnergy.NormalSplit` | An O1-VS slab (\f$\varepsilon_r=2.13\f$) evolves random histories for 50 solves; the vector and scalar potential invariants drift by at most `1e-12`. | self-consistency (invariant drift) | `unit` | 1.7 |
-| `chdr.diagnostics.energy.mpi2` | as above · `InterfaceEnergy` (2 tests) | The same run split across the slab face and along it: drift at most `1e-12`, histories bitwise equal to a one-rank replay, energy records within `1e-14`. | one against two ranks; self-consistency | `unit`, `mpi` | 1.7 |
+| `chdr.diagnostics.energy.mpi2` | `test_interface_energy.cpp` (118) · `InterfaceEnergy` (2 tests) | An O1-VS slab (\f$\varepsilon_r=2.13\f$) evolves random histories for 50 solves, split across the slab face and along it: the vector and scalar potential invariants drift by at most `1e-12`, histories are bitwise equal to a one-rank replay, and energy records agree within `1e-14`. | one against two ranks; self-consistency | `unit`, `mpi` | 1.7 |
 | `chdr.diagnostics.monitors.{serial,mpi2}` | `test_monitors.cpp` (224) · `ChdrMonitors` (5 tests) | On rough data with Nyquist content, the normalized divergence and Faraday residuals stay at most `1e-12`, a planted E error is detected, the continuity residual matches a planted value \f$p\f$ (maximum \f$\lvert p\rvert\f$, L2 norm \f$\lvert p\rvert\sqrt{960}\f$, signed cell values) to `1e-12` of its scale, and wrong call order is refused. | exact lattice value (identities); refusal | `unit`, `mpi` | 1.7 / 1.7 |
 | `chdr.diagnostics.monitor-records.{serial,mpi2}` | `test_monitor_records.cpp` (95) · `ChdrMonitorRecords` (2 tests) | The normalized mismatch between the Gauss defect and its discrete formula is at most `1e-12`, and the report keeps this mismatch and the L2 norm of the defect after the live source changes. | exact lattice value; self-consistency | `unit`, `mpi` | 1.7 / 1.7 |
 | `chdr.diagnostics.probe.{serial,mpi2}` | `test_probe.cpp` (154) · `FourierProbe` (5 tests) | `FourierProbe` refuses invalid input, its phase equals an integer reference to `2e-15` at steps near \f$2^{52}\f$, Hann weights match \f$\sin^2(\pi n/N)\f$, and (two ranks) an unowned box fails on all ranks. | exact lattice value; refusal | `unit`, `mpi` | 1.7 / 1.7 |
-| `chdr.diagnostics.mur-layer-refusals.{serial,mpi2}` | `test_mur_layer.cpp` (36) · `MurLayer` | E, B and raw-B probe boxes on Mur faces and the monitors on a Mur layout throw; a box one cell inside and a \f$\Phi\f$ box on the face do not. | refusal | `unit`, `mpi` | 1.6 / 1.6 |
+| `chdr.diagnostics.mur-layer-refusals.serial` | `test_mur_layer.cpp` (36) · `MurLayer` | E, B and raw-B probe boxes on Mur faces and the monitors on a Mur layout throw; a box one cell inside and a \f$\Phi\f$ box on the face do not. | refusal | `unit` | 1.6 |
 | `chdr.diagnostics.probe_wiring.{serial,mpi2}` | `test_probe_full.cpp` (628) · `FourierProbeSpectra` (4 tests) | Channel labels and coordinates equal fixed tables, a staggered plane equals the finite-window closed form to `1e-12` of its scale, and probes on an evolved mode equal the discrete samples. | exact lattice value | `unit`, `mpi` | 1.9 / 1.8 |
-| `chdr.diagnostics.probe_gates.{serial,mpi2}` | `test_probe_full.cpp` · `FourierProbeSpectra.FrozenGatesAndNaNGhosts` | Plane and point probes with gates over 100000 steps and NaN ghosts equal the finite-window closed form to `1e-12` of their scale. | exact lattice value | `unit`, `mpi` | 3.2 / 2.5 |
 | `chdr.diagnostics.probe.ranks` | `compare_probe_ranks.py` (118) | Runs `FrozenGatesAndNaNGhosts` on one and two ranks; all 17292 complex outputs agree to `1e-14` of the scale. | one against two ranks | `unit`, `probe`, `mpi` | 5.6 |
 
 ## `apps/vacuum-wave`: the vacuum-wave program and the field writer
@@ -423,13 +425,11 @@ Run them with `ctest --test-dir build -R '^chdr\.vacuum\.' --output-on-failure`.
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
-| `chdr.vacuum.unit.{serial,mpi2}` | `test_first_step.cpp` (317), `test_setup.cpp` (181), `test_diagnostics.cpp` (333), `test_policy.cpp` (115) · 22 tests | Initial histories and one solve match an independent host oracle to `1e-10`, the relative \f$L^2\f$ error against the continuum wave is at most 0.01, a 128-step scalar recurrence matches to `1e-12`, and domain errors and injected faults are refused on all ranks. | exact lattice value; continuum analytic; refusal | `unit`, `mpi` | 1.9 / 1.7 |
-| `chdr.vacuum.unit.mpi2.shuffle` | as above | The same 22 tests on two ranks in a shuffled order. | as above; test-order independence | `unit`, `mpi` | 1.7 |
-| `chdr.vacuum.driver.{serial,mpi2}` | `CMakeLists.txt` | `chdr-vacuum-wave --steps 1` exits with status 0. | smoke | `smoke`, `mpi` | 1.7 / 1.7 |
-| `chdr.vacuum.output.{serial,mpi2}` | `output_fixture.cpp` (187), `read_output_fixture.py` (163) | A three-frame synthetic fixture written under a comma-decimal locale reads back through VTK and ParaView bit-exact, with exactly the owned cells and the series times. | exact lattice value (fixture formula) | `output`, `reader` | 6.0 / 5.4 |
-| `chdr.vacuum.output.failure.{piece,wrapper,series,nonfinite}` | as above | A publication failure or a NaN on one of two ranks reaches every rank and leaves a readable series of the earlier frame. | refusal | `output`, `reader` | 5.5, 5.2, 5.2, 5.8 |
-| `chdr.vacuum.propagation` | `run_wave_checks.py` (122), `wave_checks.py` (84) | Three runs (coarse, fine, coarse on two ranks): CSV errors at most `1e-10`, phase speed within 0.002 of 1, relative \f$L^2\f$ errors at most 0.01 and 0.003 with coarse-to-fine ratio in [3, 5], two ranks equal to one rank within `1e-11`. | continuum analytic (second order); exact lattice value; one against two ranks | `integration` | 6.1 |
-| `chdr.vacuum.cli` | `run_cli_checks.py` (90) | Six valid command lines exit 0; seven invalid ones (one on two ranks) exit with the expected reason. | refusal; smoke | `integration` | 21.4 |
+| `chdr.vacuum.unit.{serial,mpi2}` | `test_first_step.cpp` (317), `test_setup.cpp` (181), `test_diagnostics.cpp` (333), `test_policy.cpp` (115) · 22 tests | Initial histories and one solve match an independent host oracle to `1e-10`, the relative \f$L^2\f$ error against the continuum wave is at most 0.01, a 128-step scalar recurrence matches to `1e-12`, and domain errors and injected faults are refused on all ranks. The two-rank entry shuffles the test order with the same fixed seed on both ranks. | exact lattice value; continuum analytic; refusal | `unit`, `mpi` | 1.9 / 1.7 |
+| `chdr.vacuum.output.{serial,mpi2}` | `output_fixture.cpp` (187), `read_output_fixture.py` (163) | A three-frame synthetic fixture written under a comma-decimal locale reads back through VTK and ParaView bit-exact, with exactly the owned cells and the series times. | exact lattice value (fixture formula) | `output`, `reader`, `mpi` | 6.0 / 5.4 |
+| `chdr.vacuum.output.failure.{piece,wrapper,series,nonfinite}` | as above | A publication failure or a NaN on one of two ranks reaches every rank and leaves a readable series of the earlier frame. | refusal | `output`, `reader`, `mpi` | 5.5, 5.2, 5.2, 5.8 |
+| `chdr.vacuum.propagation` | `run_wave_checks.py` (122), `wave_checks.py` (84) | Three runs (coarse, fine, coarse on two ranks): CSV errors at most `1e-10`, phase speed within 0.002 of 1, relative \f$L^2\f$ errors at most 0.01 and 0.003 with coarse-to-fine ratio in [3, 5], two ranks equal to one rank within `1e-11`. | continuum analytic (second order); exact lattice value; one against two ranks | `integration`, `mpi` | 6.1 |
+| `chdr.vacuum.cli` | `run_cli_checks.py` (90) | Six valid command lines exit 0; seven invalid ones (one on two ranks) exit with the expected reason. | refusal; smoke | `integration`, `mpi` | 21.4 |
 | `chdr.vacuum.readback` | `verify_wave_output.py` (156) | The 15 field frames of `chdr.vacuum.propagation` read back with the expected extents and times, match the discrete fields to `1e-10` and the CSV errors to `1e-12`, and two ranks equal one rank within `1e-11`. | exact lattice value; continuum analytic; one against two ranks | `reader` | 6.6 |
 | `chdr.vacuum.readback.partial` | `verify_partial_output.py` (59) | The zero-step and one-step outputs of `chdr.vacuum.cli` list exactly their frames and pass the frame checks. | exact lattice value; continuum analytic | `reader` | 3.7 |
 
@@ -449,7 +449,7 @@ and the Brewster entry with `ctest --test-dir build -R '^chdr\.interface\.long\.
 | `chdr.interface.normal` | `test_plane_interface.cpp` (131), `InterfaceOracles.h` (241) · `PlaneInterface.Normal` | A TE pulse at normal incidence onto \f$\varepsilon_r=2.13\f$: \f$r\f$ and \f$t\f$ equal the exact lattice values to `1e-11` and Fresnel to `5e-3`, the invariant drifts by at most `1e-12` and equals Yee's energy at the start. | exact lattice value; continuum analytic (Fresnel) | — | 2.5 |
 | `chdr.interface.normal.mpi2` | as above · `PlaneInterface.NormalSeam` | The same pulse and checks on two ranks with the rank seam on the material face. | exact lattice value; continuum analytic | `mpi` | 2.3 |
 | `chdr.interface.long.brewster` | as above · `PlaneInterface.Brewster` | A TM pulse at the Brewster angle onto \f$\varepsilon_r=2.13\f$: \f$r\f$ and \f$t\f$ equal the exact lattice values to `1e-11` and \f$\lvert r\rvert\le10^{-2}\f$ against the Fresnel zero. | exact lattice value; continuum analytic | `long` | 356.1 |
-| `chdr.interface.reserved` | as above · `PlaneInterface.DISABLED_Reserved` | Disabled; the former held-out acceptance check: a TM pulse from \f$\varepsilon_r=3.4\f$ at 18 degrees on two ranks. | — | `reserved`, `long` | disabled |
+| `chdr.interface.reserved` | as above · `PlaneInterface.DISABLED_Reserved` | Disabled; the former held-out acceptance check: a TM pulse from \f$\varepsilon_r=3.4\f$ at 18 degrees on two ranks. | — | `long`, `reserved`, `mpi` | disabled |
 | `chdr.interface.smoke` | `smoke.cmake` (44) | A YAML half-space case gives the expected frames, energy rows and solve count, and the legacy command gives the same settings and byte-identical field files. | smoke; regression record (bitwise) | `smoke` | 3.4 |
 
 ## `apps/interface-movies`: the interface-movies program
@@ -477,9 +477,9 @@ compares the two rank counts. Run them with
 |---|---|---|---|---|---|
 | `chdr.mesh.geometry` | `test_geometry.cpp` (322) | Prism and brick volumes to `1e-13`, point classification on the host and in a Kokkos reduction, refusal of degenerate shapes, and the parsing of `config.yaml`. | continuum analytic (volumes); refusal | — | 0.5 |
 | `chdr.mesh.{serial,mpi2}` | `mesh-1` with `config.yaml` | Builds the prism radiator on one and on two ranks and writes the output that `chdr.mesh.compare` reads. | smoke (fixture setup) | `mpi` | 1.6 / 1.7 |
-| `chdr.mesh.compare` | `verify_mesh_output.py` (392) | Cell values and the dielectric count match an independent description of the prism, and the two rank counts agree exactly in counts and checksum. | one against two ranks; exact lattice value | `mpi` | 0.2 |
+| `chdr.mesh.compare` | `verify_mesh_output.py` (392) | Cell values and the dielectric count match an independent description of the prism, and the two rank counts agree exactly in counts and checksum. | one against two ranks; exact lattice value | — | 0.2 |
 | `chdr.mesh.brick.{serial,mpi2}` | `mesh-1` with `config-brick.yaml` | Builds the brick radiator on one and on two ranks. | smoke (fixture setup) | `mpi` | 1.6 / 1.7 |
-| `chdr.mesh.brick.compare` | `verify_mesh_output.py` | The same checks for the brick. | one against two ranks; exact lattice value | `mpi` | 0.2 |
+| `chdr.mesh.brick.compare` | `verify_mesh_output.py` | The same checks for the brick. | one against two ranks; exact lattice value | — | 0.2 |
 
 ## `1d`: the one-dimensional prototype
 

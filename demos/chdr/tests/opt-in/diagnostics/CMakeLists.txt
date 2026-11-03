@@ -22,18 +22,18 @@ function(chdr_diagnostics_skip name reason)
                                                            "chdr;diagnostics;unit;unavailable")
 endfunction()
 
-# One serial and one two-rank entry per suite; an optional third argument narrows the serial filter.
+# Register both variants by default; SERIAL_ONLY or MPI2_ONLY keeps the specified rank count.
 function(chdr_diagnostics_test suite filter)
-  set(serial_filter "${filter}")
-  if(ARGC GREATER 2)
-    set(serial_filter "${ARGV2}")
+  cmake_parse_arguments(DIAGNOSTICS "SERIAL_ONLY;MPI2_ONLY" "" "" ${ARGN})
+  if(NOT DIAGNOSTICS_MPI2_ONLY)
+    add_test(NAME chdr.diagnostics.${suite}.serial COMMAND test-chdr-diagnostics
+                                                           --gtest_filter=${filter})
+    set_tests_properties(
+      chdr.diagnostics.${suite}.serial
+      PROPERTIES TIMEOUT 60 LABELS "chdr;diagnostics;unit" ENVIRONMENT
+                 "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
   endif()
-  add_test(NAME chdr.diagnostics.${suite}.serial COMMAND test-chdr-diagnostics
-                                                         --gtest_filter=${serial_filter})
-  set_tests_properties(
-    chdr.diagnostics.${suite}.serial PROPERTIES TIMEOUT 60 LABELS "chdr;diagnostics;unit"
-                                                ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
-  if(MPIEXEC_EXECUTABLE)
+  if(MPIEXEC_EXECUTABLE AND NOT DIAGNOSTICS_SERIAL_ONLY)
     add_test(
       NAME chdr.diagnostics.${suite}.mpi2
       COMMAND "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
@@ -51,12 +51,11 @@ function(chdr_diagnostics_test suite filter)
   endif()
 endfunction()
 
-# InterfaceEnergy.NormalSplit and .TangentialSplit differ only in the MPI decomposition axis: along
-# the slab normal x (the rank seam lies on the slab face) or along y. One rank has no decomposition,
-# so its entry runs NormalSplit only; two ranks run both.
-chdr_diagnostics_test(energy "InterfaceEnergy.*" "InterfaceEnergy.NormalSplit")
+# NormalSplit and TangentialSplit use the normal and tangential decomposition axes. Both compare
+# with a one-rank evolution on MPI_COMM_SELF, so the two-rank entry also checks serial evolution.
+chdr_diagnostics_test(energy "InterfaceEnergy.*" MPI2_ONLY)
 chdr_diagnostics_test(monitors "ChdrMonitors.*")
 chdr_diagnostics_test(monitor-records "ChdrMonitorRecords.*")
 chdr_diagnostics_test(probe "FourierProbe.*")
-chdr_diagnostics_test(mur-layer-refusals "MurLayer.ProbeAndMonitorRefusals")
+chdr_diagnostics_test(mur-layer-refusals "MurLayer.ProbeAndMonitorRefusals" SERIAL_ONLY)
 include(ProbeTests.cmake)

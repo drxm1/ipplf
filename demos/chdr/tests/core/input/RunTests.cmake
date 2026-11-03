@@ -16,4 +16,9 @@ if(Python3_Interpreter_FOUND)
                1
                ENVIRONMENT
                "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;PYTHONDONTWRITEBYTECODE=1")
+else()
+  add_test(NAME chdr.input.runs.si COMMAND ${CMAKE_COMMAND} -E echo
+                                           "SKIP: SI run comparison requires Python3")
+  set_tests_properties(chdr.input.runs.si PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP:" LABELS
+                                                     "chdr;input;integration;unavailable")
 endif()

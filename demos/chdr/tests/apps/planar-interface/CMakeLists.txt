@@ -31,5 +31,5 @@ if(MPIEXEC_EXECUTABLE)
                        PROPERTIES PROCESSORS 2 ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
   set_tests_properties(chdr.interface.normal.mpi2 PROPERTIES TIMEOUT 60 LABELS "chdr;interface;mpi")
   set_tests_properties(chdr.interface.reserved PROPERTIES DISABLED TRUE TIMEOUT 1800 LABELS
-                                                          "chdr;interface;reserved;long")
+                                                          "chdr;interface;reserved;long;mpi")
 endif()

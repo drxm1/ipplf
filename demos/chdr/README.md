@@ -93,7 +93,10 @@ ranks, one OpenMP thread each):
 | `chdr.1d.` | the one-dimensional prototype (`unittest`; needs a Python with NumPy, SciPy and Matplotlib, `CHDR_1D_PYTHON`) | `tests/1d` |
 | `chdr.src.` | the IPPL library changes made for ChDR: per-axis periodic layouts (`PeriodicAxes`) and the Mur faces (`FDTDBoundary`, `MurSpeed`, `MurDispatch`, `InteriorBounds`, `HaloOrder`, `OpenFaceClosure`, `OpenBoundaryRegression`) | `tests/src/<component>` |
 
-Labels: `long` marks ladders and trajectories above one minute, `record`
+Labels: `long` marks runs above about \f$10^8\f$ cell-steps (cells times steps,
+summed over the runs of an entry), or trajectories of 10000 steps or ten wave periods. These
+work measures also apply on slower machines; the timings in the test index are from its named
+machine. `record`
 marks entries that only print records, `holdout` marks the disabled holdout
 entries, and `unavailable` marks entries registered as skipped because Python,
 an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,

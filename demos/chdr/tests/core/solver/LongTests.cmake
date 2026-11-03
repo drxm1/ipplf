@@ -3,6 +3,10 @@ target_sources(test-chdr-solver PRIVATE test_gauge_growth.cpp test_convergence_l
 chdr_solver_test(long.GaugeGrowth.StaggeredRecord "LongGaugeGrowth.StaggeredRecord")
 foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
   foreach(family IN ITEMS Convergence GaugeGrowth)
+    set(costLabel long)
+    if(stencil STREQUAL "StaggeredRecord")
+      set(costLabel record)
+    endif()
     if(stencil STREQUAL "StaggeredRecord" AND family STREQUAL "Convergence")
       continue()
     endif()
@@ -17,7 +21,7 @@ foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
             TIMEOUT
             1800
             LABELS
-            "chdr;solver;long"
+            "chdr;solver;${costLabel}"
             ENVIRONMENT
             "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;CHDR_SOLVER_RECORD_DIR=${CHDR_SOLVER_RECORD_ROOT}/long-${variant}"
         )

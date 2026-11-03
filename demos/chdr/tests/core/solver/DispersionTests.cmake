@@ -11,7 +11,7 @@ foreach(variant IN ITEMS serial mpi2)
         TIMEOUT
         600
         LABELS
-        "chdr;solver;record"
+        "chdr;solver;long"
         ENVIRONMENT
         "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;CHDR_SOLVER_RECORD_DIR=${CHDR_SOLVER_RECORD_ROOT}/record-${variant}"
     )
