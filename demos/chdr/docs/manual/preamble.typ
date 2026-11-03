@@ -3,6 +3,9 @@
 #import "@preview/equate:0.3.3": equate
 #import "@preview/simple-todo:0.1.0": list-todos, todo
 
+#let proposal(body) = text(fill: rgb("1f4e9c"), body)
+#let revision(body) = text(fill: rgb("707070"), body)
+
 // Shared typography for the manual.
 #let manual-typography(body) = {
   set text(
