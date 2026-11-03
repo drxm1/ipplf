@@ -18,7 +18,6 @@
  *
  * CTest: chdr.solver.mur.stability.serial and chdr.solver.mur.stability.mpi2
  * (InnerDataEnvelope, label long); chdr.solver.mur.stability-control.serial (label long);
- * chdr.solver.mur.stability-control.mpi2 is disabled, because the test skips on two ranks;
  * chdr.solver.open.record.all-cell-drift (serial only, label record).
  */
 #include <gtest/gtest.h>
@@ -194,6 +193,9 @@ namespace chdr::solver::test {
     /// ratio. Fixture stability-open on all cells (no zeroed layers), vacuum, all faces Mur,
     /// safety factor 0.98, 10000 steps. Prints the envelope ratio, \f$Q_N/Q_0\f$ and the mean
     /// step increment per component; asserts nothing. Skips on more than one rank.
+    /// @todo Retain this unrestricted-data baseline for comparisons with other boundary
+    /// treatments using the envelope, positive-norm ratio and mean drift. Compare its envelope
+    /// also with InnerDataEnvelope, which zeros the two outer layers before evolution.
     TEST(MurStabilityRecords, AllCellDrift) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "This record uses one rank";

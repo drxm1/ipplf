@@ -1,7 +1,7 @@
-# Development cases use explicit filters; the independently held cases are never registered.
+# Each material family has an explicit filter and a separate record directory.
 target_sources(test-chdr-solver PRIVATE test_medium_guard.cpp)
 function(chdr_solver_medium_test suite filter)
-  chdr_solver_test(medium.${suite} "${filter}")
+  chdr_solver_test(medium.${suite} "${filter}" ${ARGN})
   foreach(variant serial mpi2)
     if(TEST chdr.solver.medium.${suite}.${variant})
       set_tests_properties(
@@ -41,6 +41,11 @@ endforeach()
 chdr_solver_medium_test(long.Dispersion "MediumDispersionLong.*")
 chdr_solver_medium_test(record.Dispersion "MediumDispersionRecord.*")
 chdr_solver_medium_test(long.TimeStep "MediumTimeStepLong.*")
+chdr_solver_medium_test(long.anisotropic.Fields "MediumAnisotropic.Fields" MPI2_ONLY)
+chdr_solver_medium_test(anisotropic.Phase "MediumAnisotropic.Phase" MPI2_ONLY)
+if(TEST chdr.solver.medium.anisotropic.Phase.mpi2)
+  set_tests_properties(chdr.solver.medium.anisotropic.Phase.mpi2 PROPERTIES TIMEOUT 180)
+endif()
 foreach(reading Collocated Staggered)
   chdr_solver_medium_test(long.Convergence.${reading} "MediumConvergenceLong.${reading}")
   chdr_solver_medium_test(long.Source.${reading} "MediumSourceLong.${reading}")

@@ -22,14 +22,14 @@
  * (Homogeneous update, prediction mediumPhasePerStep()): MediumDispersion has 20 cases
  * (\f$\varepsilon=2.13,4\f$, \f$N=32\f$) and writes phase records for
  * chdr.solver.medium.ranks; MediumDispersionLong runs the same 20 cases at \f$N=64\f$;
- * MediumDispersionRecord only records 48 cases. MediumHoldout.DISABLED_Phase is a disabled
- * holdout without a CTest entry.
+ * MediumDispersionRecord only records 48 cases. MediumAnisotropic.Phase compares the anisotropic
+ * mode on two ranks and a one-rank replay (chdr.solver.medium.anisotropic.Phase.mpi2).
  *
  * CTest entries: chdr.solver.dispersion.{serial,mpi2} (label unit, timeout 60 s),
- * chdr.solver.record.dispersion.{serial,mpi2} (label record, timeout 600 s, records in
+ * chdr.solver.record.dispersion.{serial,mpi2} (label long, timeout 600 s, records in
  * runs/record-serial and runs/record-mpi2), chdr.solver.medium.Dispersion.{serial,mpi2}
- * (label unit, timeout 60 s), chdr.solver.medium.long.Dispersion.{serial,mpi2} and
- * chdr.solver.medium.record.Dispersion.{serial,mpi2} (both label long, timeout 1800 s).
+ * (label unit, timeout 60 s), chdr.solver.medium.long.Dispersion.{serial,mpi2} (label long)
+ * and chdr.solver.medium.record.Dispersion.{serial,mpi2} (label record), both with timeout 1800 s.
  */
 #include <algorithm>
 #include <cmath>
@@ -269,20 +269,20 @@ namespace chdr::solver::test {
      * comparison uses that cumulative measurement, not individual increments.
      */
     inline void writeDispersion(const DispersionInput& input, const nlohmann::json& record) {
-        std::cout << "T5 " << input.name_m << " omega=" << record["omega"].get<double>()
-                  << " predicted=" << record["omega_prediction"].get<double>()
-                  << " v_minus_1=" << record["phase_velocity_error"].get<double>()
-                  << " predicted_v_minus_1=" << record["phase_velocity_prediction"].get<double>()
-                  << " max_increment_error=" << record["max_increment_error"].get<double>() << '\n';
         int rank;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         if (rank != 0)
             return;
+        std::cout << "dispersion " << input.name_m << " omega=" << record["omega"].get<double>()
+                  << " predicted=" << record["omega_prediction"].get<double>()
+                  << " v_minus_1=" << record["phase_velocity_error"].get<double>()
+                  << " predicted_v_minus_1=" << record["phase_velocity_prediction"].get<double>()
+                  << " max_increment_error=" << record["max_increment_error"].get<double>() << '\n';
         std::filesystem::create_directories(recordDirectory());
-        std::ofstream out(recordDirectory() / ("T5-" + input.name_m + ".jsonl"));
+        std::ofstream out(recordDirectory() / ("dispersion-" + input.name_m + ".jsonl"));
         out << record.dump() << '\n';
         if (input.rankRecord_m) {
-            std::ofstream comparison(recordDirectory() / ("T5-" + input.name_m + ".json"));
+            std::ofstream comparison(recordDirectory() / ("dispersion-" + input.name_m + ".json"));
             comparison << nlohmann::json{{"omega", record["omega"]}}.dump() << '\n';
         }
     }
@@ -409,6 +409,9 @@ namespace chdr::solver::test {
     /// pairs the medium-bound and the vacuum-bound step. The test writes the phase error per
     /// wavelength; it omits the phase rule and asserts only a nonzero projected amplitude
     /// after each solve.
+    /// @todo Use the phase error per dielectric wavelength to choose the resolution of medium
+    /// runs. Compare measured phase with the independent discrete prediction and the continuum
+    /// value, including the paired medium-bound and vacuum-bound time steps.
     TEST(MediumDispersionRecord, WavelengthError) {
         const std::array<std::array<int, 3>, 3> modes = {{{1, 0, 0}, {1, 1, 0}, {1, 1, 1}}};
         for (int n : {16, 32, 64, 128})
@@ -419,20 +422,20 @@ namespace chdr::solver::test {
                                           true, vacuumSet);
     }
 
-    /** @brief Independently held anisotropic single-root phase and rank comparison.
+    /** @brief Independent anisotropic single-root phase and rank comparison.
      * @details The serial reference repeats the same measured cumulative phase on
-     * MPI_COMM_SELF. It is deliberately absent from ordinary test registration.
-     * The mesh is the finest held continuum-wave mesh, but initialization uses
+     * MPI_COMM_SELF.
+     * The mesh is the finest anisotropic continuum-wave mesh, but initialization uses
      * the discrete prediction to isolate one travelling root. First require
      * agreement with that independent symbol, then compare the two measured
      * phases across rank counts. The root-only replay uses exactly the distributed
      * step; serialFrequency also means radians per step, as in PhaseMeasurement.
-     * It was the held-out final acceptance check of earlier work; it is disabled and has no
-     * CTest entry.
+     * CTest runs this case on two ranks and compares with a one-rank replay.
      */
-    TEST(MediumHoldout, DISABLED_Phase) {
-        const DispersionInput input{{120, 144, 160}, {-1, 2, 3}, {1, 1, 1}, 0.9, "medium-held",
-                                    false,           3.7,        false,     1};
+    TEST(MediumAnisotropic, Phase) {
+        const DispersionInput input{
+            {120, 144, 160}, {-1, 2, 3}, {1, 1, 1}, 0.9, "medium-anisotropic",
+            false,           3.7,        false,     1};
         auto fields = makeBoxFieldContainer(input.cells_m, input.lengths_m, input.splitAxis());
         initializeFieldStorage(fields);
         auto handle = coreTest::makeTestSolver<StandardSolverPeriodic>(

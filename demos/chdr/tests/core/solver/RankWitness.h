@@ -5,7 +5,7 @@
  * test_open_beam.cpp. rankDifference() runs on the rank that holds the MPI_COMM_SELF replay;
  * checkRankAgreement() broadcasts its result, requires the relative difference to be at most
  * the tolerance (1e-13 by default) and prints the binary equality flag.
- * MurReflection.DISABLED_Holdout also runs this code.
+ * MurReflection.AnisotropicMedium also runs this code.
  */
 #pragma once
 #include <algorithm>

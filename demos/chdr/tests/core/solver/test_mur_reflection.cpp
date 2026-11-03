@@ -14,8 +14,8 @@
  * serial entry this replay compares a run with an identical run.
  *
  * CTest: chdr.solver.mur.reflection.serial and chdr.solver.mur.reflection.mpi2
- * (MurReflection.ExactTwoWaveRows). chdr.solver.mur.holdout selects
- * MurReflection.DISABLED_Holdout and is disabled; see that test.
+ * (MurReflection.ExactTwoWaveRows). chdr.solver.mur.anisotropic.mpi2 selects
+ * MurReflection.AnisotropicMedium; see that test.
  */
 #include <gtest/gtest.h>
 
@@ -147,24 +147,23 @@ namespace chdr::solver::test::reflection {
                 checkPotentialCase(row, reading, true);
     }
 
-    /** @brief Separate configuration kept for one final validation run; disabled by default.
+    /** @brief Independent anisotropic medium rows with a one-rank replay.
      * @details The two modes use a separate permittivity, aspect ratio and integer
-     * periods. Their expressions are evaluated only if this disabled test is
-     * explicitly selected. The propagating row also checks both field polarizations.
+     * periods. The propagating row also checks both field polarizations.
      * Rows: \f$\varepsilon_r = 3.1\f$, h = (1.15, 1, 0.85),
      * \f$\Delta t = 0.9\sqrt{\varepsilon_r/\sum_d h_d^{-2}}\f$, staggered R2; one propagating row
      * (36 z cells) and one evanescent row (19 z cells). Criteria: those of checkPotentialCase()
      * without controls (1e-11), the field rows of checkFieldReflection() (1e-10 and 1e-9) and
-     * the rank replay (1e-13). This test was the held-out final acceptance check of the Mur
-     * reflection tests, on two ranks; its CTest entry chdr.solver.mur.holdout is disabled.
+     * the rank replay (1e-13). CTest runs these rows on two ranks as
+     * chdr.solver.mur.anisotropic.mpi2.
      */
-    TEST(MurReflection, DISABLED_Holdout) {
+    TEST(MurReflection, AnisotropicMedium) {
         const std::array<double, 3> h{1.15, 1, .85};
         const double dt =
             .9 * std::sqrt(3.1) / std::sqrt(1 / (h[0] * h[0]) + 1 + 1 / (h[2] * h[2]));
         for (const Case row :
-             {Case{"reserved-propagating", 2, 36, 3.1, .17776026053686098, dt, h},
-              Case{"reserved-evanescent", 2, 19, 3.1, .17677322362748854, dt, h}}) {
+             {Case{"anisotropic-propagating", 2, 36, 3.1, .17776026053686098, dt, h},
+              Case{"anisotropic-evanescent", 2, 19, 3.1, .17677322362748854, dt, h}}) {
             checkPotentialCase(row, SpatialDiscretization::Staggered, false);
             if (row.nz_m != 36)
                 continue;

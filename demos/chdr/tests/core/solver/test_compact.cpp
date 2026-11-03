@@ -11,9 +11,8 @@
  * reference is an exact lattice value. Each rank samples the mode at its own local indices
  * and reads no field or halo value; on two ranks each rank samples a shorter local x range,
  * and MPI_Allreduce combines the maximum errors. The suite name keeps "compact", the earlier
- * name of the staggered
- * difference. CTest runs the suite CompactOperators as chdr.solver.compact.serial and
- * chdr.solver.compact.mpi2.
+ * name of the staggered difference. CTest runs the suite CompactOperators as
+ * chdr.solver.compact.serial.
  */
 #include <Kokkos_MathematicalConstants.hpp>
 #include <gtest/gtest.h>

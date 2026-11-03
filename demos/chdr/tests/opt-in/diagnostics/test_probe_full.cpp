@@ -23,7 +23,6 @@
  * Reference: exact lattice value (finite-window sums, discrete mode samples, fixed tables).
  *
  * CTest: chdr.diagnostics.probe_wiring.serial and .mpi2 run the first four tests;
- * chdr.diagnostics.probe_gates.serial and .mpi2 run FrozenGatesAndNaNGhosts;
  * chdr.diagnostics.probe.ranks runs FrozenGatesAndNaNGhosts on one and on two ranks
  * through compare_probe_ranks.py.
  */

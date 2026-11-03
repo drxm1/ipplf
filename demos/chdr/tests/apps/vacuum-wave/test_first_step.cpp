@@ -15,9 +15,9 @@
  * continuum wave at most 0.01. Reference: exact lattice value (one-step oracle) and
  * continuum analytic (relative L2).
  *
- * CTest: chdr.vacuum.unit.serial, chdr.vacuum.unit.mpi2 and chdr.vacuum.unit.mpi2.shuffle
- * run the executable test-chdr-vacuum, which holds the 22 tests of this file,
- * test_setup.cpp, test_diagnostics.cpp and test_policy.cpp.
+ * CTest: chdr.vacuum.unit.serial and chdr.vacuum.unit.mpi2 run the executable
+ * test-chdr-vacuum, which holds the 22 tests of this file, test_setup.cpp,
+ * test_diagnostics.cpp and test_policy.cpp. The two-rank entry uses shuffled order.
  */
 #include "Ippl.h"
 

@@ -171,7 +171,7 @@ values. `MurEdgeCornerFamilies` checks local edge/corner compatibility.
 `MurStability` checks fixed long trajectories, not stability for arbitrary
 initial data; `OpenBeam` compares a finite beam in an all-Mur box with a
 reference run using periodic transverse axes and Mur faces normal to x. The
-disabled reflection holdout is configured separately.
+anisotropic medium reflection case is configured separately.
 
 Tests labelled `record` also print dense three-mesh reflection tables, vacuum
 gauge and Gauss residuals, the field error from an unfilled physical ghost, and
@@ -367,12 +367,12 @@ with the run log.
 | Test suites | Main checks |
 |---|---|
 | `Manufactured` | Source sign, all components and time labels; wrong-label control |
-| `Levels`, `GaugeWave`, `LevelEquivalence` | Discrete gauge cancellation, R1 closed form and bitwise R2/R2Prime equivalence |
+| `Levels`, `GaugeCancellation`, `LevelEquivalence` | Discrete gauge cancellation, R1 closed form and bitwise R2/R2Prime equivalence |
 | `Convergence`, `LongConvergence`, `StaggeredConvergence`, `LongStaggeredConvergence` | Mixed source-free and analytic sourced waves, compared at each output's label |
 | `LongGaugeGrowth` | Gauge norm in the first and last of ten periods |
 | `Dispersion`, `RecordDispersion` | Single-root cumulative phase and angular dispersion |
 | `TimeStep`, `TimeStepLong`, `TimeStepRecords` | Permitted range, effective safety factor, bounded/growing histories and endpoint records |
-| `ComovingT7` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
+| `Comoving` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
 | `RankGather`, `RankCases`, `SerialReference`, `StableStatistics` | Owned fields and well-conditioned reductions across rank layouts |
 | `ChdrSolverContract` | Construction contract of `ChdrSolver`, and its evolution against IPPL's Standard solver on the vacuum plane wave |
 | `Operators`, `CompactOperators`, `BoxSetup` | Difference symbols, periodic halos and geometry |
@@ -383,11 +383,11 @@ The manufactured test checks that the update adds its source without averaging;
 the smooth sourced-wave record does not test evanescent near-field response.
 That application remains a separate experiment.
 
-The `DISABLED_Holdout` suite is excluded from normal runs. It uses a different
-wave vector and anisotropic cells and is run once after development checks
-and their evidence are complete. The collocated case checks field/Gauss
-convergence, discrete identities and rank agreement; the staggered case is an
-additional record. Do not tune against its result. The exact inputs and
+The `AnisotropicConvergence` suite uses a different wave vector and anisotropic
+cells. Its two-rank entries carry the `long` label. The collocated case checks
+field/Gauss convergence, discrete identities and rank agreement; the staggered
+case checks finiteness and records the orders, identities and rank differences.
+The exact inputs and
 numerical assertions are defined in `Convergence.h` and the named test bodies.
 
 The four upstream Maxwell examples remain compile-only. The Standard example's

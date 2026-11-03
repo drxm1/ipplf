@@ -22,8 +22,9 @@
  * history as one gauge-history JSONL record; each collocated case prints its two maxima
  * and their ratio.
  *
- * CTest entries (label long, timeout 1800 s, records in runs/long-serial and runs/long-mpi2):
- * chdr.solver.long.GaugeGrowth.{Standard,NonStandard,StaggeredRecord}.{serial,mpi2}.
+ * CTest entries (timeout 1800 s, records in runs/long-serial and runs/long-mpi2):
+ * chdr.solver.long.GaugeGrowth.{Standard,NonStandard}.{serial,mpi2} have label long;
+ * chdr.solver.long.GaugeGrowth.StaggeredRecord.{serial,mpi2} have label record.
  */
 #include <algorithm>
 #include <cmath>
@@ -131,10 +132,12 @@ namespace chdr::solver::test {
                                      bool gaugeWave) {
         ASSERT_GT(envelope.first_m, 0);
         ASSERT_TRUE(std::isfinite(envelope.last_m));
-        std::cout << "B5 stencil=" << (nonstandard ? "NS" : "Std")
-                  << " family=" << (gaugeWave ? "T2" : "T3") << " first=" << envelope.first_m
-                  << " last=" << envelope.last_m << " ratio=" << envelope.last_m / envelope.first_m
-                  << " steps=" << envelope.steps_m << '\n';
+        if (ippl::Comm->rank() == 0)
+            std::cout << "gauge-envelope stencil=" << (nonstandard ? "NS" : "Std")
+                      << " family=" << (gaugeWave ? "gauge" : "mixed")
+                      << " first=" << envelope.first_m << " last=" << envelope.last_m
+                      << " ratio=" << envelope.last_m / envelope.first_m
+                      << " steps=" << envelope.steps_m << '\n';
         EXPECT_LE(envelope.last_m / envelope.first_m, 1.05);
     }
 
@@ -203,6 +206,9 @@ namespace chdr::solver::test {
     }
     /// Record only: gauge-norm history of the discrete gauge wave in the staggered reading
     /// (Standard 32x32x32, R2); it asserts finite norms and the final identities, no ratio.
+    /// @todo Use this periodic staggered history as a baseline for open-boundary constraint
+    /// studies. Compare it with the collocated gauge-wave histories and future boundary
+    /// treatments using the same gauge norm and time labels.
     TEST(LongGaugeGrowth, StaggeredRecord) {
         gaugeGrowth<StandardSolverPeriodic>(true, SpatialDiscretization::Staggered);
     }

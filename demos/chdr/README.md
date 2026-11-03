@@ -96,10 +96,10 @@ ranks, one OpenMP thread each):
 Labels: `long` marks runs above about \f$10^8\f$ cell-steps (cells times steps,
 summed over the runs of an entry), or trajectories of 10000 steps or ten wave periods. These
 work measures also apply on slower machines; the timings in the test index are from its named
-machine. `record`
-marks entries that only print records, `holdout` marks the disabled holdout
-entries, and `unavailable` marks entries registered as skipped because Python,
-an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
+machine. `record` selects record generation and reference-function checks.
+All six former acceptance cases now have ordinary enabled entries; the test
+index describes their checks. `unavailable` marks entries registered as skipped
+because Python, an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
 so `ctest -L chdr` selects the same set as `ctest -R '^chdr\.'`.
 
 ## Documentation / Manual

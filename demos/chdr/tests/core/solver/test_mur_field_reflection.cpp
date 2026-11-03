@@ -11,8 +11,8 @@
  * replay compares a run with an identical run.
  *
  * CTest: chdr.solver.mur.field-reflection.serial and chdr.solver.mur.field-reflection.mpi2
- * (MurFieldReflection.SignedElectricAndMagnetic). The disabled holdout
- * MurReflection.DISABLED_Holdout also calls checkFieldReflection().
+ * (MurFieldReflection.SignedElectricAndMagnetic). The anisotropic medium test
+ * MurReflection.AnisotropicMedium also calls checkFieldReflection().
  */
 #include <gtest/gtest.h>
 

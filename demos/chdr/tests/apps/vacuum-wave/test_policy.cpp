@@ -11,7 +11,7 @@
  * within 0.002 of 1, and at checkpoints relative L2 errors 0.01 (coarse) and 0.003 (fine).
  * No expected decision calls a duplicated local implementation of the policy.
  *
- * CTest: chdr.vacuum.unit.serial, chdr.vacuum.unit.mpi2 and chdr.vacuum.unit.mpi2.shuffle.
+ * CTest: chdr.vacuum.unit.serial and chdr.vacuum.unit.mpi2.
  */
 #include <cmath>
 #include <gtest/gtest.h>

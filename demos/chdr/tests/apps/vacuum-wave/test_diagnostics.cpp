@@ -14,7 +14,7 @@
  * 1e-12) and the phase tracker. Reference: exact lattice value (scalar recurrence) and
  * the detection of injected faults.
  *
- * CTest: chdr.vacuum.unit.serial, chdr.vacuum.unit.mpi2 and chdr.vacuum.unit.mpi2.shuffle.
+ * CTest: chdr.vacuum.unit.serial and chdr.vacuum.unit.mpi2.
  */
 #include "Ippl.h"
 

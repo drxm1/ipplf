@@ -11,6 +11,8 @@
 
 #include "Ippl.h"
 
+#include <array>
+
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "MaxwellSolvers/StandardFDTDSolver.h"
 
@@ -22,6 +24,15 @@ namespace fdtd_test {
     using Standard = ippl::StandardFDTDSolver<Field, Potential, BC>;
     template <ippl::fdtd_bc BC>
     using NonStandard = ippl::NonStandardFDTDSolver<Field, Potential, BC>;
+
+    /** @brief Accumulate owned-potential differences against a full one-rank reference.
+     * @details Defined in HaloOrderPulse.cpp. maximum[0] is the largest absolute
+     * difference and maximum[1] the largest reference magnitude; both accumulate across
+     * calls. identical stays nonzero only when all compared binary64 values have equal
+     * bits. Ghost cells are excluded; serial must cover the full global domain.
+     */
+    void difference(Potential& distributed, Potential& serial, std::array<double, 2>& maximum,
+                    int& identical);
 
     /** @brief Own source-free solver storage with decomposition along z only.
      * @details MPI_COMM_SELF constructs an independent serial reference with

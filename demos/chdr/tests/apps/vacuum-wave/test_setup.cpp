@@ -16,7 +16,7 @@
  * \f$k = 2\pi\f$) on owned cells and face halos, and the scratch history must be exactly 0.
  * Reference: exact lattice value (sampled continuum potential) and refusal.
  *
- * CTest: chdr.vacuum.unit.serial, chdr.vacuum.unit.mpi2 and chdr.vacuum.unit.mpi2.shuffle.
+ * CTest: chdr.vacuum.unit.serial and chdr.vacuum.unit.mpi2.
  */
 #include "Ippl.h"
 

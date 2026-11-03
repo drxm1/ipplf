@@ -92,11 +92,11 @@ target_sources(test-chdr-solver PRIVATE test_equivalence.cpp)
 chdr_solver_test(equivalence "LevelEquivalence.*")
 foreach(case ObliqueStandard ObliqueNonStandard AxialNonStandardStable
              AxialNonStandardBoundaryRecord)
-  chdr_solver_test(gauge.${case} "GaugeWave.${case}")
+  chdr_solver_test(gauge.${case} "GaugeCancellation.${case}")
 endforeach()
 
 target_sources(test-chdr-solver PRIVATE test_comoving.cpp)
-chdr_solver_test(comoving "ComovingT7.*")
+chdr_solver_test(comoving "Comoving.*")
 foreach(variant serial mpi2)
   if(TEST chdr.solver.comoving.${variant})
     set_tests_properties(
@@ -122,24 +122,7 @@ chdr_solver_test(mur.refinement "MurReflectionRefinement.CentrePlaneOrder" SERIA
 chdr_solver_test(mur.records "MurReflectionRefinement.CodeConfirmedRows" SERIAL_ONLY)
 set_tests_properties(chdr.solver.mur.refinement.serial chdr.solver.mur.records.serial
                      PROPERTIES LABELS "chdr;solver;record")
-add_test(
-  NAME chdr.solver.mur.holdout
-  COMMAND
-    "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
-    $<TARGET_FILE:test-chdr-solver> ${MPIEXEC_POSTFLAGS} --gtest_also_run_disabled_tests
-    --gtest_filter=MurReflection.DISABLED_Holdout)
-set_tests_properties(
-  chdr.solver.mur.holdout
-  PROPERTIES DISABLED
-             TRUE
-             PROCESSORS
-             2
-             TIMEOUT
-             1800
-             LABELS
-             "chdr;solver;holdout;mpi"
-             ENVIRONMENT
-             "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
+chdr_solver_test(mur.anisotropic "MurReflection.AnisotropicMedium" MPI2_ONLY)
 target_sources(test-chdr-solver PRIVATE test_mur_faces.cpp test_mur_medium.cpp)
 set(randomPotentialHistoryFixtureDirectory
     "${CMAKE_CURRENT_BINARY_DIR}/random-potential-history-fixtures")

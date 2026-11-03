@@ -220,9 +220,10 @@ namespace chdr::solver::test {
                 SolverType::stencil() == Stencil::NonStandard ? "NS" : "Std";
             const int ebReconstructionConvention =
                 static_cast<int>(solver.ebReconstructionConvention());
-            std::cout << "T1 stencil=" << stencil
-                      << " reconstruction=" << ebReconstructionConvention
-                      << " wrong_label=" << wrongLabel << " max_error=" << worst << '\n';
+            if (ippl::Comm->rank() == 0)
+                std::cout << "T1 stencil=" << stencil
+                          << " reconstruction=" << ebReconstructionConvention
+                          << " wrong_label=" << wrongLabel << " max_error=" << worst << '\n';
             ASSERT_TRUE(std::isfinite(worst));
             if (wrongLabel) {
                 EXPECT_GE(worst, 1e-3);

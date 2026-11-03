@@ -38,7 +38,7 @@ def expected_names(medium=False):
         names = {f"MediumMMS-{eps:.6f}-{reading}-{field}.json"
                  for eps in (2.13, 4) for reading in (0, 1)
                  for field in ("current", "previous", "E", "B")}
-        names.update(f"T5-Medium-{eps:.6f}-Std-32-{direction}-{safety:.6f}.json"
+        names.update(f"dispersion-Medium-{eps:.6f}-Std-32-{direction}-{safety:.6f}.json"
                      for eps in (2.13, 4) for direction in range(5)
                      for safety in (math.sqrt(3) / 2, .98))
         return names
@@ -52,10 +52,10 @@ def expected_names(medium=False):
     names = {f"{state}-{field}.json" for state in states + seams
              for field in ("current", "previous", "E", "B")}
     names.update(f"{state}-residuals.json" for state in seams)
-    names.update(f"T5-Std-32-{direction}-{safety:.6f}.json"
+    names.update(f"dispersion-Std-32-{direction}-{safety:.6f}.json"
                  for direction in range(5) for safety in (0, .98))
-    names.update(f"T5-NS-axis-24-{safety:.6f}.json" for safety in (1, .99, .98))
-    names.update(f"T5-NS-near-24-{length}-{safety:.6f}.json"
+    names.update(f"dispersion-NS-axis-24-{safety:.6f}.json" for safety in (1, .99, .98))
+    names.update(f"dispersion-NS-near-24-{length}-{safety:.6f}.json"
                  for length in (2, 4, 8) for safety in (1, .98))
     return names
 

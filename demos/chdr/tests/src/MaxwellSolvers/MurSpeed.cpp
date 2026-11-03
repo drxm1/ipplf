@@ -9,9 +9,8 @@
  * weight must equal an in-test copy of the original unit-speed constructor arithmetic (IPPL
  * 5ce8e37ed).
  *
- * Reference: exact lattice value; regression record (bitwise). CTest entries:
- * chdr.src.MurSpeed.serial and chdr.src.MurSpeed.mpi2. The test builds no layout and uses no
- * communicator, so the mpi2 entry repeats the serial arithmetic on each rank.
+ * Reference: exact lattice value; regression record (bitwise). CTest entry:
+ * chdr.src.MurSpeed.serial. The test builds no layout and uses no communicator.
  */
 #include "Ippl.h"
 

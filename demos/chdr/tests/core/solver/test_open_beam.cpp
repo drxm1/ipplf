@@ -13,13 +13,9 @@
  * - ReducedRankWitness: 300 steps in a 40 x 80 x 200 box with Mur on all faces. The final
  *   owned potentials must equal an MPI_COMM_SELF replay within 1e-13 of the run maximum, and
  *   the 20-layer Fourier sums within 1e-12 of \f$300\cdot80\cdot200\f$ times that maximum.
- *   On one rank the replay repeats an identical run, so the serial entry tests only
- *   determinism.
  *
- * CTest (label long, TIMEOUT 1800): chdr.solver.open.beam-ranks.serial and
- * chdr.solver.open.beam-ranks.mpi2 (ReducedRankWitness); chdr.solver.open.beam-full.mpi2
- * (FullBoxAgainstPeriodicWitness). chdr.solver.open.beam-full.serial is disabled: the full
- * box runs on two ranks only.
+ * CTest (label long, TIMEOUT 1800): chdr.solver.open.beam-ranks.mpi2 (ReducedRankWitness)
+ * and chdr.solver.open.beam-full.mpi2 (FullBoxAgainstPeriodicWitness).
  */
 #include <Kokkos_Complex.hpp>
 #include <complex>

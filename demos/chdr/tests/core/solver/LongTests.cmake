@@ -1,4 +1,4 @@
-# Full ladders and ten-period gauge histories; the independent anisotropic case remains disabled.
+# Full ladders, anisotropic cases and ten-period gauge histories.
 target_sources(test-chdr-solver PRIVATE test_gauge_growth.cpp test_convergence_long.cpp)
 chdr_solver_test(long.GaugeGrowth.StaggeredRecord "LongGaugeGrowth.StaggeredRecord")
 foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
@@ -32,4 +32,19 @@ foreach(stencil IN ITEMS Standard NonStandard StaggeredRecord)
       endif()
     endforeach()
   endforeach()
+endforeach()
+foreach(reading Collocated StaggeredRecord)
+  chdr_solver_test(long.anisotropic.${reading} "AnisotropicConvergence.${reading}" MPI2_ONLY)
+  if(TEST chdr.solver.long.anisotropic.${reading}.mpi2)
+    set_tests_properties(
+      chdr.solver.long.anisotropic.${reading}.mpi2
+      PROPERTIES
+        TIMEOUT
+        1800
+        LABELS
+        "chdr;solver;long;mpi"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;OMP_PROC_BIND=false;CHDR_SOLVER_RECORD_DIR=${CHDR_SOLVER_RECORD_ROOT}/anisotropic-${reading}-mpi2"
+    )
+  endif()
 endforeach()

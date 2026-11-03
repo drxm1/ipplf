@@ -9,8 +9,7 @@
  * \f$10^{-3}\f$. The test prints whether the two runs agree bit for bit; it does not assert it.
  *
  * Both tests require exactly two ranks (ASSERT_EQ on the communicator size). They run only in
- * chdr.src.HaloOrder.mpi2; chdr.src.HaloOrder.serial compiles this file but filters out its
- * tests. HaloOrderMixed.cpp also uses difference(), which this file defines.
+ * chdr.src.HaloOrder.mpi2. HaloOrderMixed.cpp also uses difference(), which this file defines.
  */
 #include <algorithm>
 #include <bit>

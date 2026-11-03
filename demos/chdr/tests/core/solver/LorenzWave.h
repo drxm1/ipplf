@@ -101,7 +101,7 @@ namespace chdr::solver {
 
     /** @brief Construct a sourced polarization with caller-selectable wave number and frequency.
      * @details The source multiplier is computed from those actual parameters.
-     * Constructing the functor does not run the holdout; its only use is sampling.
+     * Constructing the functor only prepares the wave samples; it does not evolve fields.
      */
     inline LorenzWave makeSourcedWave(
         ippl::Vector<double, SpatialDim> waveNumber = 2 * Kokkos::numbers::pi_v<double>

@@ -1,7 +1,7 @@
 /** @file TwoWaveState.h
  * @brief Exact lattice histories and a row-scaled two-root reflection fit.
  * @details Used by ReflectionRun.h (the Mur reflection tests), test_open_gauge_records.cpp
- * and test_open_beam.cpp (fit() only). MurReflection.DISABLED_Holdout also runs this code.
+ * and test_open_beam.cpp (fit() only). MurReflection.AnisotropicMedium also runs this code.
  */
 #pragma once
 #include <vector>

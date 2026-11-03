@@ -11,8 +11,8 @@
  * most \f$10^{-13}\f$ of the one-rank maximum, and the control must differ by at least
  * \f$10^{-3}\f$.
  *
- * MixedStandardDrift runs in chdr.src.HaloOrder.serial and chdr.src.HaloOrder.mpi2.
- * MixedStandardPulseAcrossSeam requires exactly two ranks and runs only in the mpi2 entry.
+ * Both tests run in chdr.src.HaloOrder.mpi2. MixedStandardDrift includes the one-rank replay;
+ * MixedStandardPulseAcrossSeam requires exactly two ranks.
  */
 #include <cmath>
 #include <gtest/gtest.h>
@@ -27,15 +27,6 @@ namespace fdtd_test {
         using Base::Base;
         void setStep(double step) { this->dt = step; }
     };
-
-    /** @brief Reuse the owned-sample comparison from HaloOrderPulse.cpp.
-     * @details It records maximum discrepancy, reference magnitude and exact
-     * binary64 equality; neither physical exterior ghosts nor rank ghosts enter.
-     * This declaration is written by hand, and the definition is in HaloOrderPulse.cpp.
-     * The executable therefore needs the pulse file, also in the serial entry, which
-     * filters out the pulse tests.
-     */
-    void difference(Potential&, Potential&, std::array<double, 2>&, int&);
 
     /** @brief Load the affine-time or Gaussian mixed-boundary fixture.
      * @details The pulse has width 2.5 cells, center x=4,z=16, and no y variation.

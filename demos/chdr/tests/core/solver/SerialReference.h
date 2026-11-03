@@ -2,10 +2,11 @@
  * @brief Compare a distributed wave run with a rank-zero MPI_COMM_SELF execution.
  * @details For each comparison, rank zero prints one communicator-self witness line with
  * the largest per-cell difference and the largest statistic difference.
- * verifySerialReference() requires the first to be at most \f$10^{-13}\f$ and the second
- * at most \f$10^{-12}\f$. Users:
- * test_serial_reference.cpp, the \f$N=32\f$ replay of the medium ladders and the disabled
- * holdouts in Convergence.h, the disabled medium holdout of test_dispersion.cpp and,
+ * With assertChecks enabled, verifySerialReference() requires the first to be at most
+ * \f$10^{-13}\f$ and the second at most \f$10^{-12}\f$. Record-only callers omit these bounds.
+ * Users:
+ * test_serial_reference.cpp, the \f$N=32\f$ replay of the medium ladders and the
+ * anisotropic cases in Convergence.h, the medium phase case of test_dispersion.cpp and,
  * through SerialFields, the Mur and open-box tests; test_statistics.cpp checks
  * serialSnapshot().
  */
@@ -152,7 +153,7 @@ namespace chdr::solver::test {
         for (unsigned field = 0; field < 4; ++field)
             compareSerialSnapshots(before[field], after[field], errors);
         const auto domain = solver.A_n.getLayout().getDomain();
-        std::cout << "A9 communicator-self witness cells=" << domain[0].length() << 'x'
+        std::cout << "rank comparison with communicator-self cells=" << domain[0].length() << 'x'
                   << domain[1].length() << 'x' << domain[2].length()
                   << " reading=" << int(spatialDiscretization) << " steps=" << steps
                   << " max_cell_relative=" << errors[0] << " max_reduction_relative=" << errors[1]

@@ -1,17 +1,15 @@
 /** @file test_mur_refinement.cpp
  * @brief Compare the centre-plane discrete reflection with its continuum limit.
  * @details Both tests evaluate only the oracle functions of ReflectionOracles.h. They create
- * no solver and make no MPI call, so each mpi2 entry repeats the serial computation on both
- * ranks.
+ * no solver and make no MPI call.
  * - CentrePlaneOrder: for 11 rows (vacuum and \f$\varepsilon_r = 2.13\f$, from normal to
  *   evanescent incidence; h = 1, \f$\Delta t = 0.5\f$, matched speed), the observed order of
  *   \f$\lvert R_{1/2} - R_c\rvert\f$ between the refinement factors 2 and 4 must lie in
  *   [1.9, 2.1]. Reference: the continuum coefficient \f$R_c\f$ of continuumReflection().
  * - CodeConfirmedRows: prints 117 reflection-record lines and asserts nothing.
  *
- * CTest: chdr.solver.mur.refinement.serial and chdr.solver.mur.refinement.mpi2
- * (CentrePlaneOrder); chdr.solver.mur.records.serial and chdr.solver.mur.records.mpi2
- * (CodeConfirmedRows, label record).
+ * CTest: chdr.solver.mur.refinement.serial (CentrePlaneOrder) and
+ * chdr.solver.mur.records.serial (CodeConfirmedRows), both with label record.
  */
 #include <gtest/gtest.h>
 #include <iostream>
@@ -63,6 +61,8 @@ namespace chdr::solver::test::reflection {
      * and continuum coefficients are independently defined in ReflectionOracles.h.
      * Pass: for each of the 11 rows, the order between the refinement factors 2 and 4 lies in
      * [1.9, 2.1].
+     * @todo Use these discrete-to-continuum oracle orders when comparing mesh resolutions.
+     * Keep this oracle-only check separate from solver validation in ExactTwoWaveRows.
      */
     TEST(MurReflectionRefinement, CentrePlaneOrder) {
         for (const auto& row : refinementRows) {
@@ -83,6 +83,9 @@ namespace chdr::solver::test::reflection {
     /// Mur speed) at refinements 1, 2 and 4: 13 vacuum rows at the steps 0.5 and
     /// \f$0.98/\sqrt3\f$, 11 medium rows at 0.5, and the 2 anisotropic rows of OpenBoxCases.h.
     /// Asserts nothing.
+    /// @todo Use the angular and refinement tables to compare box widths and absorber choices.
+    /// Compare the discrete coefficients with their continuum limits; the evolved flag names
+    /// the coarse rows also checked against ChdrSolver by ExactTwoWaveRows.
     TEST(MurReflectionRefinement, CodeConfirmedRows) {
         const auto precision = std::cout.precision(17);
         const auto record    = [](const Case& row, bool normal, bool evolved, int refinement) {

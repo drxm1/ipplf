@@ -143,6 +143,9 @@ namespace chdr::solver::test {
 
     /// Print 8 gauge-record lines (rows v30 and v60, TMT and pure gauge, layers 0 and 3).
     /// Asserts nothing; skips on more than one rank.
+    /// @todo Use these residuals to compare constraint errors of future open-boundary
+    /// treatments. Compare the closed-field gauge and Gauss values at the face and in the
+    /// interior with the plane-wave prediction printed beside them.
     TEST(OpenGaugeRecords, VacuumRepresentatives) {
         if (ippl::Comm->size() != 1)
             GTEST_SKIP() << "This record uses one rank";

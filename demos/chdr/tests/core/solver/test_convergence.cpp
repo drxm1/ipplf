@@ -26,8 +26,8 @@
  * the fields: cells to \f$10^{-13}\f$, statistics to \f$10^{-12}\f$ (SerialReference.h).
  * CTest entries, each serial and mpi2: chdr.solver.medium.Convergence.{Collocated,Staggered},
  * chdr.solver.medium.Source, chdr.solver.medium.long.Convergence.{Collocated,Staggered} and
- * chdr.solver.medium.long.Source.{Collocated,Staggered}. MediumHoldout.DISABLED_Fields has
- * no CTest entry.
+ * chdr.solver.medium.long.Source.{Collocated,Staggered}. MediumAnisotropic.Fields runs as
+ * chdr.solver.medium.long.anisotropic.Fields.mpi2.
  */
 #include <complex>
 
@@ -190,14 +190,13 @@ namespace chdr::solver::test {
         mediumLadders(true, true, SpatialDiscretization::Staggered);
     }
     /** @brief Independent anisotropic refinement with both component placements.
-     * @details The holdout flag in runWave selects an anisotropic mesh family
+     * @details The anisotropicCase flag in runWave selects an anisotropic mesh family
      * and y decomposition. Each level compares evolved E/B with continuum
      * samples at their labels and repeats the evolution on MPI_COMM_SELF.
-     * The separate held phase test initializes a discrete single-root mode;
-     * these field runs retain continuum initial histories. Disabled by default
-     * and absent from the development CTest filters.
+     * The separate anisotropic phase test initializes a discrete single-root mode;
+     * these field runs retain continuum initial histories.
      */
-    TEST(MediumHoldout, DISABLED_Fields) {
+    TEST(MediumAnisotropic, Fields) {
         for (auto reading : {SpatialDiscretization::Collocated, SpatialDiscretization::Staggered})
             waveLadder<StandardSolverPeriodic>(false, EBReconstructionConvention::R2, true, reading,
                                                true, false, 3.7);

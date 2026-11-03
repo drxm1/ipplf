@@ -14,9 +14,8 @@
  *
  * This file holds main() of the executable HaloOrder. HaloOrderMixed.cpp adds the box that is
  * open in \f$x\f$ and periodic in \f$y\f$ and \f$z\f$; HaloOrderPulse.cpp adds the Gaussian
- * pulses across the rank seam. Reference: exact lattice value. CTest entries:
- * chdr.src.HaloOrder.serial runs only the three drift tests (filter HaloOrder.*Drift);
- * chdr.src.HaloOrder.mpi2 runs all six tests on two ranks.
+ * pulses across the rank seam. Reference: exact lattice value. The CTest entry
+ * chdr.src.HaloOrder.mpi2 runs all six tests on two ranks, including the one-rank drift replays.
  */
 #include <gtest/gtest.h>
 #include <limits>

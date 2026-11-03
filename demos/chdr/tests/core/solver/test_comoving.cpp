@@ -195,7 +195,7 @@ namespace {
                           unsigned component, double label) {
         if (ippl::Comm->rank() != 0)
             return;
-        const std::string name = std::string(singleMode ? "T7a-" : "T7b-")
+        const std::string name = std::string(singleMode ? "comoving-mode-" : "comoving-train-")
                                  + std::to_string(int(SolverType::stencil())) + "-"
                                  + std::to_string(int(solver.ebReconstructionConvention())) + "-"
                                  + std::to_string(int(solver.spatialDiscretization())) + "-"
@@ -220,7 +220,8 @@ namespace {
         if (ippl::Comm->rank() != 0)
             return;
         const auto measured = result.measured_m, p1 = result.exact_m, p2 = result.leading_m;
-        std::cout << std::setprecision(17) << (singleMode ? "T7a" : "T7b") << " stencil="
+        std::cout << std::setprecision(17) << (singleMode ? "comoving-mode" : "comoving-train")
+                  << " stencil="
                   << (solver.stencil() == Stencil::NonStandard ? "NonStandard" : "Standard")
                   << " reconstruction=" << int(solver.ebReconstructionConvention())
                   << " reading=" << int(solver.spatialDiscretization())
@@ -237,7 +238,8 @@ namespace {
                                  : solver.labelTime(Quantity::Electric, solver.completedSolves());
         for (unsigned component : {2u, 0u}) {
             SCOPED_TRACE(::testing::Message()
-                         << (singleMode ? "T7a" : "T7b") << " stencil=" << int(solver.stencil())
+                         << (singleMode ? "comoving-mode" : "comoving-train")
+                         << " stencil=" << int(solver.stencil())
                          << " reconstruction=" << int(solver.ebReconstructionConvention())
                          << " reading=" << int(solver.spatialDiscretization())
                          << " component=" << component << " label/dt=" << label / solver.getDt());
@@ -291,7 +293,7 @@ namespace {
 
     /// Refusal of the fixture input: \f$k_x=16\pi\f$ (1.5 periods in x length 0.1875) throws
     /// std::invalid_argument; \f$k_x=32\pi/3\f$ (one period) is accepted.
-    TEST(ComovingT7, RejectsNonperiodicSingleMode) {
+    TEST(Comoving, RejectsNonperiodicSingleMode) {
         constexpr double PI = ComovingPotentials::PI;
         EXPECT_THROW(
             ComovingPotentials::requirePeriodicWave({16 * PI, 0, 6 * PI}, {0.1875, 0.1875, 1.0}),
@@ -301,28 +303,28 @@ namespace {
     }
     /// One mode on Standard 8x8x64 cells, collocated R1, R2, R2Prime: measured errors equal
     /// the exact-symbol prediction to relative \f$10^{-9}\f$.
-    TEST(ComovingT7, StandardSingleMode) {
+    TEST(Comoving, StandardSingleMode) {
         comovingCase<StandardSolverPeriodic>(true);
     }
     /// The single-mode rule on NonStandard 8x8x64 cells (\f$h_x=h_y=1.5h_z\f$).
-    TEST(ComovingT7, NonStandardSingleMode) {
+    TEST(Comoving, NonStandardSingleMode) {
         comovingCase<NonStandardSolverPeriodic>(true);
     }
     /// Gaussian bunch train on Standard 32x32x64 cells, collocated R1, R2, R2Prime: exact
     /// symbols to relative \f$10^{-9}\f$, leading-order series to relative 0.10.
-    TEST(ComovingT7, StandardBunchTrain) {
+    TEST(Comoving, StandardBunchTrain) {
         comovingCase<StandardSolverPeriodic>(false);
     }
     /// The bunch-train rules on NonStandard 32x32x64 cells (\f$h_x=h_y=1.5h_z\f$).
-    TEST(ComovingT7, NonStandardBunchTrain) {
+    TEST(Comoving, NonStandardBunchTrain) {
         comovingCase<NonStandardSolverPeriodic>(false);
     }
     /// The single-mode rule in the staggered reading, Standard R2.
-    TEST(ComovingT7, StaggeredSingleMode) {
+    TEST(Comoving, StaggeredSingleMode) {
         comovingCase<StandardSolverPeriodic>(true, SpatialDiscretization::Staggered);
     }
     /// The bunch-train rules in the staggered reading, Standard R2.
-    TEST(ComovingT7, StaggeredBunchTrain) {
+    TEST(Comoving, StaggeredBunchTrain) {
         comovingCase<StandardSolverPeriodic>(false, SpatialDiscretization::Staggered);
     }
 }  // namespace

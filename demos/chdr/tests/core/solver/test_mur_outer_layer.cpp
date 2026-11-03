@@ -172,6 +172,9 @@ namespace chdr::solver::test {
      * No evolution is used. Box: 24 x 2 x 4 cells, h = 1, Mur on x; 10, 20, 40 and 80 points
      * per wavelength in both readings. The test prints the error and asserts nothing. It skips
      * on more than one rank.
+     * @todo Keep this record as the magnitude of the removed zero-ghost defect. Compare it
+     * with the exact continued-wave derivative and the repaired closure checked by
+     * PolynomialFieldsAndZeroGhostControl when changing the outer-layer reconstruction.
      */
     TEST(MurOuterLayerRecords, ZeroGhostMagnitude) {
         if (ippl::Comm->size() != 1)

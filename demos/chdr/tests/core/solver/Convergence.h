@@ -36,13 +36,13 @@ namespace chdr::solver::test {
      * body-diagonal propagation (0, 1 or 2). gamma_m selects a transverse wave
      * (0) or one with an additional longitudinal potential (1); makeMediumWave
      * supplies the corresponding scalar potential through the independent oracle.
-     * Sourced and held cases have their own fixed wave vectors.
+     * Sourced and anisotropic cases have their own fixed wave vectors.
      */
     struct WaveOptions {
         bool sourced_m;
         EBReconstructionConvention ebReconstructionConvention_m;
         SpatialDiscretization spatialDiscretization_m;
-        bool holdout_m, recordOnly_m;
+        bool anisotropicCase_m, recordOnly_m;
         double epsilon_m = 0;
         int direction_m  = 0;
         double gamma_m   = 1;
@@ -57,10 +57,10 @@ namespace chdr::solver::test {
      * throughout each refinement family; the coarsest anisotropic y count is odd.
      */
     template <class PotentialSolverBase>
-    std::array<int, SpatialDim> waveCells(int n, bool holdout) {
+    std::array<int, SpatialDim> waveCells(int n, bool anisotropicCase) {
         constexpr bool NS = std::is_same_v<PotentialSolverBase, NonStandardSolverPeriodic>;
-        return holdout ? std::array<int, SpatialDim>{5 * n / 4, 25 * n / 16, n}
-                       : std::array<int, SpatialDim>{n, n, NS ? 3 * n / 2 : n};
+        return anisotropicCase ? std::array<int, SpatialDim>{5 * n / 4, 25 * n / 16, n}
+                               : std::array<int, SpatialDim>{n, n, NS ? 3 * n / 2 : n};
     }
 
     /** @brief Load continuum samples at the labels of ChdrSolver and reconstruct initial fields.
@@ -71,17 +71,17 @@ namespace chdr::solver::test {
      */
     template <class SolverType>
     LorenzWave initializeWave(SolverType& solver, const WaveOptions& options) {
-        if (options.holdout_m)
+        if (options.anisotropicCase_m)
             solver.setSafetyFactor(0.9);
         auto wave       = options.sourced_m ? makeSourcedWave() : makeMixedWave();
         const double pi = Kokkos::numbers::pi_v<double>;
-        if (options.holdout_m)
+        if (options.anisotropicCase_m)
             wave = makeSourcedWave({4 * pi, -2 * pi, 6 * pi}, 4 * pi);
         if (options.epsilon_m > 0) {
-            solver.setSafetyFactor(options.holdout_m ? 0.9 : std::sqrt(3.0) / 2);
+            solver.setSafetyFactor(options.anisotropicCase_m ? 0.9 : std::sqrt(3.0) / 2);
             const ippl::Vector<double, SpatialDim> mode =
-                options.holdout_m   ? ippl::Vector<double, SpatialDim>(-1, 2, 3)
-                : options.sourced_m ? ippl::Vector<double, SpatialDim>(1, 2, 2)
+                options.anisotropicCase_m ? ippl::Vector<double, SpatialDim>(-1, 2, 3)
+                : options.sourced_m       ? ippl::Vector<double, SpatialDim>(1, 2, 2)
                                     : ippl::Vector<double, SpatialDim>(1, options.direction_m > 0,
                                                                        options.direction_m > 1);
             wave = makeMediumWave(2 * pi * mode, options.epsilon_m, options.gamma_m,
@@ -115,7 +115,7 @@ namespace chdr::solver::test {
     }
 
     /** @brief Check stored identities unless the caller requests a record-only case.
-     * @details The staggered holdout uses recordOnly and skips these assertions.
+     * @details The staggered anisotropic case uses recordOnly and skips these assertions.
      * Otherwise the normalized magnetic-divergence, Faraday and Gauss-formula
      * mismatches must each be at most \f$10^{-12}\f$.
      */
@@ -129,9 +129,9 @@ namespace chdr::solver::test {
         EXPECT_LE(report.gauss_m.cell_m, 1e-12);
     }
 
-    /** @brief Stable identifiers for source-free, sourced and held wave records.
+    /** @brief Stable identifiers for source-free, sourced and anisotropic wave records.
      * @details The first field names the wave family: the mixed source-free wave, the
-     * sourced Lorenz wave or the independently held anisotropic case. The remaining fields
+     * sourced Lorenz wave or the independent anisotropic case. The remaining fields
      * are stencil, reconstruction enum, reading enum and refinement count. Medium names
      * hold direction, gamma, reading enum and refinement count instead. compare_ranks.py
      * expects the names of the vacuum ladder states, so their format must not change.
@@ -139,15 +139,15 @@ namespace chdr::solver::test {
     template <class SolverType>
     std::string waveCaseName(int n, const WaveOptions& options) {
         if (options.epsilon_m > 0)
-            return std::string(options.holdout_m   ? "MediumHeld"
-                               : options.sourced_m ? "MediumSource"
-                                                   : "MediumWave")
+            return std::string(options.anisotropicCase_m ? "MediumAnisotropic"
+                               : options.sourced_m       ? "MediumSource"
+                                                         : "MediumWave")
                    + "-" + std::to_string(options.direction_m) + "-"
                    + std::to_string(int(options.gamma_m)) + "-"
                    + std::to_string(int(options.spatialDiscretization_m)) + "-" + std::to_string(n);
-        return std::string(options.holdout_m   ? "H1"
-                           : options.sourced_m ? "T4"
-                                               : "T3")
+        return std::string(options.anisotropicCase_m ? "H1"
+                           : options.sourced_m       ? "T4"
+                                                     : "T3")
                + "-" + (SolverType::stencil() == Stencil::NonStandard ? "NS" : "Std") + "-"
                + std::to_string(static_cast<int>(options.ebReconstructionConvention_m)) + "-"
                + std::to_string(static_cast<int>(options.spatialDiscretization_m)) + "-"
@@ -239,9 +239,9 @@ namespace chdr::solver::test {
     /** @brief Run one mesh while keeping the field owner at a stable address.
      * @details Helpers receive references to this owner and solver; neither is
      * copied or moved after allocation. The source, mesh and layout therefore
-     * outlive all kernels and monitor work fields. The independent anisotropic case is registered
-     * separately as a disabled test and never entered by a development ladder.
-     * For a medium holdout, n is a refinement label rather than an axis count:
+     * outlive all kernels and monitor work fields. The anisotropic case is registered
+     * separately and is not entered by the other ladders.
+     * For an anisotropic medium case, n is a refinement label rather than an axis count:
      * n=16 gives 15 by 18 by 20 cells, doubled at each subsequent level.
      * Its y decomposition differs from the development cases' x decomposition.
      */
@@ -249,20 +249,20 @@ namespace chdr::solver::test {
     WaveErrors runWave(
         int n, bool sourced, EBReconstructionConvention ebReconstructionConvention,
         SpatialDiscretization spatialDiscretization = SpatialDiscretization::Collocated,
-        bool holdout = false, bool recordOnly = false, double eps = 0, int direction = 0,
+        bool anisotropicCase = false, bool recordOnly = false, double eps = 0, int direction = 0,
         double gamma = 1) {
         const WaveOptions options{sourced,
                                   ebReconstructionConvention,
                                   spatialDiscretization,
-                                  holdout,
+                                  anisotropicCase,
                                   recordOnly,
                                   eps,
                                   direction,
                                   gamma};
-        const auto cells = eps > 0 && holdout
+        const auto cells = eps > 0 && anisotropicCase
                                ? std::array<int, 3>{15 * n / 16, 18 * n / 16, 20 * n / 16}
-                               : waveCells<PotentialSolverBase>(n, holdout);
-        auto fields      = makeBoxFieldContainer(cells, {1, 1, 1}, eps > 0 && holdout ? 1 : 0);
+                               : waveCells<PotentialSolverBase>(n, anisotropicCase);
+        auto fields = makeBoxFieldContainer(cells, {1, 1, 1}, eps > 0 && anisotropicCase ? 1 : 0);
         initializeFieldStorage(fields);
         auto handle = coreTest::makeTestSolver<PotentialSolverBase>(
             fields.getJ(), fields.getE(), fields.getB(), ebReconstructionConvention,
@@ -274,8 +274,8 @@ namespace chdr::solver::test {
             monitors = std::make_unique<Monitors>(solver.A_n);
         advanceWave(solver, wave, monitors.get());
         // Repeat the 32-cell medium cases on MPI_COMM_SELF to isolate decomposition
-        // effects from continuum error. Held cases request this comparison at every level.
-        if (holdout || (eps > 0 && n == 32))
+        // effects from continuum error. Anisotropic cases compare every level.
+        if (anisotropicCase || (eps > 0 && n == 32))
             verifySerialReference(solver, wave, int(solver.completedSolves()),
                                   spatialDiscretization, !recordOnly);
         if (monitors)
@@ -299,8 +299,10 @@ namespace chdr::solver::test {
     }
 
     inline void recordOrders(const WaveErrors& a, const WaveErrors& b, std::size_t pair) {
-        for (double value : {b.electric_m, b.magnetic_m, b.gauss_m, b.gauge_m})
-            EXPECT_TRUE(std::isfinite(value));
+        for (const auto& errors : {a, b})
+            for (double value :
+                 {errors.electric_m, errors.magnetic_m, errors.gauss_m, errors.gauge_m})
+                EXPECT_TRUE(std::isfinite(value));
         std::cout << "order pair=" << (16 << (pair - 1)) << ',' << (16 << pair)
                   << " E=" << order(a.electric_m, b.electric_m)
                   << " B=" << order(a.magnetic_m, b.magnetic_m)
@@ -320,7 +322,7 @@ namespace chdr::solver::test {
     }
 
     /** @brief Report refinement orders and enforce the specified pair/control criteria.
-     * @details Every call checks that the fine-mesh error values are finite and
+     * @details Every call checks that both levels' error values are finite and
      * reports the observed orders. recordOnly adds no order-bound assertions.
      * On waveLadder's 32-to-64 and 64-to-128 pairs, magnetic-field order must be
      * at least 1.8. R2 and R2Prime require the same electric/Gauss order; R1 instead
@@ -336,7 +338,7 @@ namespace chdr::solver::test {
      * [chew2014generalizedgauge, Eq. (4)]). Its measured round-off residual has
      * no defined truncation-error order (Deduction from the order definition
      * [salari2000CodeVerificationMms, section 4.2]).
-     * For sourced non-holdout cases, gauge order must also be at least 1.8 when
+     * For the ordinary sourced cases, gauge order must also be at least 1.8 when
      * the fine-mesh relative gauge error exceeds \f$10^{-12}\f$.
      * These are end-of-period comparisons, not temporal-envelope bounds. A driven
      * mode plus homogeneous gauge modes can interfere at individual instants
@@ -356,7 +358,7 @@ namespace chdr::solver::test {
             }
         }
         EXPECT_GE(order(a.magnetic_m, b.magnetic_m), 1.8);
-        if (options.sourced_m && !options.holdout_m && b.gauge_m > 1e-12) {
+        if (options.sourced_m && !options.anisotropicCase_m && b.gauge_m > 1e-12) {
             EXPECT_GE(order(a.gauge_m, b.gauge_m), 1.8);
         }
     }
@@ -365,12 +367,12 @@ namespace chdr::solver::test {
     void waveLadder(bool sourced, EBReconstructionConvention ebReconstructionConvention,
                     bool longRun,
                     SpatialDiscretization spatialDiscretization = SpatialDiscretization::Collocated,
-                    bool holdout = false, bool recordOnly = false, double eps = 0,
+                    bool anisotropicCase = false, bool recordOnly = false, double eps = 0,
                     int direction = 0, double gamma = 1) {
         const WaveOptions options{sourced,
                                   ebReconstructionConvention,
                                   spatialDiscretization,
-                                  holdout,
+                                  anisotropicCase,
                                   recordOnly,
                                   eps,
                                   direction,
@@ -380,7 +382,7 @@ namespace chdr::solver::test {
             if (n == 128 && !longRun)
                 break;
             errors.push_back(runWave<PotentialSolverBase>(n, sourced, ebReconstructionConvention,
-                                                          spatialDiscretization, holdout,
+                                                          spatialDiscretization, anisotropicCase,
                                                           recordOnly, eps, direction, gamma));
         }
         for (std::size_t pair = 1; pair < errors.size(); ++pair)

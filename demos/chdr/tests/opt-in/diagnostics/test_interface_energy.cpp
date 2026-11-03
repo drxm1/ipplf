@@ -18,9 +18,8 @@
  * run, and each part of each energy record (total, vacuum, dielectric, absolute sum) must
  * agree within \f$10^{-14}\f$ times the initial one-rank total.
  *
- * CTest: chdr.diagnostics.energy.serial runs NormalSplit on one rank, where the
- * one-rank repeat has the same decomposition as the distributed run.
- * chdr.diagnostics.energy.mpi2 runs both tests on two ranks.
+ * CTest: chdr.diagnostics.energy.mpi2 runs NormalSplit and TangentialSplit on two ranks.
+ * Each test includes a one-rank replay.
  */
 #include <bit>
 #include <gtest/gtest.h>

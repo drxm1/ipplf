@@ -128,9 +128,8 @@ namespace {
      * longitudinal waves have different speeds [chew2014generalizedgauge, section 2, text
      * after Eq. (22)]. \f$\varepsilon_r = 10^{155}\f$ is refused because
      * \f$\chi = \alpha\varepsilon^2\f$ [chew2014generalizedgauge, Eq. (18)] overflows.
-     * The refusals are not all independent: the non-finite-map row keeps minimum and maximum
-     * 1e155 from the row before it, and that value is refused anyway, so the row does not
-     * test the finiteness flag on its own. The monitor part builds two solvers with
+     * The non-finite-map row restores valid extrema before clearing the finiteness flag.
+     * The monitor part builds two solvers with
      * \f$\alpha = 2\f$, at \f$\varepsilon_r\f$ = 1 and 2.13; Monitors::beforeSolve() must throw
      * std::logic_error for both.
      */
@@ -162,6 +161,8 @@ namespace {
                                                 fields.getFL()),
                          IpplException);
         }
+        stats.minimum_m   = 1;
+        stats.maximum_m   = 2.13;
         stats.allFinite_m = false;
         EXPECT_THROW(
             validateMaterialUpdate({MaterialFormulation::O1VS, 1}, stats, selected, fields.getFL()),

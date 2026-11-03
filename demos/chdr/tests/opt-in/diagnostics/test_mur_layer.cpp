@@ -6,8 +6,7 @@
  * std::invalid_argument. A box on x = 1 and a \f$\Phi\f$ box on x = 0 do not throw. The
  * Monitors constructor throws std::invalid_argument on this layout. Reference: refusal.
  *
- * CTest: chdr.diagnostics.mur-layer-refusals.serial and
- * chdr.diagnostics.mur-layer-refusals.mpi2.
+ * CTest: chdr.diagnostics.mur-layer-refusals.serial.
  */
 #include <gtest/gtest.h>
 

@@ -210,8 +210,8 @@ namespace {
     void expectEnvelope(const Envelope& envelope, bool bounded) {
         // Rank 0 prints the envelope ratio last/first to the test log.
         if (ippl::Comm->rank() == 0)
-            std::cout << "A8 bounded=" << bounded << " ratio=" << envelope.last_m / envelope.first_m
-                      << '\n';
+            std::cout << "timestep bounded=" << bounded
+                      << " ratio=" << envelope.last_m / envelope.first_m << '\n';
         if (bounded) {
             EXPECT_LE(envelope.last_m, 2 * envelope.first_m);
         } else {

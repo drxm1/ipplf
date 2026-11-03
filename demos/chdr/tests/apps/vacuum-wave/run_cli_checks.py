@@ -8,7 +8,7 @@
 # one-period benchmark" (two ranks) to standard error. Each run is limited to 120 s. The
 # source hashes before and after the runs must be equal. The record cli-checks.json is the
 # manifest that chdr.vacuum.readback.partial reads.
-"""Exercise the actual driver CLI, including a coordinated MPI rejection.
+"""Exercise the chdr-vacuum-wave command line, including a coordinated MPI rejection.
 
 This checks parsing and process exit status. Mid-run numerical gates are tested
 in GoogleTest. The output-enabled zero/one-step cases supply a separate actual

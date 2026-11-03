@@ -1,10 +1,10 @@
 /** @file ReflectionRun.h
  * @brief Shared thirty-step trajectories and transverse projections for reflection tests.
  * @details Used by test_mur_reflection.cpp and test_mur_field_reflection.cpp (CTest
- * chdr.solver.mur.reflection.*, chdr.solver.mur.field-reflection.* and the disabled
- * chdr.solver.mur.holdout). verifyRanks() is defined in test_mur_reflection.cpp and
+ * chdr.solver.mur.reflection.*, chdr.solver.mur.field-reflection.* and
+ * chdr.solver.mur.anisotropic.mpi2). verifyRanks() is defined in test_mur_reflection.cpp and
  * checkFieldReflection() in test_mur_field_reflection.cpp, so both files link together.
- * MurReflection.DISABLED_Holdout also runs the code of this file.
+ * MurReflection.AnisotropicMedium also runs the code of this file.
  */
 #pragma once
 #include "OpenRunSupport.h"
