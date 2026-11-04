@@ -788,7 +788,7 @@ bisects each monotone side. In addition it requires
  K\max(h_x,h_z)<\sqrt2,\qquad K=\sqrt\varepsilon\,W.
 \]
 For any Cartesian principal root, \(\lvert K_x\rvert,\lvert K_z\rvert
-\leq K\), with \(K_ell=2\sin(k_\ell h_\ell/2)/h_\ell\).
+\leq K\), with \(K_\ell=2\sin(k_\ell h_\ell/2)/h_\ell\).
 The displayed bound therefore implies both strict phase inequalities above.
 Thus the two roots exhaust this qualified principal branch. This is a
 sufficient-bound deduction from Fallahi's symbols, not a general solver for
