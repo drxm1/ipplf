@@ -109,19 +109,30 @@ remaining extraction concern; the periodic-order basis is Oskooi–Johnson §4.5
 
 At nonzero incidence, changing the periodic box can change its selected tangent
 mode and actual central frequency. Do not interpret such a change as an
-isolation estimate. Copy the baseline's resolved `period_cells_multiplier` and
-`tangent_mode` into an explicit control input, multiplying both by the same
-positive integer when a larger period is required. Keep the primitive pair,
-cell shape and incidence unchanged. This preserves their ratio and hence the
-tangential wavenumber and central frequency; it follows directly from the
-periodic phase condition in Oskooi–Johnson Eq. (4.30). The C++ resolver checks
-whether the pinned period isolates the modified probes and gates. Preserve
+isolation estimate. Use integer `period_cells_multiplier` and `tangent_mode`
+values that preserve the baseline's exact ratio of tangent index to period
+multiplier. A common integer multiple is one option; reducing that ratio can
+also give smaller compatible integer pairs. Keep the primitive pair, cell
+shape and incidence unchanged. This preserves the tangential wavenumber and
+central frequency, apart from floating-point roundoff; it follows directly
+from the periodic phase condition in Oskooi–Johnson Eq. (4.30). The C++ resolver
+checks the directional travel-time estimates for the pinned period. Preserve
 the exact resulting control input and verify the recorded frequency and
 tangential wavenumber before comparing. `controls.csv` refuses a raw-coefficient isolation
 difference when those central reference parameters differ. It compares only
 equal recorded frequencies, with no interpolation, and reports the common valid
 bin count. Boundary, packet and probe controls remain pending until their
 completed measured records have been supplied.
+
+Two representative oblique controls are supplied. TE at 17 degrees uses
+`(M, j) = (942, 111)` against baseline `(628, 74)`; TM at 33 degrees uses
+`(476, 60)` against `(357, 45)`. Both increase separation, probe distance and
+extent, timing sampling and gate padding. Their period ratios are 3/2 and 4/3.
+Actual layer widths, source/probe coordinates, gates, modal sampling and fit
+residuals remain part of the comparison. Larger doubled-period fallbacks under
+`controls/alternatives/` are unexecuted alternatives, not evidence. The other
+two oblique baseline combinations have no dedicated enlarged-domain control
+in this selected set; do not silently assign them those control results.
 
 ## Analysis and retained evidence
 
