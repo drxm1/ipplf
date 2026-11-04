@@ -19,6 +19,7 @@ add_subdirectory(opt-in/output)
 add_subdirectory(apps/vacuum-wave)
 add_subdirectory(apps/planar-interface)
 add_subdirectory(apps/interface-movies)
+add_subdirectory(experiments/interface-reference-cases)
 
 if(BUILD_TESTING AND IPPL_ENABLE_UNIT_TESTS)
   add_subdirectory(tests)

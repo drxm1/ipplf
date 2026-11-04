@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Focused checks of reference signs/branches and recorded-data interpretation.
+
+The independent expected continuum values follow the boundary equations in
+references.org (Ellingson §§5.6–5.7, 5.10). Synthetic records test transport of
+units, masks and raw data; they are not solver validation results.
+"""
+import argparse
+import csv
+import importlib.util
+import io
+import json
+import math
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+from read_run import RunDataError, load_run
+from references import extraction_residuals
+from scan import output_input
+
+REFERENCE = None
+
+
+def calculate(polarization, epsilon1=1, epsilon2=4, kz=0, omega=.2, continuum_only=False):
+    command = [str(REFERENCE), "--polarization", polarization, "--epsilon-incident", str(epsilon1),
+               "--epsilon-transmitted", str(epsilon2), "--spacing", "1,1,1", "--dt", ".4",
+               "--kz", str(kz), "--frequencies", "-"]
+    if continuum_only:
+        command.append("--continuum-only")
+    result = subprocess.run(command, input=f"{omega:.17g}\n", text=True, capture_output=True, check=True)
+    return next(csv.DictReader(io.StringIO(result.stdout)))
+
+
+def synthetic_record():
+    plane = dict(schema_version=1, central_bin=0, geometry="aligned_plane", incidence_plane="xz",
+                 polarization="TE", component="E_y", incidence="vacuum", frequency_units="normalized",
+                 coordinate_units="normalized", epsilon=4, omega0=.5, kx0=.5, kz=0, sigma_k=.05,
+                 tail_sigmas=8, requested_cells_per_wavelength=20, cells_per_wavelength=20,
+                 separation_factor=1, face_position=0, incident_probe_x=1, other_probe_x=-1,
+                 probe_z=.5, requested_angle_degrees=0, actual_angle_degrees=0, cutoff_fraction=0,
+                 gate_incident=10, gate_other=10, timing_samples=513)
+    spectra = dict(amplitudes_units="dimensionless", angular_frequency_units="rad/s",
+                   raw_units="normalized", transform="dt sum w f exp(+i omega t)",
+                   raw_phase_origin="probe_coordinates", coefficient_phase_origin="requested_face")
+    return dict(record_version=1, status="completed", application="planar-interface", input={"case": "plane"},
+                output_factors={"system": "si", "frequency": 10}, build={"source_revision": "synthetic"},
+                effective=dict(value_system="normalized", completed_solves=10, plane=plane,
+                               box={"cells": [32, 2, 2], "spacing": [1, 1, 1]},
+                               solver={"time_step": .1}, output={"spectra": spectra}))
+
+
+def synthetic_sample():
+    return dict(angular_frequency_rad_per_s=5, omega_code=.5, r_real=.2, r_imag=0,
+                t_real=1.2, t_imag=0, valid=1, reason="", incident_real=2, incident_imag=0,
+                total_real=2.2161209223472559, total_imag=.3365883939231586,
+                transmitted_real=.16976928400248697, transmitted_imag=2.3939879678497307)
+
+
+def write_synthetic(path, record, sample):
+    (path / "run.json").write_text(json.dumps(record))
+    with (path / "spectra.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, list(sample))
+        writer.writeheader()
+        writer.writerow(sample)
+
+
+class ReferenceTests(unittest.TestCase):
+    def test_normal_component_sign_and_power(self):
+        for polarization, reflection, transmission in [("TE", -1/3, 2/3), ("TM", 1/3, 4/3)]:
+            row = calculate(polarization)
+            self.assertEqual(row["continuum_valid"], "1")
+            self.assertAlmostEqual(float(row["continuum_r_real"]), reflection, places=14)
+            self.assertAlmostEqual(float(row["continuum_t_real"]), transmission, places=14)
+            self.assertAlmostEqual(float(row["continuum_R"]) + float(row["continuum_T"]), 1, places=14)
+
+    def test_brewster_and_complex_transmitted_branch(self):
+        row = calculate("TM", kz=.2 * 2 / math.sqrt(5))
+        self.assertAlmostEqual(float(row["continuum_r_real"]), 0, places=14)
+        self.assertAlmostEqual(float(row["continuum_t_real"]), 1, places=14)
+        row = calculate("TE", epsilon1=4, epsilon2=1, kz=.2 * math.sqrt(2))
+        self.assertEqual(row["continuum_transmitted_root"], "evanescent")
+        self.assertAlmostEqual(float(row["continuum_r_real"]), 1/3, places=14)
+        self.assertAlmostEqual(float(row["continuum_r_imag"]), -2 * math.sqrt(2)/3, places=14)
+        self.assertEqual(float(row["continuum_T"]), 0)
+        self.assertEqual(row["lattice_valid"], "1")
+
+    def test_applicability_is_separate(self):
+        row = calculate("TE", epsilon2=2.13, kz=.5235987755982988, omega=.5234373912173248)
+        self.assertEqual(row["continuum_valid"], "0")
+        self.assertEqual(row["continuum_reason"], "incident_not_propagating")
+        self.assertEqual(row["continuum_R"], "")
+        self.assertEqual(row["lattice_valid"], "1")
+        row = calculate("TE", continuum_only=True)
+        self.assertEqual(row["lattice_reason"], "not_requested")
+        self.assertEqual(row["lattice_r_real"], "")
+
+
+class ReaderTests(unittest.TestCase):
+    def test_si_raw_units_and_phase_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            record, sample = synthetic_record(), synthetic_sample()
+            write_synthetic(path, record, sample)
+            run = load_run(path)
+            self.assertEqual(run.frequencies, (.5,))
+            self.assertEqual(run.samples_m[0].incident_m, 2)
+            roots = ({"lattice_k1_real": .5, "lattice_k1_imag": 0,
+                      "lattice_k2_real": 1, "lattice_k2_imag": 0},)
+            audit = extraction_residuals(run, roots)[0]
+            self.assertLess(audit["reflection_residual"], 1e-15)
+            self.assertLess(audit["transmission_residual"], 1e-15)
+            sample["angular_frequency_rad_per_s"] = 6
+            write_synthetic(path, record, sample)
+            with self.assertRaises(RunDataError):
+                load_run(path)
+
+    def test_invalid_bin_retained_and_unknown_schema_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            record, sample = synthetic_record(), synthetic_sample()
+            sample.update(valid=0, reason="nonfinite_spectrum", r_real="nan", r_imag="nan",
+                          t_real="nan", t_imag="nan", total_real="nan")
+            write_synthetic(path, record, sample)
+            run = load_run(path)
+            self.assertFalse(run.samples_m[0].valid_m)
+            self.assertIsNone(run.samples_m[0].reflection_m)
+            self.assertTrue(math.isnan(run.samples_m[0].total_m.real))
+            record["effective"]["plane"]["schema_version"] = 999
+            write_synthetic(path, record, sample)
+            with self.assertRaises(RunDataError):
+                load_run(path)
+
+    @unittest.skipUnless(importlib.util.find_spec("yaml"), "PyYAML is needed only by the runner")
+    def test_output_replacement_preserves_physical_text(self):
+        import yaml
+        forms = ["schema_version: 1\ncase: plane\nparameters: {courant: 9e-1}\n",
+                 "{schema_version: 1, case: plane, parameters: {courant: 9e-1}}\n",
+                 "case: plane\nparameters: {courant: 9e-1}\noutput:\n  directory: old\n"]
+        for original in forms:
+            resolved = output_input(original, Path('/tmp/example output'))
+            self.assertIn("parameters: {courant: 9e-1}", resolved)
+            self.assertEqual(yaml.safe_load(resolved)["output"]["directory"], '/tmp/example output')
+        with self.assertRaises(ValueError):
+            output_input("case: plane\ncase: plane\n", Path('/tmp/example'))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--reference", required=True, type=Path)
+    options, remaining = parser.parse_known_args()
+    REFERENCE = options.reference.resolve()
+    unittest.main(argv=[__file__, *remaining])

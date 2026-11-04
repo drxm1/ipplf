@@ -1,0 +1,179 @@
+# Planar-interface reference tools
+
+These tools run explicit `planar-interface` inputs, read their recorded results,
+and evaluate continuum and aligned-lattice references through a small C++ program.
+[references.org](references.org) derives the coefficients, field conventions,
+phase transfer and applicability limits. Calculating a reference or completing a
+simulation does not by itself establish agreement with the physical problem.
+
+The C++ utility uses only standard C++ and the independent functions in
+[`InterfaceOracles.h`](../../tests/apps/planar-interface/InterfaceOracles.h).
+It does not initialize MPI or an IPPL simulation. Python performs orchestration,
+record validation and analysis; it does not reimplement the Fresnel formulas.
+
+## Build and requirements
+
+In an IPPL build configured with the ChDR applications, build:
+
+```sh
+cmake --build /path/to/build --target planar-interface interface-reference
+```
+
+The Python readers need Python 3.10 or newer and its standard library.
+`scan.py` additionally needs PyYAML. An MPI launcher is needed only when requesting
+more than one rank. The focused CTest check is `chdr.interface.reference-tools`.
+
+## Run explicit inputs
+
+For example, an aligned TE row can be requested with:
+
+```yaml
+schema_version: 1
+case: plane
+units: {system: normalized}
+parameters:
+  polarization: TE
+  incidence: vacuum
+  epsilon: 2.13
+  angle_degrees: 30
+  cells_per_wavelength: 20
+  cell_shape_y: 1
+  cell_shape_z: 1
+```
+
+Numerical resolution, modes, pulse placement and gates are calculated by the C++
+application. The runner changes only `output/directory`; it preserves the spelling
+of every physical parameter, including exponent notation. Inputs must be explicit
+YAML mappings without anchors or aliases. An existing `output` mapping must contain
+a scalar `directory`; otherwise omit `output` and the runner adds it.
+
+```sh
+python3 demos/chdr/experiments/interface-reference-cases/scan.py \
+  --binary /path/to/immutable/planar-interface \
+  --output-root /path/to/build/interface-reference-cases \
+  --ranks 1 --threads 1 --jobs 2 --max-cores 2 \
+  normal.yaml oblique.yaml
+```
+
+Use a copied immutable executable if the source or build is changing during a
+campaign. Its SHA-256 is checked before and after each run. The runner records the
+binary's compiled identity from `run.json` separately from the analysis checkout's
+identity at launch; those two revisions need not be identical.
+
+`jobs * ranks * threads` must fit the explicit CPU budget, which cannot exceed the
+current process's local CPU affinity. Each job receives `OMP_NUM_THREADS` and
+`OMP_PROC_BIND=false`. Multi-rank runs use `--mpi` (default `mpiexec`) and `-n`;
+extra arguments can be supplied as repeated `--mpi-arg=VALUE` options. Use
+`--timeout SECONDS` for a per-attempt time limit. Each subprocess is invoked with an
+argument list, without a command interpreter.
+
+Each row receives a fresh directory:
+
+```text
+OUTPUT_ROOT/
+  scan-SCAN_ID.json
+  ROW_ID/SCAN_ID/
+    input.original.yaml
+    input.yaml
+    attempt.json
+    stdout.txt
+    stderr.txt
+    output/
+      run.json
+      spectra.csv
+      ...other selected application outputs...
+```
+
+Original inputs are copied before any simulation starts. Repeating a scan creates
+new attempts; existing results are not replaced. Preparation, execution, timeout
+and output-reading failures remain in the manifest with their reasons. CLI exit
+status is one if any attempt failed. A completed entry means that a completed run
+record and a consistent spectrum were read. Its `physics_validation` remains
+`not_performed`; agreement, boundary isolation and angular errors require separate
+analysis.
+
+## Read and evaluate one completed run
+
+```sh
+python3 demos/chdr/experiments/interface-reference-cases/read_run.py RUN_OUTPUT
+python3 demos/chdr/experiments/interface-reference-cases/references.py RUN_OUTPUT \
+  --binary /path/to/interface-reference --output NEW_REFERENCE_DIRECTORY
+```
+
+The reader supports the first aligned-row record (plane schema absent, treated as
+version zero) and plane schema one. It requires explicit normalized effective
+metadata and `geometry: aligned_plane`. Unsupported geometry/schema combinations
+are rejected rather than interpreted from directory names. Version one validates
+the declared transform, raw units and separate probe/coefficient phase origins.
+SI frequency columns are converted with the recorded output factor and checked
+against `omega_code`. Raw transforms remain in normalized solver units.
+
+An invalid frequency bin is retained with its reason. Undefined coefficients are
+represented as `None` by the Python reader; invalid raw non-finite values remain
+available for diagnosis. Use `valid_m` when selecting data for comparisons. Do not
+turn an invalid-bin mask into a zero reflected or transmitted signal.
+
+The reference directory is new and contains `frequencies.txt`, `reference.csv`,
+`stderr.txt` and `reference.json`. The JSON record preserves the exact command,
+input/output identities, reference executable hash and compiled revision, analysis
+source identity, and reference-document hash. It also records discrepancies between
+published coefficients and a reconstruction from raw spectra when that audit is
+applicable. Those discrepancies test extraction consistency, not physical accuracy.
+
+## Direct reference-program interface
+
+Write one normalized angular frequency per line in `frequencies.txt`, then run:
+
+```sh
+interface-reference --polarization TM \
+  --epsilon-incident 1 --epsilon-transmitted 2.13 \
+  --spacing 1,1,1 --dt 0.5196152422706632 --kz 0 \
+  --frequencies frequencies.txt > reference.csv
+```
+
+`--frequencies -` reads stdin. `--identity` reports the reference schema and compiled
+source identity. Each output row contains `omega_code`, continuum complex roots
+and coefficients, continuum `R` and `T`, the continuum incidence angle, and aligned
+lattice roots/coefficients. Continuum and lattice validity/reasons are separate.
+A bin can have propagating lattice roots without a propagating continuum incident
+root; no physical flux normalization is emitted for the latter. Complex transmitted
+roots can still have valid reference coefficients, even when a measurement method
+does not support that branch. See the derivations for the exact meanings.
+
+`--continuum-only` disables the aligned-lattice result. For a rotated continuum
+reference, `--kz` denotes the signed tangential wavenumber in the interface's local
+normal/tangent basis; it must not be copied blindly from a laboratory wavevector.
+The aligned lattice formulas are not an exact oracle for a rotated material map.
+The Python wrapper also rejects an off-cell-boundary requested face for this
+unshifted lattice formula; use `--continuum-only` for the requested-face shifted
+comparison. It checks the recorded Standard/staggered/O1VS configuration before
+requesting the aligned lattice reference.
+The current Python run reader accepts only its documented aligned schemas; a new
+rotated record needs an explicit schema/reader extension.
+
+## Python interfaces for case analyses
+
+- `read_run.load_run(path)` returns `PlaneRun`. Its `plane`, `spacing`, `dt` and
+  `frequencies` properties expose normalized effective values. `samples_m` retains
+  bin order and `central_bin_m` identifies the central bin.
+- Each `SpectrumSample` has `omega_m`, `reflection_m`, `transmission_m`, `valid_m`,
+  `reason_m`, and optional raw `incident_m`, `total_m`, `transmitted_m` transforms.
+- `references.evaluate(run, binary, new_directory, continuum_only=False)` returns
+  a `ReferenceTable` with `rows_m` and its provenance in `record_m`.
+- `references.coefficient(row, "continuum" or "lattice", "r" or "t" or "k1" or
+  "k2")` returns the corresponding complex reference or `None` when unavailable.
+  Power columns are `continuum_R` and `continuum_T`; the angle column is
+  `continuum_angle_degrees`. For measured transmission power use the explicitly
+  calculated `continuum_transmission_weight` times the squared magnetic/electric
+  amplitude magnitude in the recorded basis; do not infer that weight by dividing
+  two potentially small reference quantities.
+- `references.extraction_residuals(run, rows)` audits the raw-to-face phase transfer
+  using the C++ lattice roots. The spectra must be from the aligned schema and the
+  selected measured bins must have propagating roots.
+
+Keep the run input, resolved record, spectra, reference invocation and output,
+comparison data and relevant control runs together when retaining a result. Store
+the selected frame/series data needed to reproduce reported field profiles or
+movies, not only their rendered pictures. Artifact retention and storage policy
+belong to the surrounding experiment workflow; these programs have no external
+research-directory dependency.
