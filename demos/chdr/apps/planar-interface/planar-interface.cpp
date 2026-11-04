@@ -189,22 +189,32 @@ namespace chdr::apps::planarInterface {
         node["angle_definition"] = "continuum phase angle relative to interface normal";
     }
 
+    /// Retain both the requested face and the transition produced by inclusive cell-centre
+    /// sampling.
+    void recordPlaneMaterial(conduit_cpp::Node& node, const PlaneRow& p) {
+        node["face_position"]             = p.facePosition_m;
+        node["represented_face_position"] = p.dielectricCells_m * p.h_m[0];
+        node["face_position_error"]       = p.dielectricCells_m * p.h_m[0] - p.facePosition_m;
+        node["material_sampling"]         = "cell_centres_inclusive_upper_face";
+        node["cell_size"]                 = p.h_m[0];
+        node["dielectric_cells"]          = p.dielectricCells_m;
+    }
+
     /// Record component positions and the actual finite observation intervals.
     void recordPlaneGeometry(conduit_cpp::Node node, const PlaneRow& p) {
-        node["geometry"]                  = "aligned_plane";
-        const bool tm                     = p.polarization_m == Polarization::TM;
-        node["coordinate_units"]          = "normalized";
-        node["incidence_plane"]           = "xz";
-        node["component"]                 = tm ? "H_y" : "E_y";
-        node["face_position"]             = p.dielectricCells_m * p.h_m[0];
-        node["represented_face_position"] = p.dielectricCells_m * p.h_m[0];
-        node["incident_probe_x"]          = p.incidentProbe_m;
-        node["other_probe_x"]             = p.otherProbe_m;
-        node["probe_z"]                   = (tm ? 1 : 0.5) * p.h_m[2];
-        node["gate_incident"]             = p.gateIncident_m;
-        node["gate_other"]                = p.gateOther_m;
-        node["timing_samples"]            = p.timingSamples_m;
-        node["separation_factor"]         = p.separationFactor_m;
+        node["geometry"]         = "aligned_plane";
+        const bool tm            = p.polarization_m == Polarization::TM;
+        node["coordinate_units"] = "normalized";
+        node["incidence_plane"]  = "xz";
+        node["component"]        = tm ? "H_y" : "E_y";
+        recordPlaneMaterial(node, p);
+        node["incident_probe_x"]  = p.incidentProbe_m;
+        node["other_probe_x"]     = p.otherProbe_m;
+        node["probe_z"]           = (tm ? 1 : 0.5) * p.h_m[2];
+        node["gate_incident"]     = p.gateIncident_m;
+        node["gate_other"]        = p.gateOther_m;
+        node["timing_samples"]    = p.timingSamples_m;
+        node["separation_factor"] = p.separationFactor_m;
     }
 
     /// Spectral schema and sample labels suffice to reproduce every raw-to-face conversion.

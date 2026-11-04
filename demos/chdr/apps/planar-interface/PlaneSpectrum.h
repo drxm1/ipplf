@@ -135,7 +135,7 @@ namespace chdr::apps::planarInterface {
         const double side = p.incidentFromVacuum_m ? -1 : 1;
         const double ki   = side * planeNormalK(p, omega, planeMedia(p)[0]);
         const double kt   = side * planeNormalK(p, omega, planeMedia(p)[1]);
-        const double face = p.dielectricCells_m * p.h_m[0];
+        const double face = p.facePosition_m;
         return {(total / incident - 1.0)
                     * std::exp(std::complex<double>(0, -2 * ki * (face - p.incidentProbe_m))),
                 transmitted / incident

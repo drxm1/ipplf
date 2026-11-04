@@ -15,6 +15,7 @@ namespace chdr::apps::planarInterface {
         completePlaneSpectrum(p);
         const double side     = p.incidentFromVacuum_m ? 1 : -1;
         const double face     = p.dielectricCells_m * p.h_m[0];
+        p.facePosition_m      = face;
         const double offset   = p.polarization_m == Polarization::TE ? 0.5 : 1;
         p.envelopeHalfWidth_m = p.tailSigmas_m / p.sigmaK_m;
         p.pulseCentre_m       = face + side * (3 * p.h_m[0] + p.envelopeHalfWidth_m);

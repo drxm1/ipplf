@@ -16,6 +16,10 @@ add_test(NAME chdr.interface.band-input COMMAND test-plane-interface
                                                 --gtest_filter=PlaneInterface.BandInput)
 add_test(NAME chdr.interface.band-spectrum COMMAND test-plane-interface
                                                    --gtest_filter=PlaneInterface.BandSpectrum)
+add_test(NAME chdr.interface.shifted-face COMMAND test-plane-interface
+                                                  --gtest_filter=PlaneInterface.ShiftedFace)
+add_test(NAME chdr.interface.scaled-cell COMMAND test-plane-interface
+                                                 --gtest_filter=PlaneInterface.ScaledCell)
 set_tests_properties(
   chdr.interface.normal
   chdr.interface.long.brewster
@@ -24,6 +28,8 @@ set_tests_properties(
   chdr.interface.band-domain
   chdr.interface.band-input
   chdr.interface.band-spectrum
+  chdr.interface.shifted-face
+  chdr.interface.scaled-cell
   PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800 LABELS
              "chdr;interface")
 set_tests_properties(chdr.interface.long.brewster PROPERTIES LABELS "chdr;interface;long")

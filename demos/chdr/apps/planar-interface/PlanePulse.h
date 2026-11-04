@@ -42,7 +42,8 @@ namespace chdr::apps::planarInterface {
      */
     struct PlanePulse {
         Kokkos::View<double* [3]> modes_m;
-        double kz_m, centre_m, dt_m, hx_m, hz_m, face_m, length_m, epsilon_m, incidentEpsilon_m;
+        double kz_m, centre_m, dt_m, hx_m, hz_m, epsilon_m, incidentEpsilon_m;
+        int cellsX_m, dielectricCells_m;
         bool tm_m;
 
         explicit PlanePulse(const PlaneRow& p)
@@ -51,10 +52,10 @@ namespace chdr::apps::planarInterface {
             , dt_m(p.dt_m)
             , hx_m(p.h_m[0])
             , hz_m(p.h_m[2])
-            , face_m(p.dielectricCells_m * p.h_m[0])
-            , length_m(p.cellsX_m * p.h_m[0])
             , epsilon_m(p.epsilon_m)
             , incidentEpsilon_m(planeMedia(p)[0])
+            , cellsX_m(p.cellsX_m)
+            , dielectricCells_m(p.dielectricCells_m)
             , tm_m(p.polarization_m == Polarization::TM) {
             const auto modes = planeModes(p);
             modes_m          = decltype(modes_m)("Plane pulse modes", modes.size());
@@ -75,10 +76,15 @@ namespace chdr::apps::planarInterface {
             return result;
         }
 
-        /// Periodic cell material; component samples adjoining the aligned face use cell centres.
+        /** @brief Look up a material cell using the resolved inclusive-centre map.
+         * @details The curl weights query cell centres. Using their integer cell avoids
+         * changing a tie through the rounded component-coordinate plus/minus half-spacing.
+         * The resolver counted cells with exactly MaterialOwner's centre expression.
+         */
         KOKKOS_INLINE_FUNCTION double epsilon(double x) const {
-            x -= Kokkos::floor(x / length_m) * length_m;
-            return x < face_m ? epsilon_m : 1;
+            const int cell    = static_cast<int>(Kokkos::floor(x / hx_m));
+            const int wrapped = (cell % cellsX_m + cellsX_m) % cellsX_m;
+            return wrapped < dielectricCells_m ? epsilon_m : 1;
         }
 
         KOKKOS_INLINE_FUNCTION double operator()(double x, double, double z, double t,
@@ -193,11 +199,10 @@ namespace chdr::apps::planarInterface {
         if (cadence <= 0 || p.steps_m < std::max(p.gateIncident_m, p.gateOther_m))
             throw std::invalid_argument(
                 "Plane measurement needs positive cadence and complete gates");
-        return InterfaceRun(
-            {{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m, seam},
-            material::TwoMaterialMap{material::PlanarSlab{0, 0, p.dielectricCells_m * p.h_m[0]},
-                                     p.epsilon_m, 1.0},
-            {.safetyFactor_m = p.courant_m});
+        return InterfaceRun({{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m, seam},
+                            material::TwoMaterialMap{material::PlanarSlab{0, 0, p.facePosition_m},
+                                                     p.epsilon_m, 1.0},
+                            {.safetyFactor_m = p.courant_m});
     }
 
     /** @brief Initialize and measure a caller-owned run, optionally observing its same states.

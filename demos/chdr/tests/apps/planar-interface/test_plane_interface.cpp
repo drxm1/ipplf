@@ -156,6 +156,27 @@ namespace chdr::apps::planarInterface {
         EXPECT_NEAR(equivalent.actualAngleDegrees_m, p.actualAngleDegrees_m, 1e-12);
     }
 
+    /// A fixed physical wavelength and face fit the planned three-resolution normal ladder.
+    void checkPhysicalRequests() {
+        input::RunInput input;
+        input.parameters_m["cell_shape_y"] = 2.0;
+        input.parameters_m["cell_shape_z"] = 2.0;
+        for (int n : {20, 40, 80})
+            for (double fraction : {0.0, 0.25, 0.5}) {
+                input.parameters_m["cells_per_wavelength"] = n;
+                input.parameters_m["cell_size"]            = 20.0 / n;
+                input.parameters_m["face_position"]        = 500 + fraction * 20 / n;
+                const auto p                               = planeRow(input);
+                EXPECT_NEAR(p.omega0_m, 2 * std::numbers::pi / (20 * std::sqrt(2.13)), 1e-15);
+                EXPECT_EQ(p.dielectricCells_m, 25 * n + (fraction == 0.5));
+                EXPECT_EQ(p.facePosition_m, 500 + fraction * p.h_m[0]);
+            }
+        input.parameters_m["face_position"] = 1.0;
+        EXPECT_THROW(planeRow(input), std::invalid_argument);
+        input.parameters_m["cell_size"] = 0.0;
+        EXPECT_THROW(planeRow(input), std::invalid_argument);
+    }
+
     /// Request parsing preserves the continuum angle and enforces mutually exclusive inputs.
     TEST(PlaneInterface, RowInput) {
         input::RunInput input;
@@ -174,6 +195,104 @@ namespace chdr::apps::planarInterface {
         invalid.angleDegrees_m   = 30;
         invalid.cutoffFraction_m = 0;
         EXPECT_THROW(resolvePlaneRow(invalid), std::invalid_argument);
+        checkPhysicalRequests();
+    }
+
+    /** @brief Check sampled cells and the harmonic weights actually used by the TM initializer.
+     * The cell predicate includes upper-face ties. Harmonic coefficients follow the existing
+     * MaterialOwner rule [eymard2000FiniteVolume, section 7.1, Example 7.1].
+     */
+    void checkPlaneMaterial(InterfaceSolver& state, const material::MaterialOwner& owner,
+                            const PlaneRow& p) {
+        const PlanePulse pulse(p);
+        const auto coords =
+            material::detail::coordinates(state.A_n.get_mesh(), state.A_n.getLayout());
+        const auto epsilon = owner.epsilon(), face = owner.derive(material::HarmonicFace<0>{});
+        double local = 0, error = 0;
+        Kokkos::parallel_reduce(
+            "Plane sampled material", state.A_n.getFieldRangePolicy(),
+            KOKKOS_LAMBDA(int i, int j, int k, double& worst) {
+                const double x = coords.centre(coords.global(i, j, k))[0];
+                const double a = pulse.epsilon(x), b = pulse.epsilon(x + coords.spacing_m[0]);
+                worst = Kokkos::fmax(worst, Kokkos::abs(a - epsilon(i, j, k)));
+                worst = Kokkos::fmax(worst, Kokkos::abs(2 / (1 / a + 1 / b) - face(i, j, k)));
+            },
+            Kokkos::Max<double>(local));
+        MPI_Allreduce(&local, &error, 1, MPI_DOUBLE, MPI_MAX, state.A_n.getLayout().comm);
+        EXPECT_LE(error, 1e-14);
+        EXPECT_EQ(owner.statistics().marked_m,
+                  std::uint64_t(p.dielectricCells_m) * p.cellsY_m * p.cellsZ_m);
+    }
+
+    /** @brief Move independent represented-face coefficients to the requested phase origin.
+     * Deduction from the incident/reflected/transmitted propagation phases
+     * [schneider2010UnderstandingFdtd, section 5.8.2, Eqs. (5.96)-(5.99)].
+     */
+    LatticeCoefficients shiftedPlaneReference(const PlaneRow& p, double omega) {
+        const auto media = planeMedia(p);
+        auto reference = latticeCoefficients(p.polarization_m, media[0], media[1], p.h_m, p.dt_m, 0,
+                                             p.kz_m, omega);
+        const double shift = p.facePosition_m - p.dielectricCells_m * p.h_m[0];
+        const double sign  = p.incidentFromVacuum_m ? -1 : 1;
+        reference.k1 *= sign;
+        reference.k2 *= sign;
+        reference.r *= std::exp(Complex(0, -2 * shift) * reference.k1);
+        reference.t *= std::exp(Complex(0, shift) * (reference.k2 - reference.k1));
+        return reference;
+    }
+
+    /// Synthetic fields at the probes must recover the given requested-face amplitudes.
+    void checkSyntheticPlanePhase(const PlaneRow& p, double omega,
+                                  const LatticeCoefficients& reference) {
+        const Complex incoming(0.7, -0.4);
+        const double xi        = p.incidentProbe_m - p.facePosition_m;
+        const double xt        = p.otherProbe_m - p.facePosition_m;
+        const Complex incident = incoming * std::exp(Complex(0, xi) * reference.k1);
+        const Complex total =
+            incident + incoming * reference.r * std::exp(Complex(0, -xi) * reference.k1);
+        const Complex transmitted =
+            incoming * reference.t * std::exp(Complex(0, xt) * reference.k2);
+        const auto result = planeFaceCoefficients(p, omega, incident, total, transmitted);
+        EXPECT_LE(std::abs(result[0] - reference.r), 1e-14);
+        EXPECT_LE(std::abs(result[1] - reference.t), 1e-14);
+    }
+
+    /// A measured shifted face must match the independent aligned lattice result and phase shift.
+    void checkShiftedPlane(const PlaneRow& p) {
+        const auto result = measurePlane(p, 10, 0, [&](auto& state, const auto& owner) {
+            checkPlaneMaterial(state, owner, p);
+        });
+        EXPECT_LE(result.drift_m, 1e-12);
+        if (ippl::Comm->rank() != 0)
+            return;
+        for (size_t bin = 0; bin < result.omega_m.size(); ++bin) {
+            ASSERT_TRUE(result.valid(bin)) << result.reason_m[bin];
+            const auto reference = shiftedPlaneReference(p, result.omega_m[bin]);
+            checkSyntheticPlanePhase(p, result.omega_m[bin], reference);
+            EXPECT_LE(std::abs(result.r_m[bin] - reference.r), 1e-10);
+            EXPECT_LE(std::abs(result.t_m[bin] - reference.t), 1e-10);
+            std::cout << "shift/h=" << (p.facePosition_m / p.h_m[0] - p.dielectricCells_m)
+                      << " lattice errors=" << std::abs(result.r_m[bin] - reference.r) << ','
+                      << std::abs(result.t_m[bin] - reference.t) << '\n';
+        }
+    }
+
+    /// Quarter-cell shifts retain the map; the inclusive half-cell tie moves it by one cell.
+    TEST(PlaneInterface, ShiftedFace) {
+        PlaneRequest request;
+        request.cellsPerWavelength_m = 8;
+        request.h_m                  = {1, 2, 2};
+        for (const auto polarization : {Polarization::TE, Polarization::TM})
+            for (double fraction : {0.0, 0.25, 0.5}) {
+                request.polarization_m = polarization;
+                request.facePosition_m = 200 + fraction;
+                const auto p           = resolvePlaneRow(request);
+                EXPECT_EQ(p.dielectricCells_m, 200 + (fraction == 0.5));
+                checkShiftedPlane(p);
+            }
+        request.incidentFromVacuum_m = false;
+        request.facePosition_m       = 500.5;
+        checkShiftedPlane(resolvePlaneRow(request));
     }
 
     /// Compare both layouts against independent lattice coefficients across the measured band.
@@ -187,6 +306,23 @@ namespace chdr::apps::planarInterface {
             EXPECT_LE(std::abs(first.r_m[bin] - second.r_m[bin]), 1e-7);
             EXPECT_LE(std::abs(first.t_m[bin] - second.t_m[bin]), 1e-7);
         }
+    }
+
+    /// Scaling every length and time together preserves dimensionless coefficients and cells.
+    TEST(PlaneInterface, ScaledCell) {
+        PlaneRequest request;
+        request.cellsPerWavelength_m = 8;
+        request.h_m                  = {1, 2, 2};
+        request.facePosition_m       = 200;
+        const auto original          = resolvePlaneRow(request);
+        request.h_m                  = {0.5, 1, 1};
+        request.facePosition_m       = 100;
+        const auto scaled            = resolvePlaneRow(request);
+        EXPECT_EQ(scaled.cellsX_m, original.cellsX_m);
+        EXPECT_EQ(scaled.gateIncident_m, original.gateIncident_m);
+        EXPECT_DOUBLE_EQ(scaled.omega0_m, 2 * original.omega0_m);
+        EXPECT_DOUBLE_EQ(scaled.dt_m, original.dt_m / 2);
+        checkExpandedPlane(original, scaled);
     }
 
     /// Denser speed sampling and enlarged layers/gates qualify one non-preset oblique TM row.

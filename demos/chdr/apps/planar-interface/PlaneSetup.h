@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "apps/planar-interface/PlaneRow.h"
@@ -72,6 +73,20 @@ namespace chdr::apps::planarInterface {
         return speed;
     }
 
+    /// Validate physical geometry before selecting any material cells or periodic modes.
+    inline void validatePlaneGeometry(const PlaneRequest& r) {
+        for (double h : r.h_m)
+            if (!std::isfinite(h) || h <= 0)
+                throw std::invalid_argument("Plane cell spacings must be finite and positive");
+        if (r.facePosition_m && (!std::isfinite(*r.facePosition_m) || *r.facePosition_m <= 0))
+            throw std::invalid_argument("Plane face_position must be finite and positive");
+        if (r.angleDegrees_m && r.transversePeriod_m)
+            throw std::invalid_argument(
+                "angle_degrees and transverse_period are mutually exclusive");
+        if (r.probeCells_m < 2 || r.timingSamples_m < 17 || r.gatePaddingSteps_m < 0)
+            throw std::invalid_argument("Plane probes, timing samples or gate padding are invalid");
+    }
+
     /// Reject non-finite or out-of-range requests before any distributed field allocation.
     inline void validatePlaneRequest(const PlaneRequest& r) {
         if (!std::isfinite(r.epsilon_m) || r.epsilon_m < 1 || !std::isfinite(r.courant_m)
@@ -80,14 +95,7 @@ namespace chdr::apps::planarInterface {
             || !std::isfinite(r.separationFactor_m) || r.separationFactor_m < 1)
             throw std::invalid_argument(
                 "Invalid plane material, resolution, Courant or pulse settings");
-        for (double h : r.h_m)
-            if (!std::isfinite(h) || h <= 0)
-                throw std::invalid_argument("Plane cell spacings must be finite and positive");
-        if (r.angleDegrees_m && r.transversePeriod_m)
-            throw std::invalid_argument(
-                "angle_degrees and transverse_period are mutually exclusive");
-        if (r.probeCells_m < 2 || r.timingSamples_m < 17 || r.gatePaddingSteps_m < 0)
-            throw std::invalid_argument("Plane probes, timing samples or gate padding are invalid");
+        validatePlaneGeometry(r);
     }
 
     /// Check conversion before narrowing a computed cell or step count.
@@ -241,6 +249,7 @@ namespace chdr::apps::planarInterface {
         p.dielectricCells_m = p.incidentFromVacuum_m ? otherCells : incidentCells;
         const double side   = p.incidentFromVacuum_m ? 1 : -1;
         const double face   = p.dielectricCells_m * p.h_m[0];
+        p.facePosition_m    = face;
         p.incidentProbe_m   = face + side * distance;
         p.otherProbe_m      = face - side * distance;
         p.pulseCentre_m     = p.incidentProbe_m + side * p.envelopeHalfWidth_m;
@@ -281,11 +290,52 @@ namespace chdr::apps::planarInterface {
         return planeInteger(std::ceil(cells * p.separationFactor_m));
     }
 
+    /** @brief Count centres at or below a physical face using PlanarSlab's inclusive predicate.
+     * @details The correction compares the same coordinate expression as MaterialOwner;
+     * it avoids moving an exact centre tie because division rounded on the opposite side.
+     * The represented transition is the boundary after these cells, not the requested face.
+     */
+    inline int planeDielectricCells(double face, double h) {
+        int cells = planeInteger(std::floor(face / h + 0.5));
+        while (cells > 0 && (cells - 0.5) * h > face)
+            --cells;
+        while ((cells + 0.5) * h <= face)
+            ++cells;
+        return cells;
+    }
+
+    /// A fixed face may enlarge the dielectric layer, but cannot violate its timing minimum.
+    inline int fixedPlaneLayer(int minimum, std::optional<double> face, double h) {
+        if (!face)
+            return minimum;
+        const int cells = planeDielectricCells(*face, h);
+        if (cells < minimum)
+            throw std::invalid_argument(
+                "face_position leaves too few dielectric cells for the "
+                "qualified gates; need at least "
+                + std::to_string(minimum));
+        return cells;
+    }
+
+    /// Apply a physical face to its dielectric layer and re-evaluate the dependent return paths.
+    inline void resolvePlaneLayers(PlaneRow& p, const PlaneTiming& timing, double source,
+                                   double distance, std::optional<double> face) {
+        int other = planeOtherLayer(timing, p, source, distance);
+        if (p.incidentFromVacuum_m)
+            other = fixedPlaneLayer(other, face, p.h_m[0]);
+        int incident = planeIncidentLayer(timing, p, source, distance, other);
+        if (!p.incidentFromVacuum_m)
+            incident = fixedPlaneLayer(incident, face, p.h_m[0]);
+        placePlanePacket(p, incident, other, distance);
+        if (face)
+            p.facePosition_m = *face;
+    }
+
     /** @brief Choose layers and gates using the completed spectrum and physical probe offsets.
      * The extra samples include the last half-step-labelled sample after the latest intended
      * arrival. Layer searches then exclude all listed return paths until after these gates.
      */
-    inline void resolvePlaneLayout(PlaneRow& p, int probeCells) {
+    inline void resolvePlaneLayout(PlaneRow& p, int probeCells, std::optional<double> face = {}) {
         const double h        = p.h_m[0];
         const double distance = (probeCells + (p.polarization_m == Polarization::TE ? 0.5 : 0)) * h;
         p.envelopeHalfWidth_m = std::ceil(p.tailSigmas_m / (p.sigmaK_m * h)) * h;
@@ -295,9 +345,7 @@ namespace chdr::apps::planarInterface {
                                         + 3.0 + p.gatePaddingSteps_m);
         p.gateOther_m    = planeInteger(std::ceil(timing.window(source, distance)[1] / p.dt_m) + 3.0
                                         + p.gatePaddingSteps_m);
-        const int other  = planeOtherLayer(timing, p, source, distance);
-        const int incident = planeIncidentLayer(timing, p, source, distance, other);
-        placePlanePacket(p, incident, other, distance);
+        resolvePlaneLayers(p, timing, source, distance, face);
         p.steps_m = std::max(p.gateIncident_m, p.gateOther_m) + 1;
     }
 
@@ -349,7 +397,7 @@ namespace chdr::apps::planarInterface {
             throw std::invalid_argument(
                 "cutoff_fraction must be in [0,1), and positive for oblique incidence");
         completePlaneSpectrum(p);
-        resolvePlaneLayout(p, r.probeCells_m);
+        resolvePlaneLayout(p, r.probeCells_m, r.facePosition_m);
         selectPlaneBins(p, r.frequencyBins_m, r.bandSigmas_m, r.incidentFloor_m);
         return p;
     }

@@ -209,6 +209,11 @@ def check_plane(binary, directory):
         assert spectra['coefficient_phase_origin'] == 'requested_face'
         assert item['effective']['plane']['schema_version'] == 1
         assert item['effective']['plane']['central_bin'] == 0
+        geometry = item['effective']['plane']
+        assert geometry['face_position'] == geometry['represented_face_position']
+        assert geometry['represented_face_position'] == geometry['dielectric_cells'] * geometry['cell_size']
+        assert geometry['face_position_error'] == 0
+        assert geometry['material_sampling'] == 'cell_centres_inclusive_upper_face'
         assert item['effective']['completed_solves'] > 0
         assert item['effective']['observations']['fields']['enabled'] == 0
     assert json.loads((normal / 'wave.pvti.series').read_text())['files'] == []

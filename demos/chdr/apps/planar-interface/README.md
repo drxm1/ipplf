@@ -86,7 +86,9 @@ Both use one tangential period. This follows from periodic phase matching
 | `angle_degrees` | Continuum phase angle relative to the interface normal, strictly between -90 and 90; default zero when no period is supplied. |
 | `transverse_period` | Alternative physical period in normalized code-length units; mutually exclusive with angle. |
 | `cells_per_wavelength` | Requested dielectric resolution at the central frequency, greater than two; default 20. |
-| `cell_shape_y`, `cell_shape_z` | Cell spacings relative to h_x=1; both default to one and remain fixed during angle resolution. |
+| `cell_size` | Physical h_x in normalized code-length units; positive, default one. All three spacings scale with this value. |
+| `cell_shape_y`, `cell_shape_z` | Cell spacings relative to h_x=`cell_size`; both default to one and remain fixed during angle resolution. |
+| `face_position` | Optional requested upper dielectric face x in normalized code-length units. Omission selects the layer from timing constraints. An explicit value must leave at least the required number of dielectric cells. |
 | `courant` | Fraction of the Standard vacuum CFL limit, strictly between zero and one; default 0.9. |
 | `tail_sigmas` | Gaussian spectral/envelope extent, greater than three; default 8. |
 | `cutoff_fraction` | Fraction of the normal-wavenumber interval above the shared propagation cutoff excluded from the useful band; default zero at normal incidence and 0.5 otherwise. Must be in [0,1), and positive at oblique incidence. |
@@ -100,8 +102,8 @@ Both use one tangential period. This follows from periodic phase matching
 
 Coefficient extraction requires each bin to propagate in both media under both
 the continuum and lattice descriptions; unusable bins retain their raw measurements.
-The material face remains aligned with x. Its position follows the resolved
-layer thickness; general shifted/rotated input is not yet implemented.
+The material face remains aligned with x. Its requested physical position is
+retained independently of the represented material boundary; rotation is not yet implemented.
 The layout uses numerical group velocities and checks second-interface returns,
 both periodic wraps and the analytic incident's periodic image. It is a sampled
 arrival estimate, not a rigorous error bound. Qualify a new configuration with
@@ -116,6 +118,29 @@ their explicit gate lengths. The observation controls `frequency_bins`, `band_si
 and `incident_floor` may be supplied with a preset. A preset cannot be combined with
 physical parameter overrides; use a requested row for those. These are ordinary configurations, not
 separate evolution paths.
+
+For a physical refinement ladder, keep `cells_per_wavelength * cell_size`
+fixed and keep the cell-shape ratios fixed. For example, resolutions 20, 40 and
+80 with cell sizes 1, 0.5 and 0.25 retain the same central physical frequency at
+normal incidence. `face_position: 500` keeps that physical interface fixed.
+The resolver recomputes box lengths, pulse placement and gates on each mesh.
+These physical input parameters always use normalized code length, including
+when files are emitted in SI units.
+
+Material cells whose centres are at or below `face_position` are dielectric.
+For an integer D, requested faces D*h_x and D*h_x+h_x/4 therefore select the
+same D cells; the inclusive centre tie at D*h_x+h_x/2 selects D+1 cells.
+The TM initializer uses that same sampled map in its harmonic weights.
+`effective.plane` records `face_position`, `represented_face_position`,
+`face_position_error` (represented minus requested), `dielectric_cells` and the
+sampling convention. Probes and initial packet placement follow the represented
+transition, so their component locations stay on the mesh. Fourier coefficients
+are transferred to the **requested** face using lattice propagation phases,
+as derived in the [reference document](../../experiments/interface-reference-cases/references.org).
+The shifted comparison uses continuum values at this requested face; an aligned
+lattice coefficient requires an explicit phase transfer from the represented
+boundary before it can serve as a shifted diagnostic. No sub-cell permittivity
+averaging is introduced.
 
 Standard output contains measured central reflection/transmission, effective
 angle/resolution and energy drift. Continuum/lattice comparison formulas remain
@@ -206,3 +231,8 @@ The existing `chdr.input.runs.si` integration check also compares plane spectra
 with frames enabled and disabled, checks the sparse frame/energy schedules,
 reads a nonzero electric profile and verifies material, component/time labels
 and SI conversions.
+`chdr.interface.shifted-face` checks both polarizations at shifts zero, one
+quarter and one half cell, including material weights, synthetic phase transfer
+and measured complex coefficients against the independently phase-shifted lattice
+reference. `chdr.interface.scaled-cell` compares two equivalent physical scalings;
+the input check also resolves the fixed-frequency 20/40/80 ladder at face 500.

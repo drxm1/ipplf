@@ -64,17 +64,25 @@ namespace chdr::apps::planarInterface {
         r.incidentFloor_m = planeParameter(input, "incident_floor", r.incidentFloor_m);
     }
 
-    /// Read dimensionless shape, resolution and pulse controls; h_x is the code length unit.
+    /// Interpret cell_size and face_position in normalized physical length, preserving cell shape.
+    inline void readPlaneGeometry(const input::RunInput& input, PlaneRequest& r) {
+        r.h_m[0] = planeParameter(input, "cell_size", 1);
+        r.h_m[1] = r.h_m[0] * planeParameter(input, "cell_shape_y", 1);
+        r.h_m[2] = r.h_m[0] * planeParameter(input, "cell_shape_z", 1);
+        if (input.parameters_m.has_path("face_position"))
+            r.facePosition_m = planeParameter(input, "face_position", 0);
+    }
+
+    /// Read physical cell size and shape independently from pulse and resolution controls.
     inline PlaneRequest readPlaneRequest(const input::RunInput& input) {
         PlaneRequest r;
         readPlaneSelectors(input, r);
         readPlaneBand(input, r);
+        readPlaneGeometry(input, r);
         r.epsilon_m = planeParameter(input, "epsilon", r.epsilon_m);
         r.courant_m = planeParameter(input, "courant", r.courant_m);
         r.cellsPerWavelength_m =
             planeParameter(input, "cells_per_wavelength", r.cellsPerWavelength_m);
-        r.h_m[1]       = planeParameter(input, "cell_shape_y", 1);
-        r.h_m[2]       = planeParameter(input, "cell_shape_z", 1);
         r.tailSigmas_m = planeParameter(input, "tail_sigmas", r.tailSigmas_m);
         if (input.parameters_m.has_path("cutoff_fraction"))
             r.cutoffFraction_m = planeParameter(input, "cutoff_fraction", 0);
@@ -123,10 +131,11 @@ namespace chdr::apps::planarInterface {
             return readPlanePreset(input);
         input::validateParameters(
             input,
-            {"polarization", "incidence", "epsilon", "courant", "cells_per_wavelength",
-             "angle_degrees", "transverse_period", "cell_shape_y", "cell_shape_z", "tail_sigmas",
-             "cutoff_fraction", "probe_cells", "timing_samples", "gate_padding_steps",
-             "separation_factor", "frequency_bins", "band_sigmas", "incident_floor"});
+            {"polarization",         "incidence",      "epsilon",           "courant",
+             "cells_per_wavelength", "angle_degrees",  "transverse_period", "cell_size",
+             "cell_shape_y",         "cell_shape_z",   "face_position",     "tail_sigmas",
+             "cutoff_fraction",      "probe_cells",    "timing_samples",    "gate_padding_steps",
+             "separation_factor",    "frequency_bins", "band_sigmas",       "incident_floor"});
         return resolvePlaneRow(readPlaneRequest(input));
     }
 }  // namespace chdr::apps::planarInterface
