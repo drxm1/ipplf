@@ -134,7 +134,7 @@ namespace chdr::solver::test {
      * sourced Lorenz wave or the independent anisotropic case. The remaining fields
      * are stencil, reconstruction enum, reading enum and refinement count. Medium names
      * hold direction, gamma, reading enum and refinement count instead. compare_ranks.py
-     * expects the names of the vacuum ladder states, so their format must not change.
+     * parses the names of the vacuum ladder states: change the format and the script together.
      */
     template <class SolverType>
     std::string waveCaseName(int n, const WaveOptions& options) {

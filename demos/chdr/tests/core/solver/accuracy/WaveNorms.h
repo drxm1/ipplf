@@ -195,7 +195,7 @@ namespace chdr::solver::test {
         }
     }  // namespace waveNormDetail
 
-    /** @brief Relative E/B L2 errors and the frozen Gauss/gauge norm ratios.
+    /** @brief Relative E/B L2 errors and the normalized Gauss and gauge residual ratios.
      * @details The common cell volume cancels on each uniform grid. Gauss is
      * normalized by the continuum electric-field norm, wave-number magnitude
      * and relative permittivity; gauge by the current numerical vector-potential

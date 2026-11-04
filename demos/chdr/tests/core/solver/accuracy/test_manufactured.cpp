@@ -50,7 +50,7 @@ namespace chdr::solver::test {
         /// Four-component storage shared by sampled potentials and their manufactured source.
         using FourComponentView = decltype(std::declval<AJFourFieldsType&>().getView());
 
-        /// Frozen three-mode potential; each component has distinct time dependence.
+        /// Fixed three-mode potential; each component has distinct time dependence.
         struct Manufactured {
             double shift_m = 0;
             KOKKOS_FUNCTION double mode(int m, double x, double y, double z, double t,

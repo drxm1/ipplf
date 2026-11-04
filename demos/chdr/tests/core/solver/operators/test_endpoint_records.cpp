@@ -124,7 +124,7 @@ namespace {
                   << " safety=" << solver.safetyFactor() << "\nn,amplitude,symbol_prediction\n";
     }
 
-    /// @brief Report a finite observation without imposing an unfrozen amplitude tolerance.
+    /// @brief Report a finite observation without imposing an amplitude tolerance.
     void recordEndpointStep(int step, double projection, double norm, double predicted) {
         EXPECT_TRUE(std::isfinite(projection));
         if (ippl::Comm->rank() == 0)

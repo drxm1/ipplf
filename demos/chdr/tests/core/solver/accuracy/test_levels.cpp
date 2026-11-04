@@ -225,7 +225,7 @@ namespace {
         expectGauge(solver, errors, steps, record);
     }
 
-    /// @brief Reuse exactly the same frozen grid/mode/run length for each reconstruction.
+    /// @brief Reuse exactly the same grid, mode and run length for each reconstruction.
     template <class PotentialSolverBase>
     void gaugeCase(std::array<int, SpatialDim> cells, std::array<double, SpatialDim> lengths,
                    ippl::Vector<double, SpatialDim> waveNumber, int steps, double safety = 0,

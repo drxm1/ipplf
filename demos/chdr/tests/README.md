@@ -60,7 +60,7 @@ its variants' labels. The timeout is 180 s for `medium.Convergence.*`,
 | continuum analytic | a closed-form solution of the continuous equations; the tolerance is a discretization error or an observed order of convergence |
 | self-consistency | an identity, an invariant, a contract, or the equality of two code paths; "refusal" marks checks that a wrong input throws |
 | one against two ranks | the same run on one rank and on two ranks |
-| regression record | exact numerical or bitwise equality with a frozen code path, or a record that the test only prints |
+| regression record | exact numerical or bitwise equality with values saved from an earlier run, or a record that the test only prints. |
 | smoke | the program runs to the end and writes the expected files |
 
 Most evolving solver tests also require, after their last solve, that the

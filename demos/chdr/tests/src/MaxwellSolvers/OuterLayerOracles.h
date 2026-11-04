@@ -33,7 +33,7 @@ namespace open_boundary_oracle {
     /// Per component: \f$P_x\f$, \f$P_y\f$, \f$P_z\f$ (ascending powers) and the time slope a.
     using PolynomialCoefficients = std::array<std::array<double, 10>, 4>;
 
-    /** @brief Forty frozen coefficients of the polynomial potentials
+    /** @brief Forty fixed coefficients of the polynomial potentials
      * \f$\psi_q = P_x^q(x)P_y^q(y)P_z^q(z)(1 + a_qt)\f$, degree two in space, one in time.
      * @details Standard-normal draws (NumPy default_rng seed 7, in the order given), stored to
      * round-trip precision. With periodicY, \f$P_y^q = 1\f$, so the potentials are periodic in y.

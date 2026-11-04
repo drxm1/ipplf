@@ -171,7 +171,7 @@ namespace chdr::solver::test {
     struct PhaseMeasurement {
         double phase_m = 0, largestIncrementError_m = 0;
         int steps_m = 0;
-        /// Accumulate principal increments; every frozen per-step phase lies below pi.
+        /// Accumulate principal increments; the per-step phase of the mode lies below pi.
         void observe(std::complex<double> current, std::complex<double> previous, double expected) {
             const double increment = std::arg(current * std::conj(previous));
             phase_m += increment;
