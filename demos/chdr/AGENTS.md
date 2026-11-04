@@ -28,7 +28,7 @@
 - Include every header by its path from this directory, for example `#include "core/solver/ChdrSolver.h"`. Bare includes do not compile.
 - No file under `core/` includes a file from `apps/`, `opt-in/`, `tests/` or `testing/`.
 - Name exactly what is meant: the executable, the file, the class, the quantity. Avoid general words such as "the driver", "demo" or "the shell" for a named thing.
-- Internal identifiers that you are using belong to the project records, not to code, comments, CMake files, READMEs or anywhere else in ippl's source control.
+- Internal workflow identifiers belong to the project records, not to code, comments, CMake files, READMEs or elsewhere in this repository. Reference-case labels `RC-<number>` are explicitly permitted when their exact meanings are documented in [the public reference-case definitions](experiments/interface-reference-cases/references.org), under "Reference-case labels". Use those definitions consistently and link or name the reference problem where its meaning would otherwise be unclear.
 - Prefer functions of 20 lines or fewer; extract coherent helpers from longer routines. Do not sacrifice good code-comments or physical correctness to achieve under 20 LOC functions. Functions that call kokkos loops/reductions should be under 20 LOC if the kokkos reduction call's lambda function's lines are not counted, and any other function must be 20 LOC or less in almost any case.
 - Write READMEs and comments in precise scientific language and keep sentences well readable (in the spirit of ASD-STE100).
 - The pre-commit hook runs clang-format and cmake-format; keep every file clean under both.

@@ -477,7 +477,39 @@ simulation controls, not from a central-frequency travel-time estimate alone.
 
 * Reference cases and their specialisation
 
-** Normal incidence and mesh refinement
+<<reference-case-labels>>
+** Reference-case labels
+
+The labels below name reference problems in this demonstration. They are local
+identifiers, not a numbering scheme from the literature and not a claim that a
+case has been implemented or validated. A run must still state its geometry,
+materials, illumination, observable and reference. Code, inputs, figures and
+documentation that use an =RC-= label refer to these definitions.
+
+| Label | Exact reference-problem family |
+|-------+--------------------------------|
+| RC-1 | Plane pulse at normal incidence on a dielectric half-space: reflected/transmitted amplitudes, phases, pulse profiles and power split. Mesh refinement and sub-cell placement of that same planar face are variants of this case. |
+| RC-2 | Oblique plane-pulse incidence from vacuum on a dielectric half-space, for TE and TM, including the Brewster condition. An angle scan may include the RC-1 normal-incidence limit. |
+| RC-3 | Dielectric-side total internal reflection at a planar face: reflection phase, evanescent transmitted field and, for finite illumination, the Goos–Hänchen shift. Below-critical dielectric-side rows are controls, not validation of total internal reflection. |
+| RC-4 | Evanescent coupling through a vacuum gap between dielectric regions, including frustrated total internal reflection. The gap width and incidence determine the particular three-layer problem. |
+| RC-5 | Reflection/transmission by a finite-thickness dielectric slab: Fabry–Pérot spectrum and the pulse sequence from multiple reflections at its two faces. |
+| RC-6 | Guided modes of a dielectric slab and modes of a periodic layered box. The structure, boundary conditions and selected mode must be specified. |
+| RC-7 | A pulsed line source or a ring-pulse initial field near a dielectric half-space. Specify which excitation is used; their reference fields are not interchangeable. |
+| RC-8 | Scattering by a dielectric circular cylinder in two dimensions; a dielectric sphere is the explicitly identified three-dimensional variant. |
+| RC-9 | A planar dielectric face tilted relative to the Cartesian mesh, including a diagonal slab or a prism face isolated from its edges. Interface tilt and incidence relative to the face normal are independent; there is no 45-degree-only restriction. |
+| RC-10 | Energy and Poynting-flux accounting for a stated field problem, including source work when a source is present. The quantity and domain balance being checked must be named. |
+| RC-11 | A prescribed travelling-sheet-source mode above a dielectric half-space, used for a per-mode Cherenkov-diffraction-radiation comparison. This is a source-driven case, not the source-free plane-pulse experiment. |
+| RC-12 | Scattering by a finite dielectric body with edges or corners, such as a brick, prism or wedge. Specify the body, excitation and comparison method. |
+| RC-13 | A matched comparison with another electromagnetic code for a stated reference problem. Identify the underlying case as well as the other implementation and matched settings. |
+
+This document derives the plane-interface references needed for RC-1, RC-2 and
+the continuum part of RC-9. Other entries fix the meaning of their labels; their
+full reference derivations and measurement qualifications belong with their
+implementations. The discrete potential invariant available in the solver must
+be identified as such; it does not by itself establish the physical energy and
+flux balance of RC-10 [[ref-ellingson][Ellingson, §3.1]].
+
+** RC-1: normal incidence and mesh refinement
 
 Set \(\kappa=0\), choose the incident and transmitted permittivities, and
 evaluate the normal-incidence continuum coefficients above. The reference is
@@ -491,7 +523,7 @@ the measured band and the isolation checks. Compare complex error and magnitude
 error separately; phase is reported only for nonzero amplitudes. No observed
 order follows merely from labelling three meshes as coarse, medium and fine.
 
-** Oblique incidence and the angle scan
+** RC-2: oblique incidence and the angle scan
 
 For a periodic tangential length \(L_t\), ordinary periodic fields require
 \(\kappa L_t=2\pi m\), with integer \(m\). For a chosen central continuum
@@ -519,7 +551,7 @@ generally nonzero finite-grid lattice value. This separates continuum agreement
 from reproduction of the discrete interface. Absolute reflection error is the
 appropriate quantity at the continuum zero [[ref-ellingson][Ellingson, §5.10]].
 
-** Shifted interface and phase origin
+** RC-1 variant: shifted interface and phase origin
 
 A requested continuum face and the transition represented by cell-centred
 material sampling are distinct. For the current aligned sampling rule, a
@@ -549,7 +581,7 @@ Re-referring the same data to the represented face is useful for diagnosing
 registration, but must be identified as a different comparison. It must not
 silently replace the requested continuum geometry.
 
-** Rotated interface and finite-width illumination
+** RC-9: rotated interface and finite-width illumination
 
 The continuum plane can be rotated about the x-z origin. For a normal rotated
 from +x towards +z by \(\alpha\), its equation is
