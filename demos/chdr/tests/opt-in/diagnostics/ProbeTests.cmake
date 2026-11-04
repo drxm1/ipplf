@@ -5,8 +5,6 @@ chdr_diagnostics_test(
   probe_wiring
   "FourierProbeSpectra.IdenticalSamplesGiveTheLabelShiftFactor:FourierProbeSpectra.SolverLabelsAndChannelCoordinates:FourierProbeSpectra.StaggeredPlaneClosedForm:FourierProbeSpectra.LiveSolverChannels"
 )
-chdr_diagnostics_test(probe_gates "FourierProbeSpectra.FrozenGatesAndNaNGhosts")
-
 if(Python3_Interpreter_FOUND AND MPIEXEC_EXECUTABLE)
   set(probe_mpi_flags)
   foreach(flag IN LISTS MPIEXEC_PREFLAGS)

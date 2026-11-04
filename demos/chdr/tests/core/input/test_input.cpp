@@ -1,5 +1,17 @@
 /** @file test_input.cpp
  * @brief Check strict common input and one independently evaluated SI normalization.
+ * @details readRunInput() reads temporary YAML files. It must throw std::invalid_argument for
+ * 8 malformed run or observation entries and for 7 invalid unit declarations, and
+ * booleanParameter() must throw for 3 non-boolean values. applicationInput() must reject 3
+ * incomplete or mixed command-line selectors, and a missing file and unclosed YAML must throw.
+ * The valid input checks partial schedule overrides. For \f$L_0 = 1\f$ mm and
+ * \f$\rho_0 = 8.8541878188\times10^{-9}\ \mathrm{C\,m^{-3}}\f$, the SI factors must equal fixed
+ * values (EXPECT_DOUBLE_EQ, or absolute tolerances such as \f$10^{-26}\f$ s on
+ * \f$t_0 = 3.3356409519815207\times10^{-12}\f$ s). An SI duration of 8 steps of 0.25 must give
+ * 8 steps; 8.5 steps and the largest double must throw.
+ *
+ * Reference: refusal; closed-form SI factors. CTest entry: chdr.input.unit.serial (one rank,
+ * timeout 30 s).
  */
 #include <cstdlib>
 #include <filesystem>
@@ -98,6 +110,8 @@ namespace {
         EXPECT_THROW(parseYaml(normalizedInput() + "parameters: [unclosed\n"), std::exception);
     }
 
+    /// Valid input with partial overrides, 8 malformed entries, 3 non-boolean parameter values,
+    /// 3 invalid selector lists, a missing file and unclosed YAML.
     TEST(RunInput, StrictSchemaAndOverrides) {
         checkValidInput();
         checkInvalidInput();
@@ -106,8 +120,12 @@ namespace {
     }
 
     /** @brief A millimetre scale with one volt per metre for unit code electric field.
-     * @details The fixed values below evaluate the normalization derived in UnitSystem
-     * using the published CODATA-2022 constants, not the implementation's factor methods.
+     * @details The fixed values below evaluate the normalization derived in UnitSystem,
+     * \f$t_0 = L_0/c\f$, \f$E_0 = \rho_0L_0/\varepsilon_0\f$, \f$B_0 = E_0/c\f$,
+     * \f$\phi_0 = E_0L_0\f$, \f$A_0 = B_0L_0\f$ and \f$U_0 = \varepsilon_0E_0^2L_0^3\f$
+     * [fitzpatrick2014ClassicalElectromagnetism, Eqs. (1.1), (1.3), (1.11)-(1.16), (1.109)],
+     * with the CODATA 2022 values of \f$c\f$ and \f$\varepsilon_0\f$
+     * [mohr2025Codata2022, Table XXXIII, p. 025002-45], not the implementation's factor methods.
      * They detect missing powers of length and confusion between scalar/vector potentials.
      */
     void checkSIFactors(const UnitSystem& units) {
@@ -134,6 +152,8 @@ namespace {
             EXPECT_THROW(parseYaml(prefix + units + "\n"), std::invalid_argument) << units;
     }
 
+    /// SI factors for 1 mm and \f$\rho_0 = 8.8541878188\times10^{-9}\ \mathrm{C\,m^{-3}}\f$, the
+    /// duration-to-step conversion with step 0.25, and 7 invalid unit declarations.
     TEST(RunInput, SIUnitsAndDuration) {
         auto input = parseYaml(
             "schema_version: 1\ncase: coarse\n"

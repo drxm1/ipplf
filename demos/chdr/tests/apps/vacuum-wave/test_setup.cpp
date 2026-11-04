@@ -1,11 +1,22 @@
 /** @file test_setup.cpp
  * @brief Independent initialization and local-domain tests.
  * @details The sine/history reference is our substitution in Fallahi, MITHRA 2.0,
- * arXiv:2009.13645v1, Eqs. (3.6)-(3.15), printed pp.12-13. The shifted grid is
+ * arXiv:2009.13645v1 [fallahi2020mithra20fullwavesimulation], Eqs. (3.6)-(3.15), printed
+ * pp.12-13. The shifted grid is
  * a coordinate/timestep fixture, not a new propagation benchmark. Required
- * stencil faces follow StandardFDTDSolver::step (StandardFDTDSolver.hpp:65-69) and
- * FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp:113-118).
- * Domain rejection follows HaloCells::exchangeBoundaries (HaloCells.hpp:122-128).
+ * stencil faces follow StandardFDTDSolver::step (StandardFDTDSolver.hpp) and
+ * FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp).
+ * Domain rejection follows HaloCells::exchangeBoundaries (HaloCells.hpp).
+ *
+ * The VacuumDomain tests check that checkLocalDomain() accepts grids other than the
+ * chdr-vacuum-wave grid and throws std::runtime_error on every rank when one rank owns a
+ * single cell on some axis. The VacuumInitialization tests load the histories on the
+ * coarse grid of chdr-vacuum-wave (8 by 8 by 64 cells) and on a shifted grid with unequal
+ * spacings; both histories must be within 1e-10 of the sine reference (scaled by
+ * \f$k = 2\pi\f$) on owned cells and face halos, and the scratch history must be exactly 0.
+ * Reference: exact lattice value (sampled continuum potential) and refusal.
+ *
+ * CTest: chdr.vacuum.unit.serial and chdr.vacuum.unit.mpi2.
  */
 #include "Ippl.h"
 
@@ -36,7 +47,8 @@ namespace {
         return Fields(spacing, lower, upper, decompose, domain, lower, true);
     }
 
-    /// @brief Demonstrate that domain validation does not assume the demo grid or z split.
+    /// @brief A grid of 4 times the rank count by 3 by 5 cells, split along x, passes:
+    /// checkLocalDomain() assumes neither the chdr-vacuum-wave grid nor a z split.
     TEST(VacuumDomain, AcceptsDifferentSizesAndSplitDirections) {
         auto fields = unitSpacedGrid({4 * ippl::Comm->size(), 3, 5}, {true, false, false});
         EXPECT_NO_THROW(checkLocalDomain(fields.getFL()));
@@ -52,14 +64,15 @@ namespace {
         }
     }
 
-    /// @brief Every rank rejects when at least one partition is too thin; MPI2 mixes validity.
+    /// @brief Every rank rejects when at least one partition is too thin. On two ranks the
+    /// 3 z cells split into 2 and 1, so one rank is valid and the other is not.
     TEST(VacuumDomain, RejectsWhenOnlySomeRanksAreInvalid) {
         auto fields = unitSpacedGrid({4, 4, 2 * ippl::Comm->size() - 1}, {false, false, true});
         EXPECT_THROW(checkLocalDomain(fields.getFL()), std::runtime_error);
     }
 
     /** @brief Shift coordinates and choose hx<hz to catch a hard-coded axial timestep.
-     * @details StandardFDTDSolver::initialize (StandardFDTDSolver.hpp:91-95) uses
+     * @details StandardFDTDSolver::initialize (StandardFDTDSolver.hpp) uses
      * min(spacing)/2. This fixture retains
      * one z wavelength and tests coordinate/time initialization, not propagation accuracy.
      */
@@ -110,8 +123,8 @@ namespace {
 
     /** @brief Inspect owned cells and one face layer against the independent history.
      * @details Edges/corners are excluded: StandardFDTDSolver::step and
-     * FDTDSolverBase::evaluate_EB consume faces only (StandardFDTDSolver.hpp:65-69;
-     * FDTDSolverBase.hpp:113-118). Returns a rank-local maximum.
+     * FDTDSolverBase::evaluate_EB consume faces only (StandardFDTDSolver.hpp;
+     * FDTDSolverBase.hpp). Returns a rank-local maximum.
      */
     double historyError(PotentialField& field, double time) {
         const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, field.getView());
@@ -162,13 +175,15 @@ namespace {
         EXPECT_EQ(errors[2], 0.0);
     }
 
-    /// @brief Check the actual coarse demo, including inter-rank and periodic face values.
+    /// @brief Check the coarse grid of chdr-vacuum-wave (8 by 8 by 64 cells), including
+    /// inter-rank and periodic face values.
     TEST(VacuumInitialization, FillsOwnedCellsAndBothHistoryFaceHalos) {
         VacuumSimulation run(vacuumBox(), VacuumMaterial{}, vacuumSettings(vacuumBox()));
         expectInitialization(run.solver(), run.fields());
     }
 
-    /// @brief Check shifted coordinates, unequal spacings and the constructor-selected timestep.
+    /// @brief Check shifted coordinates, unequal spacings and the constructor-selected timestep
+    /// on 8 by 4 by 64 cells with origin (-0.25, 0.5, 0.375) and spacings 1/256, 1/128, 1/64.
     TEST(VacuumInitialization, UsesOriginSpacingAndActualSolverTimestep) {
         auto fields = shiftedGrid();
         checkLocalDomain(fields.getFL());

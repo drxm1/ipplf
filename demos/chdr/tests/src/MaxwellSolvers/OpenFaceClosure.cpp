@@ -1,3 +1,27 @@
+/** @file OpenFaceClosure.cpp
+ * @brief Potential ghosts beyond open (Mur) faces after prepareHistories() and after one step
+ * of StandardFDTDSolver and NonStandardFDTDSolver.
+ * @details Most cases load the owned samples of a forty-coefficient polynomial, quadratic in
+ * space and linear in time (OuterLayerOracles.h). The ghost closure
+ * \f$g = 3u_0 - 3u_1 + u_2\f$ of closedGhostValue() is exact for such polynomials. The boxes
+ * have spacing (1, 0.8, 1.25), open \f$x\f$ and \f$z\f$ axes, and an open or periodic \f$y\f$
+ * axis. The tests check:
+ * - 8 by 6 by 10 box split along \f$z\f$: E and raw B of the inherited reconstruction R1 on the
+ *   outermost owned layer match the oracle within \f$10^{-13}\f$ of the analytic maximum; zero
+ *   ghosts give a relative error of at least 0.1.
+ * - 4 by 6 by 10 box split along \f$x\f$: all owned and ghost samples of both histories match
+ *   the polynomial within \f$10^{-13}\f$ of its maximum.
+ * - 8 by 6 by 10 box of spacing (1, 0.8, 0.5): one step of either stencil from the constant 2
+ *   gives 2 within \f$10^{-13}\f$ at local index (1, 0, 1) of the new level, a ghost cell of
+ *   the lower \f$y\f$ face.
+ * - A periodic solver on a nonperiodic layout receives wrapped face ghosts (EXPECT_DOUBLE_EQ).
+ *
+ * Reference: exact lattice value; one against two ranks. CTest entries:
+ * chdr.src.OpenFaceClosure.serial and chdr.src.OpenFaceClosure.mpi2. On two ranks the first
+ * test also compares E and B with a one-rank replay on rank 0, within \f$10^{-13}\f$ of the
+ * one-rank maximum; on one rank this comparison returns at once. OpenFaceClosure.md describes
+ * the suite.
+ */
 #include "Ippl.h"
 
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
@@ -8,6 +32,7 @@ using namespace outer_layer_test;
 
 namespace {
     /// Reconstruct the same loaded histories on rank zero's self communicator and compare fields.
+    /// On one rank there is nothing to compare, and the function returns at once.
     void checkPolynomialRanks(const Box& box, bool periodicY) {
         if (box.layout.comm.size() == 1)
             return;
@@ -54,6 +79,7 @@ TEST(OpenFaceClosure, PolynomialFieldsAndZeroGhostControl) {
 
 /** With two ranks, the third normal sample lies in an MPI halo. The tensor polynomial also
  * checks seam/face intersections and full ghost corners, at both loaded time levels.
+ * The 4 by 6 by 10 box splits along x; the tolerance is 1e-13 of the polynomial maximum.
  */
 TEST(OpenFaceClosure, TwoOwnedNormalSamplesAndCorners) {
     for (bool periodicY : {false, true}) {
@@ -70,6 +96,8 @@ TEST(OpenFaceClosure, TwoOwnedNormalSamplesAndCorners) {
 
 /** Both production step tails must close the newly computed level. A constant polynomial
  * makes the expected face ghost equal to its owned samples; omitted closure leaves zero.
+ * With 2 in both histories, the lower y ghost at local index (1, 0, 1) of the new level must be
+ * 2 within 1e-13.
  */
 TEST(OpenFaceClosure, BothStepsCloseTheNewLevel) {
     Box box({8, 6, 10}, {1., .8, .5});

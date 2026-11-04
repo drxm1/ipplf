@@ -24,7 +24,7 @@ This directory holds the ChDR code of my master's project:
 | `apps/vacuum-wave/` | `chdr-vacuum-wave`: the vacuum plane wave in a periodic box, the benchmark of the inherited vacuum update | [`apps/vacuum-wave/README.md`](apps/vacuum-wave/README.md), [`ViewingGuide.org`](apps/vacuum-wave/ViewingGuide.org) |
 | `apps/planar-interface/` | `planar-interface`: one planar dielectric in a periodic box; the plane-pulse reflection measurement and the packet cases | [`apps/planar-interface/README.md`](apps/planar-interface/README.md) |
 | `apps/interface-movies/` | `interface-movies`: an open box with Mur faces, ring starts and eight movie cases; `render_movie.py`, which renders the output of both interface programs | [`apps/interface-movies/README.md`](apps/interface-movies/README.md) |
-| `tests/` | One directory per unit of the code it tests: `core/<unit>`, `opt-in/diagnostics`, `apps/<program>`, `1d`, and `src/<component>` for the IPPL library changes made for ChDR (per-axis periodic layouts in `src/FieldLayout`, Mur faces in `src/MaxwellSolvers`) | The section Tests below; `tests/src/MaxwellSolvers/HaloOrder.md` and `OpenFaceClosure.md` |
+| `tests/` | One directory per unit of the code it tests: `core/<unit>`, `opt-in/diagnostics`, `apps/<program>`, `1d`, and `src/<component>` for the IPPL library changes made for ChDR (per-axis periodic layouts in `src/FieldLayout`, Mur faces in `src/MaxwellSolvers`) | [`tests/README.md`](tests/README.md) (every CTest entry, what it checks and against which reference); `tests/src/MaxwellSolvers/HaloOrder.md` and `OpenFaceClosure.md` |
 | `testing/` | Shared test support: the GoogleTest main `TestMain.cpp` and `Util.h`, included as `testing/Util.h` | |
 | `mesh/` | `mesh-1`: the supervisor's distributed mesh and dielectric radiator example with Catalyst output, and its geometry test | [`mesh/README.md`](mesh/README.md), [`mesh/StudentGuide.md`](mesh/StudentGuide.md) |
 | `1d/` | The one-dimensional spectral prototype in Python: the field and radiated spectrum of a point electron near an infinite planar interface, by analytic matching per transverse mode | [`1d/README.md`](1d/README.md) |
@@ -35,7 +35,7 @@ This directory holds the ChDR code of my master's project:
 Every header is included by its path from this directory, for example
 `#include "core/solver/ChdrSolver.h"`, `#include "opt-in/diagnostics/Monitors.h"`,
 `#include "apps/vacuum-wave/VacuumSetup.h"` or
-`#include "tests/core/solver/CoreTestSupport.h"`. A bare include such as
+`#include "tests/core/solver/support/CoreTestSupport.h"`. A bare include such as
 `#include "ChdrSolver.h"` does not compile. The CMake targets export this
 directory as their include root:
 
@@ -86,16 +86,20 @@ ranks, one OpenMP thread each):
 | `chdr.solver.` | the potential solver, the operators and the sampling contract | `tests/core/solver` |
 | `chdr.solver.formulation.` | the O1-VS formulation | `tests/core/solver/formulation` |
 | `chdr.material.`, `chdr.simulation.` | the material owner, the simulation manager | `tests/core/<unit>` |
+| `chdr.input.` | the common YAML input and the SI units of the three programs | `tests/core/input` |
 | `chdr.diagnostics.` | the opt-in diagnostics | `tests/opt-in/diagnostics` |
 | `chdr.vacuum.`, `chdr.interface.` | the three programs; `chdr.interface.movies.*` belong to `interface-movies` | `tests/apps/<program>` |
 | `chdr.mesh.` | the mesh example | `mesh/` |
 | `chdr.1d.` | the one-dimensional prototype (`unittest`; needs a Python with NumPy, SciPy and Matplotlib, `CHDR_1D_PYTHON`) | `tests/1d` |
 | `chdr.src.` | the IPPL library changes made for ChDR: per-axis periodic layouts (`PeriodicAxes`) and the Mur faces (`FDTDBoundary`, `MurSpeed`, `MurDispatch`, `InteriorBounds`, `HaloOrder`, `OpenFaceClosure`, `OpenBoundaryRegression`) | `tests/src/<component>` |
 
-Labels: `long` marks ladders and trajectories above one minute, `record`
-marks entries that only print records, `holdout` marks the disabled holdout
-entries, and `unavailable` marks entries registered as skipped because Python,
-an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
+Labels: `long` marks runs above about \f$10^8\f$ cell-steps (cells times steps,
+summed over the runs of an entry), or trajectories of 10000 steps or ten wave periods. These
+work measures also apply on slower machines; the timings in the test index are from its named
+machine. `record` selects record generation and reference-function checks.
+All six former acceptance cases now have ordinary enabled entries; the test
+index describes their checks. `unavailable` marks entries registered as skipped
+because Python, an MPI launcher or ParaView is missing. Every entry carries the label `chdr`,
 so `ctest -L chdr` selects the same set as `ctest -R '^chdr\.'`.
 
 ## Documentation / Manual

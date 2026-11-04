@@ -1,5 +1,22 @@
 /** @file test_probe.cpp
  * @brief Minimal closed-form and interface checks for the time-labelled Fourier probe.
+ * @details Configuration: a periodic box of 8 by 8 by 16 cells with spacing 1/8,
+ * decomposed along z, and the probe time step \f$\Delta t = 0.0625\f$. The tests check:
+ * - the refusal of invalid boxes, channels, frequencies, gates and sample orders, with the
+ *   named exception types (the R1 case with a nonzero \f$\Phi\f$ accepts any
+ *   std::exception);
+ * - FourierProbe::phase against an integer-arithmetic reference within
+ *   \f$2 \times 10^{-15}\f$ at the half-step indices \f$2^{51}-7\f$ and \f$2^{52}-5\f$;
+ * - the Hann weights against \f$\sin^2(\pi n/N)\f$ within \f$4 \times 10^{-16}\f$ for
+ *   \f$N\f$ = 1, 2, 3, 5 and 4096, and the window sums: \f$N/2\f$ and \f$3N/8\f$ for
+ *   \f$N \ge 3\f$, the exact sums 0, 0 for \f$N = 1\f$ and 1, 1 for \f$N = 2\f$;
+ * - the refusal of a reported angular frequency that overflows;
+ * - on two or more ranks, that a box without an owner makes gather() throw
+ *   std::runtime_error on every rank.
+ * Reference: exact lattice value (integer phase reference, Hann closed form) and refusal.
+ *
+ * CTest: chdr.diagnostics.probe.serial (OwnershipFailureIsCollective skips) and
+ * chdr.diagnostics.probe.mpi2.
  */
 #include <gtest/gtest.h>
 #include <limits>
@@ -17,7 +34,7 @@ namespace {
     using namespace chdr::diagnostics;
     constexpr double PI = Kokkos::numbers::pi_v<double>;
 
-    /// The periodic 8 by 8 by 16 box of unit spacing 1/8, decomposed along z.
+    /// The periodic box of 8 by 8 by 16 cells with spacing 1/8, decomposed along z.
     ChDRFieldContainer probeGrid() {
         return makeBoxFieldContainer({8, 8, 16}, {1.0, 1.0, 2.0}, 2);
     }
@@ -78,6 +95,8 @@ namespace {
         EXPECT_NO_THROW(probe.gather());
     }
 
+    /// Invalid boxes, channels, frequencies (0, 0.5, NaN) and gates throw
+    /// std::invalid_argument; out-of-order samples inside the gate throw std::logic_error.
     TEST(FourierProbe, ValidatesConfiguration) {
         ProbeFixture fixture;
         checkInvalidGeometryAndChannels(fixture);
@@ -102,6 +121,8 @@ namespace {
         return 2 * PI * (cycles - std::nearbyint(cycles));
     }
 
+    /// For three frequencies, the phase at half-step indices near \f$2^{51}\f$ and
+    /// \f$2^{52}\f$ equals exactPhase() within 2e-15.
     TEST(FourierProbe, CorrectsLargeProductRounding) {
         for (double frequency : {0.1, 0.23456789, 0.499999999999})
             for (std::uint64_t step : {(std::uint64_t{1} << 51) - 7, (std::uint64_t{1} << 52) - 5})
@@ -129,6 +150,8 @@ namespace {
         }
     }
 
+    /// With \f$\Delta t\f$ the smallest subnormal double, the reported angular frequency
+    /// \f$2\pi\cdot 0.25/\Delta t\f$ overflows; the constructor throws std::invalid_argument.
     TEST(FourierProbe, RejectsNonfiniteReportedFrequency) {
         ProbeFixture fixture;
         EXPECT_THROW(
@@ -137,7 +160,8 @@ namespace {
             std::invalid_argument);
     }
 
-    /// Different per-rank boxes deliberately make one output index lack an owner.
+    /// Different per-rank boxes deliberately make one output index lack an owner. gather()
+    /// throws std::runtime_error on every rank, and all ranks reach the next reduction.
     TEST(FourierProbe, OwnershipFailureIsCollective) {
         if (ippl::Comm->size() < 2)
             GTEST_SKIP() << "Ownership disagreement requires multiple ranks";

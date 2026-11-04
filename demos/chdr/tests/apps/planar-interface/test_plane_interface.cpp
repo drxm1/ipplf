@@ -1,5 +1,31 @@
 /** @file test_plane_interface.cpp
  * @brief Compare coherent pulse amplitudes with independently derived lattice and Fresnel values.
+ * @details Each test runs a plane pulse in a periodic box with measurePlane() of
+ * PlanePulse.h. It compares the band-centre reflection r and transmission t at the
+ * material face with the exact lattice coefficients and the continuum Fresnel
+ * coefficients of InterfaceOracles.h. The run parameters are frozen in InterfaceOracles.h:
+ * - Normal: TE at normal incidence from vacuum onto \f$\varepsilon_r = 2.13\f$, 812 by 2
+ *   by 2 cubic cells, dielectric cells 0 to 210 (face at x = 211), Courant factor 0.9,
+ *   59 box modes, 1180 solves, one rank.
+ * - NormalSeam: the same run on two ranks; rank 0 must own x = 0 to 210, so the rank seam
+ *   lies on the material face.
+ * - Brewster: TM from vacuum at the Brewster angle onto \f$\varepsilon_r = 2.13\f$, 3581
+ *   by 18 by 2 cells of size (1, 2, 2), 1484 dielectric cells, 88 box modes, 6761 solves,
+ *   invariant sampled every 10th solve, one rank.
+ * - ObliqueDielectricSeam: TM from \f$\varepsilon_r = 3.4\f$ at 18 degrees, 1828 by 52 by 2
+ *   cells of size (1, 1.25, 0.85), 949 dielectric cells, rank seam on the material face,
+ *   78 box modes, 3789 solves, two ranks.
+ *
+ * Tolerances: r and t within \f$10^{-11}\f$ of the lattice values; r within
+ * \f$5 \times 10^{-3}\f$ (Normal, NormalSeam) or \f$10^{-2}\f$ of Fresnel, and t also,
+ * except for TM incidence from vacuum; relative drift of the vector invariant at most
+ * \f$10^{-12}\f$; for TE, the invariant equals Yee's energy at the start within
+ * \f$10^{-12}\f$ (checkYee). Reference: exact lattice value and continuum analytic
+ * (Fresnel).
+ *
+ * CTest: chdr.interface.normal (Normal), chdr.interface.normal.mpi2 (NormalSeam),
+ * chdr.interface.long.brewster (Brewster) and chdr.interface.long.oblique-dielectric.mpi2
+ * (ObliqueDielectricSeam).
  */
 #include <gtest/gtest.h>
 
@@ -68,13 +94,13 @@ namespace chdr::apps::planarInterface {
                                 .steps_m              = p.steps,
                                 .incidentFromVacuum_m = p.incidentFromVacuum};
         const auto initialCheck = [&](auto& state, const auto& owner) {
-            if (p.polarization != Polarization::TE)
-                return;
             if (seam && ippl::Comm->rank() == 0) {
                 const auto x = state.A_n.getLayout().getLocalNDIndex()[0];
                 EXPECT_EQ(x.first(), 0);
                 EXPECT_EQ(x.last() + 1, seam);
             }
+            if (p.polarization != Polarization::TE)
+                return;
             checkYee(state, owner);
         };
         const auto result =
@@ -109,6 +135,8 @@ namespace chdr::apps::planarInterface {
             EXPECT_LE(std::abs(result.t_m[0] - fresnel.t), continuumTolerance);
         }
     }
+    /// TE pulse at normal incidence onto \f$\varepsilon_r = 2.13\f$, one rank: lattice r and t
+    /// within 1e-11, Fresnel within 5e-3, drift at most 1e-12, Yee energy within 1e-12.
     TEST(PlaneInterface, Normal) {
         checkPlane(normalIncidenceRun(), 1, 5e-3);
     }
@@ -119,11 +147,17 @@ namespace chdr::apps::planarInterface {
         const auto p = normalIncidenceRun();
         checkPlane(p, 1, 5e-3, p.dielectricCells);
     }
+    /// TM pulse at the Brewster angle onto \f$\varepsilon_r = 2.13\f$, one rank: lattice r and
+    /// t within 1e-11, \f$\lvert r - r_F\rvert \le 10^{-2}\f$ against the Fresnel value
+    /// \f$r_F\f$, which is zero at the Brewster angle, drift at most 1e-12; t is not compared
+    /// with Fresnel.
     TEST(PlaneInterface, Brewster) {
         checkPlane(brewsterIncidenceRun(), 10, 1e-2);
     }
-    // Registered disabled: reserve this complete configuration until final acceptance.
-    TEST(PlaneInterface, DISABLED_Reserved) {
+    /// TM pulse from \f$\varepsilon_r = 3.4\f$ at 18 degrees on two ranks, with the rank seam
+    /// on the material face: lattice r and t within 1e-11, Fresnel within 1e-2, drift at most
+    /// 1e-12.
+    TEST(PlaneInterface, ObliqueDielectricSeam) {
         const auto p = obliqueDielectricRun();
         ASSERT_EQ(ippl::Comm->size(), 2);
         checkPlane(p, 10, 1e-2, p.dielectricCells);

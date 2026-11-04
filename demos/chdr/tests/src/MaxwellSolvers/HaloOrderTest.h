@@ -1,7 +1,17 @@
+/** @file HaloOrderTest.h
+ * @brief Solver storage and host access shared by HaloOrder, OpenBoundaryRegression,
+ * InteriorBounds and MurDispatch.
+ * @details Fields builds a box split along \f$z\f$ on a given communicator, with all axes or
+ * selected axes periodic. load() writes owned potential samples from global labels and
+ * exchanges them; owned() visits owned samples in global order. A box on MPI_COMM_SELF is a
+ * one-rank reference with the same global labels as the box on MPI_COMM_WORLD.
+ */
 #ifndef IPPL_TEST_HALO_ORDER_H
 #define IPPL_TEST_HALO_ORDER_H
 
 #include "Ippl.h"
+
+#include <array>
 
 #include "MaxwellSolvers/NonStandardFDTDSolver.h"
 #include "MaxwellSolvers/StandardFDTDSolver.h"
@@ -14,6 +24,15 @@ namespace fdtd_test {
     using Standard = ippl::StandardFDTDSolver<Field, Potential, BC>;
     template <ippl::fdtd_bc BC>
     using NonStandard = ippl::NonStandardFDTDSolver<Field, Potential, BC>;
+
+    /** @brief Accumulate owned-potential differences against a full one-rank reference.
+     * @details Defined in HaloOrderPulse.cpp. maximum[0] is the largest absolute
+     * difference and maximum[1] the largest reference magnitude; both accumulate across
+     * calls. identical stays nonzero only when all compared binary64 values have equal
+     * bits. Ghost cells are excluded; serial must cover the full global domain.
+     */
+    void difference(Potential& distributed, Potential& serial, std::array<double, 2>& maximum,
+                    int& identical);
 
     /** @brief Own source-free solver storage with decomposition along z only.
      * @details MPI_COMM_SELF constructs an independent serial reference with

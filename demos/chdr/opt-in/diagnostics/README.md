@@ -133,7 +133,7 @@ decomposition; the last bits of `l2_m` and `scaleL2_m` can (deduction).
   material solver is accepted; `O1VS.VacuumBits` shows that
   the O1-VS update then reproduces the vacuum potentials and fields bit for bit. The refusal
   occurs before any input is captured; it rejects the diagnostic, not the solver. Medium tests
-  evaluate their own gauge and Gauss residuals (`tests/core/solver/WaveNorms.h`).
+  evaluate their own gauge and Gauss residuals (`tests/core/solver/accuracy/WaveNorms.h`).
 - Write the source and make the potential halos valid before `beforeSolve`. It copies `A_nm1`,
   the output E and the source; at count zero it first calls `reconstructEB()`. `afterSolve`
   evaluates the step and keeps its source for the next continuity residual; `advance` calls
@@ -421,7 +421,9 @@ cmake --build build --parallel 2 --target test-chdr-diagnostics
 ctest --test-dir build --no-tests=error -R '^chdr\.diagnostics\.' --output-on-failure -j1
 ```
 
-Each suite has a `.serial` entry and, with an MPI launcher, a `.mpi2` entry on two ranks. All
+Most suites have a `.serial` entry and, with an MPI launcher, a `.mpi2` entry on two ranks.
+The energy suite runs on two ranks and includes a one-rank replay; the Mur-layer refusals run
+only on one rank. The probe rank comparison runs its gate checks at both rank counts. All
 entries use one OpenMP thread per rank and the labels `chdr;diagnostics;unit`, plus `mpi` for two
 ranks and `probe;mpi` for `chdr.diagnostics.probe.ranks`. The timeout is 60 s, except for
 `chdr.diagnostics.probe.ranks`, which runs the probe suite on one rank and on two ranks in two
@@ -430,14 +432,13 @@ their measured maxima; `ctest -V` shows them.
 
 | CTest entry | Test file and filter | Main checks |
 |---|---|---|
-| `chdr.diagnostics.energy` | `test_interface_energy.cpp`, `InterfaceEnergy.*` (serial: `NormalSplit`) | O1-VS dielectric slab, \f$\varepsilon=2.13\f$, random histories, 50 source-free steps: relative drift of \f$W_A\f$ and \f$W_\Phi\f$ at most \f$10^{-12}\f$; against a run on `MPI_COMM_SELF`, bitwise equal histories and energy parts within \f$10^{-14}\f$ of the initial total; decomposition normal and tangential to the slab |
+| `chdr.diagnostics.energy.mpi2` | `test_interface_energy.cpp`, `InterfaceEnergy.*` | O1-VS dielectric slab, \f$\varepsilon=2.13\f$, random histories, 50 source-free steps: relative drift of \f$W_A\f$ and \f$W_\Phi\f$ at most \f$10^{-12}\f$; against a run on `MPI_COMM_SELF`, bitwise equal histories and energy parts within \f$10^{-14}\f$ of the initial total; decomposition normal and tangential to the slab |
 | `chdr.diagnostics.monitors` | `test_monitors.cpp`, `ChdrMonitors.*` | Collocated random and Nyquist data, R1, R2 and R2Prime, Standard and NonStandard: magnetic divergence and Faraday at most \f$10^{-12}\f$; a planted E error is detected; exact zeros for zero data; planted continuity values; continuity unavailable after gaps and reloads |
 | `chdr.diagnostics.monitor-records` | `test_monitor_records.cpp`, `ChdrMonitorRecords.*` | Collocated `gauss_m` at most \f$10^{-12}\f$ for each reconstruction and stencil; result unchanged after a live-source overwrite |
 | `chdr.diagnostics.probe` | `test_probe.cpp`, `FourierProbe.*` | Refusals, gate order, FMA phase against an integer reference, Hann weights and sums, collective ownership failure (two ranks only) |
-| `chdr.diagnostics.mur-layer-refusals` | `test_mur_layer.cpp`, `MurLayer.ProbeAndMonitorRefusals` | In both readings, field probes refused on the outermost Mur layer and potentials accepted there; `Monitors` refused on a layout with a nonperiodic axis |
+| `chdr.diagnostics.mur-layer-refusals.serial` | `test_mur_layer.cpp`, `MurLayer.ProbeAndMonitorRefusals` | In both readings, field probes refused on the outermost Mur layer and potentials accepted there; `Monitors` refused on a layout with a nonperiodic axis |
 | `chdr.diagnostics.probe_wiring` | `test_probe_full.cpp`, four `FourierProbeSpectra` tests | Label-shift factor \f$e^{i\pi\nu}\f$; channel labels and coordinates for each supported reading and reconstruction; staggered plane against the closed form; `SolverFourierProbe` on an evolving mode in five solver configurations |
-| `chdr.diagnostics.probe_gates` | `test_probe_full.cpp`, `FourierProbeSpectra.FrozenGatesAndNaNGhosts` | Two planes (rectangle and Hann) and six points over 100000 steps with NaN in every halo: each value within \f$10^{-12}R\f$ of a long-double closed form; a wrong half-step label differs by at least \f$10^{-6}R\f$ |
-| `chdr.diagnostics.probe.ranks` | `compare_probe_ranks.py` | Serial against two-rank output of `FrozenGatesAndNaNGhosts` |
+| `chdr.diagnostics.probe.ranks` | `compare_probe_ranks.py`, `test_probe_full.cpp`, `FourierProbeSpectra.FrozenGatesAndNaNGhosts` | On one and two ranks: two planes (rectangle and Hann) and six points over 100000 steps with NaN in every halo, each value within \f$10^{-12}R\f$ of a long-double closed form; a wrong half-step label differs by at least \f$10^{-6}R\f$; the outputs at both rank counts agree within \f$10^{-14}R\f$ |
 
 \f$R=\Delta t\,S_1\sum_s\lvert a_s\rvert\f$ bounds the transform of the test signal with tone
 amplitudes \f$a_s\f$ (deduction from [oskooi2010meep, Eq. (6)] and

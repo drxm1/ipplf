@@ -1,3 +1,16 @@
+## @file read_output_fixture.py
+# @brief pvpython reader of the files that output_fixture.cpp writes with
+# core/output/FieldOutput.h, the writer of all three programs.
+# @details Case "valid" (argument: the number of pieces, 1 or 2): VTK reads each PVTI and
+# each piece, and ParaView reads the series. Every E and B component and every metadata
+# value must equal the independent Python formula bit for bit. Only origin, spacing, cell
+# centres and cell widths use a tolerance, 1e-14 relative and absolute. Each image must
+# hold exactly its owned cells (12 per z layer, no halo values), and the series must list
+# the times 0, 0.125 and 0.375. Failure cases ("piece", "wrapper", "series", "nonfinite"):
+# the series lists only frame 0, frame 0 is readable, and except for "series" no
+# wave-1.pvti exists.
+# CTest (through run_output_fixture.py): chdr.vacuum.output.serial,
+# chdr.vacuum.output.mpi2 and the four chdr.vacuum.output.failure entries.
 """Read the independent 72-cell sentinel using installed VTK and ParaView readers.
 
 Expected physical coordinates/data come from the declared fixture, not the writer.

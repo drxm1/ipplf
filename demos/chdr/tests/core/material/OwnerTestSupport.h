@@ -1,5 +1,9 @@
 /** @file OwnerTestSupport.h
  * @brief Non-cubic grids and independent host observations of complete material allocations.
+ * @details makeGrid() builds the 12 by 14 by 16 grid with spacing (0.125, 0.25, 0.5) and
+ * origin (-0.5, 1, 2), split along one chosen axis. IndexMap supplies three deterministic maps.
+ * mismatches() counts, over all ranks, the allocated cells whose bits differ from an expected
+ * value. test_owner.cpp, test_halo.cpp and test_derived.cpp use these helpers.
  */
 #pragma once
 #include "FELFieldContainer.hpp"
@@ -25,7 +29,8 @@ namespace chdr::material::test {
 
     /** @brief Deterministic index map for halo and coefficient observations.
      * @details mode 0 produces unique integer IDs, mode 1 a reproducible two-value
-     * map, mode 2 values in [1,16). No production indexing or hashing helper is used.
+     * map (2.13 or 4), mode 2 values in \f$[1, 16)\f$. No production indexing or hashing
+     * helper is used.
      */
     struct IndexMap {
         int mode_m = 0;

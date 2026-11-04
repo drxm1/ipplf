@@ -79,10 +79,10 @@ renders them.
 
 ## Checks
 
-`ctest -R chdr.interface -E movies -LE 'long|reserved'` runs the plane-pulse
+`ctest -R chdr.interface -E movies -LE long` runs the plane-pulse
 checks at normal incidence against the independent lattice and Fresnel values
 (`test_plane_interface.cpp` calls `PlanePulse.h` directly; it does not run the
 `planar-interface` executable) and the four-step smoke run of the half-space
 case of `planar-interface`, using YAML with separate field and diagnostic
-cadences. The Brewster check carries the `long` label. The
-reserved configuration remains disabled.
+cadences. The Brewster and two-rank oblique dielectric seam checks carry the
+`long` label.

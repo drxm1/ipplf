@@ -2,6 +2,29 @@
  * @brief Closed-form checks of point/plane spectra and their rank-count invariance.
  * @details FourierProbeSpectra is the extended probe test suite. It prints per-gate error
  * summaries and writes the spectra that compare_probe_ranks.py compares across rank counts.
+ *
+ * Configuration: the periodic box of 8 by 8 by 16 cells with spacing 1/8, decomposed
+ * along z, \f$\Delta t = 0.0625\f$. The synthetic-signal tests use 11 channels (three E,
+ * three B, \f$\Phi\f$, three A and raw \f$B_x\f$) and 6 frequencies; LiveSolverChannels uses
+ * five channels and one frequency, the label-shift test two channels and one frequency, and
+ * the coordinate test eleven channels and one frequency. R is the amplitude and window bound
+ * of checkProbeValue(). The tests check:
+ * - IdenticalSamplesGiveTheLabelShiftFactor: a half-step label shift multiplies the sum by
+ *   \f$e^{i\pi\nu}\f$, within \f$10^{-12}\,\Delta t \cdot 64\f$;
+ * - SolverLabelsAndChannelCoordinates: the labels and coordinates of the 11 channels at
+ *   cell (2, 3, 7) equal fixed tables for R1, R2 and R2Prime (collocated) and R2 (staggered);
+ * - StaggeredPlaneClosedForm: a staggered R2 plane x = 3 (4096 samples) equals the
+ *   long-double finite-window closed form within \f$10^{-12} R\f$; a wrong label misses it
+ *   by at least \f$10^{-6} R\f$;
+ * - LiveSolverChannels: probes on an evolved axial mode equal the differentiated discrete
+ *   samples within \f$10^{-12}\,\Delta t \cdot 32\f$ for five solver cases;
+ * - FrozenGatesAndNaNGhosts: two planes and six points over 100000 steps, with NaN in
+ *   every ghost cell, equal the closed form within \f$10^{-12} R\f$.
+ * Reference: exact lattice value (finite-window sums, discrete mode samples, fixed tables).
+ *
+ * CTest: chdr.diagnostics.probe_wiring.serial and .mpi2 run the first four tests;
+ * chdr.diagnostics.probe.ranks runs FrozenGatesAndNaNGhosts on one and on two ranks
+ * through compare_probe_ranks.py.
  */
 #include <cstdlib>
 #include <fstream>
@@ -47,7 +70,7 @@ namespace {
         return {40.0 / 4096.0, 40.5 / 4096.0, 97.37 / 4096.0, 61.5 / 4096.0, 0.16, 1.0 / 4096.0};
     }
 
-    /// The periodic 8 by 8 by 16 box of unit spacing 1/8, decomposed along z.
+    /// The periodic box of 8 by 8 by 16 cells with spacing 1/8, decomposed along z.
     ChDRFieldContainer makeFields() {
         return makeBoxFieldContainer({8, 8, 16}, {1.0, 1.0, 2.0}, 2);
     }
@@ -322,7 +345,7 @@ namespace {
         writeProbeValue(output, probe, cell, channel, frequency, scale, actual);
     }
 
-    /// Validate every gathered value and emit one compact error summary per gate.
+    /// Check every gathered value and print one error summary per gate.
     void checkRecord(const ProbeRecord& record, unsigned probeNumber, std::ostream* output) {
         if (ippl::Comm->rank() != 0)
             return;
@@ -502,6 +525,10 @@ namespace {
                         dt, hz, frequency, 3);
     }
 
+    /// Five cases: R1, R2 and R2Prime collocated and R2 staggered (Standard, 8 by 8 by 16
+    /// cells), and R2 collocated (NonStandard, 8 by 8 by 32 cells). Two probes at cell
+    /// (0, 0, 7) with gates from steps 0 and 3 take 32 samples each; the loop samples 35
+    /// times and calls solve() 34 times. Tolerance \f$10^{-12}\,\Delta t \cdot 32\f$.
     TEST(FourierProbeSpectra, LiveSolverChannels) {
         for (auto ebReconstructionConvention :
              {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
@@ -512,6 +539,11 @@ namespace {
                                                    SpatialDiscretization::Collocated);
     }
 
+    /// Two-tone signals on 11 channels, NaN in every ghost cell before each of 100000 steps.
+    /// A rectangle and a Hann plane (x = 3, steps 101 to 4196) and six point probes (three
+    /// cells, gates from steps 0 and 99000) equal the closed form within 1e-12 R; the wrong
+    /// label misses by at least 1e-6 R; the window sums are 4096 and 4096 (rectangle) and
+    /// 2048 and 1536 (Hann). With CHDR_PROBE_OUTPUT set, rank 0 writes every value.
     TEST(FourierProbeSpectra, FrozenGatesAndNaNGhosts) {
         auto fields = makeFields();
         initializeFieldStorage(fields);
@@ -524,7 +556,8 @@ namespace {
         checkFrozenGates(probes);
     }
 
-    /// A separately labelled raw B channel carries the label-shift factor for identical data.
+    /// A separately labelled raw B channel carries the label-shift factor for identical data:
+    /// \f$\nu = 0.125\f$, 64 samples from step 9, tolerance \f$10^{-12}\,\Delta t \cdot 64\f$.
     TEST(FourierProbeSpectra, IdenticalSamplesGiveTheLabelShiftFactor) {
         auto fields = makeFields();
         initializeFieldStorage(fields);
@@ -597,6 +630,9 @@ namespace {
         }
     }
 
+    /// For R1, R2 and R2Prime (collocated) and R2 (staggered), a probe bound to the solver
+    /// records the solver's reading and, at cell (2, 3, 7), the labels and coordinates of
+    /// expectedLabel() and expectedCoordinate() for all 11 channels.
     TEST(FourierProbeSpectra, SolverLabelsAndChannelCoordinates) {
         for (auto ebReconstructionConvention :
              {EBReconstructionConvention::R1, EBReconstructionConvention::R2,
@@ -608,7 +644,8 @@ namespace {
                     checkSolverChannelWiring(ebReconstructionConvention, spatialDiscretization);
     }
 
-    /// Exercise the same accumulation kernel with the Standard staggered channel positions.
+    /// Exercise the same accumulation kernel with the Standard staggered channel positions:
+    /// plane x = 3, steps 101 to 4196, 6 frequencies, closed form within 1e-12 R.
     TEST(FourierProbeSpectra, StaggeredPlaneClosedForm) {
         auto fields = makeFields();
         initializeFieldStorage(fields);

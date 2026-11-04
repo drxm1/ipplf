@@ -1,3 +1,19 @@
+/** @file OpenBoundaryRegression.cpp
+ * @brief Bitwise regression of the potential step: the repaired finishing order against the
+ * original order of ShippedOrderSolver.h, with the same interior and Mur kernels.
+ * @details Both solvers start from the same pseudo-random histories in \f$[-1, 1)\f$ (32-bit
+ * linear congruential generator, seed 271828) and run 256 steps. After every step, the three
+ * potential levels, E, raw B and the mean of the current and previous raw B must be bitwise
+ * equal (memcmp) to those of the control, and finite. In absorbing boxes the comparison of E
+ * and B excludes the outermost owned layer. Cases: Standard with 24 by 24 by 24 cells of
+ * spacing 1 and NonStandard with 16 by 16 by 48 cells of spacing (1, 1, 0.5), each
+ * all-periodic on MPI_COMM_WORLD and all-absorbing on MPI_COMM_SELF. The test checks that the
+ * two orders give the same samples, not the accuracy of either solver.
+ *
+ * Reference: regression record (bitwise). CTest entries: chdr.src.OpenBoundaryRegression.serial
+ * and chdr.src.OpenBoundaryRegression.mpi2 (timeout 180 s). On two ranks only the periodic
+ * cases use both ranks; each rank repeats the all-absorbing cases on its own communicator.
+ */
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -128,6 +144,8 @@ namespace fdtd_test {
         regression<NonStandard<ippl::absorbing>>({16, 16, 48}, {1, 1, .5}, false, nonstandard);
     }
 
+    /// Four cases (Standard and NonStandard, periodic and all-absorbing), 256 steps each: every
+    /// compared sample is bitwise equal to the old-order control and finite.
     TEST(OpenBoundaryRegression, OriginalOrder) {
         runRegression(portableHistories(24 * 24 * 24), portableHistories(16 * 16 * 48));
     }

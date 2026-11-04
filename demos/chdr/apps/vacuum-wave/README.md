@@ -225,14 +225,14 @@ Initial `phaseSpeed` is empty because no time has elapsed. Rank zero attempts to
 print each sample before its own validation; another rank's MPI abort can prevent
 the failing row from being written or delivered. A CSV alone does not imply success.
 
-The 29 GoogleTests cover first-step/setup behavior, synthetic diagnostic faults
+The 22 GoogleTests cover first-step/setup behavior, synthetic diagnostic faults
 (including non-root NaNs and poisoned halos), independent scalar recurrence,
-phase tracking and acceptance gates. They run serially, on MPI2 and shuffled MPI2.
+phase tracking and acceptance gates. They run on one rank and in shuffled order on two ranks.
 Unseeded shuffling uses seed1; explicit nonzero seeds are preserved. All ranks
 must receive matching test-selection/order options. Halo guards remain debug-only;
 the test target explicitly enables them.
 
-Two smoke tests run `chdr-vacuum-wave` with `--steps 1`. The propagation test runs coarse serial,
+The CLI test includes a one-step run of `chdr-vacuum-wave`. The propagation test runs coarse serial,
 fine serial and coarse MPI2 through a full period, checking every CSV row with
 an independent scalar recurrence. The CLI test covers bounded/invalid arguments.
 Python3 and an MPI launcher are needed for these integration checks. Actual-reader

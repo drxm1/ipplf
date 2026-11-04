@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+## @file compare_probe_ranks.py
+# @brief CTest entry chdr.diagnostics.probe.ranks: one rank against two ranks for the probe
+# values of FourierProbeSpectra.FrozenGatesAndNaNGhosts (test_probe_full.cpp).
+# @details The script runs the GoogleTest once on one rank and once on two ranks, with
+# CHDR_PROBE_OUTPUT set and each run limited to 60 s. Each run must exit with status 0,
+# print the GoogleTest OK line and write a record. Each record must hold every key once:
+# 8 probes (two planes of 128 cells and six points), 11 channels and 6 frequencies, that is
+# 17292 complex values. The scale R of a value must be finite, positive and equal in both
+# records. The two values must agree within 1e-14 R. The script prints whether all values
+# are bitwise equal, but it does not require bitwise equality.
 """Run the C++ finite-window probe test at both rank counts and compare its output.
 
 The test FourierProbeSpectra.FrozenGatesAndNaNGhosts writes the record. It records a

@@ -1,5 +1,12 @@
 /** @file OuterLayerTest.h
- * @brief Host-side sampling for the independent polynomial outer-layer check.
+ * @brief Host-side sampling for the independent polynomial outer-layer check in
+ * OpenFaceClosure.cpp.
+ * @details Box builds a layout with open \f$x\f$ and \f$z\f$ axes and an optional periodic
+ * \f$y\f$ axis (default 8 by 6 by 10 cells, spacing (1, 0.8, 1.25), split along \f$z\f$).
+ * load() writes the owned samples of the polynomial potentials of OuterLayerOracles.h and
+ * leaves the ghosts zero. fieldError() and historyError() return a maximum error divided by
+ * an analytic maximum. ownedFieldBits() and expectSameField() compare a two-rank field with a
+ * one-rank replay within \f$10^{-13}\f$ of the one-rank maximum.
  */
 #pragma once
 #include "Ippl.h"

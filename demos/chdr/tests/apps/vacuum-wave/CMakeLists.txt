@@ -44,45 +44,16 @@ set_tests_properties(
              ENVIRONMENT
              "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
 
-# Smoke checks exercise the real driver; the GoogleTests establish numerical accuracy.
-add_test(NAME chdr.vacuum.driver.serial COMMAND $<TARGET_FILE:chdr-vacuum-wave> --steps 1)
-set_tests_properties(
-  chdr.vacuum.driver.serial
-  PROPERTIES LABELS
-             "smoke;chdr;vacuum"
-             TIMEOUT
-             60
-             PROCESSORS
-             1
-             ENVIRONMENT
-             "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
-
 if(MPIEXEC_EXECUTABLE)
-  add_test(NAME chdr.vacuum.unit.mpi2
-           COMMAND "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
-                   $<TARGET_FILE:test-chdr-vacuum> ${MPIEXEC_POSTFLAGS})
   add_test(
-    NAME chdr.vacuum.unit.mpi2.shuffle
+    NAME chdr.vacuum.unit.mpi2
     COMMAND
       "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
       $<TARGET_FILE:test-chdr-vacuum> ${MPIEXEC_POSTFLAGS} --gtest_shuffle --gtest_random_seed=0)
   set_tests_properties(
-    chdr.vacuum.unit.mpi2 chdr.vacuum.unit.mpi2.shuffle
+    chdr.vacuum.unit.mpi2
     PROPERTIES LABELS
                "unit;chdr;vacuum;mpi"
-               TIMEOUT
-               60
-               PROCESSORS
-               2
-               ENVIRONMENT
-               "OMP_NUM_THREADS=1;OMP_PROC_BIND=false")
-  add_test(NAME chdr.vacuum.driver.mpi2
-           COMMAND "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
-                   $<TARGET_FILE:chdr-vacuum-wave> ${MPIEXEC_POSTFLAGS} --steps 1)
-  set_tests_properties(
-    chdr.vacuum.driver.mpi2
-    PROPERTIES LABELS
-               "smoke;chdr;vacuum;mpi"
                TIMEOUT
                60
                PROCESSORS

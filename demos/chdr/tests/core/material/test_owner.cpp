@@ -1,5 +1,20 @@
 /** @file test_owner.cpp
  * @brief Check rasterization, exact global statistics and unrestricted material storage.
+ * @details The grid of OwnerTestSupport.h has 12 by 14 by 16 cells, spacing
+ * (0.125, 0.25, 0.5), origin (-0.5, 1, 2) and open axes; the rasterization case runs with each
+ * axis as the split axis, HomogeneousAndNonfiniteValues with the split along x only. Two maps
+ * are used: a two-value index map and a slab with
+ * \f$\varepsilon = 2.13\f$ for \f$1.5 \le y < 3\f$ and 1 elsewhere. Every allocated permittivity
+ * cell must be bitwise equal to the map at its clamped source cell (sourceCell() in
+ * OwnerOracles.h). The marked-cell count, both checksums, the minimum and the maximum must
+ * equal a serial host scan of the global map. The uniform values 0.5, 1 and 2.13 must come
+ * back from homogeneousValue(). A NaN map is stored, and homogeneousValue() then throws
+ * std::invalid_argument.
+ *
+ * Reference: exact lattice value; one against two ranks. CTest entries:
+ * chdr.material.Owner.serial and chdr.material.Owner.mpi2 (filter MaterialOwner.*). Both
+ * entries compare with the same serial scan, so together they show that the statistics do not
+ * depend on the rank count.
  */
 #include <gtest/gtest.h>
 
@@ -77,6 +92,8 @@ namespace chdr::material::test {
         EXPECT_FALSE(actual.homogeneous());
     }
 
+    /// Two-value index map and coordinate slab, each with 3 split axes: every allocated cell is
+    /// bitwise equal to its source, and the statistics equal the serial scan exactly.
     TEST(MaterialOwner, RasterizationAndRankIndependentStatistics) {
         for (unsigned axis = 0; axis < 3; ++axis) {
             checkMap(IndexMap{1}, axis);
@@ -84,8 +101,9 @@ namespace chdr::material::test {
         }
     }
 
-    // Storage accepts values independently of a solver's material restrictions:
-    // 0.5 is valid stored data, while NaN is retained but cannot be homogeneous.
+    /// Storage accepts values independently of a solver's material restrictions:
+    /// 0.5 is valid stored data, while NaN is retained but cannot be homogeneous.
+    /// The uniform values 0.5, 1 and 2.13 come back from homogeneousValue().
     TEST(MaterialOwner, HomogeneousAndNonfiniteValues) {
         auto grid = makeGrid(0, false);
         for (double value : {0.5, 1.0, 2.13, std::numeric_limits<double>::quiet_NaN()}) {

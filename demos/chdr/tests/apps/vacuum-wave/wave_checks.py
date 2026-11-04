@@ -1,8 +1,23 @@
+## @file wave_checks.py
+# @brief CSV checks of chdr-vacuum-wave runs, shared by run_wave_checks.py,
+# verify_wave_output.py and verify_partial_output.py.
+# @details check_rows(): 2 nz + 1 rows (steps 0 to 2 nz), the owned-cell count,
+# dt = 1/(2 nz), the times, finite values, discrete error at most 1e-10, zero and source
+# errors at most 1e-12, Fourier amplitude above 0.5, and after step 0 a phase increment
+# strictly between -pi and 0 and a speed within 0.002 of 1. check_phase(): the Fourier
+# coefficient within 1e-10 of \f$-\mathrm{i}u^n\f$, where
+# \f$u^{n+1} = (2 - 4(\Delta t/h)^2\sin^2(kh/2))\,u^n - u^{n-1}\f$, \f$u^0 = 1\f$,
+# \f$u^{-1} = e^{\mathrm{i}k\Delta t}\f$, \f$k = 2\pi\f$, \f$h = 1/n_z\f$
+# [fallahi2020mithra20fullwavesimulation, Eqs. (3.8)-(3.17)], and the phase increment and
+# speed within 1e-11. checkpoint_errors(): at the five checkpoints (every nz/2 steps) the
+# relative L2 errors of E and B are at most 0.01 (coarse) or 0.003 (fine).
+# compare_csv_runs(): the coarse-to-fine ratio of these maxima lies in [3, 5], and every
+# two-rank CSV value is within 1e-11 of the one-rank value.
 """Independent benchmark checks; no imports from the C++ diagnostic implementation.
 
 The scalar recurrence and signed phase follow our axial substitution into
 Fallahi, MITHRA 2.0, arXiv:2009.13645v1, equations (3.8)-(3.17), printed pp.12-14.
-The benchmark uses c=1, wavelength1, uniform grids and the declared raw E/B times.
+The benchmark uses c=1, wavelength 1, uniform grids and the declared raw E/B times.
 """
 import cmath
 import csv

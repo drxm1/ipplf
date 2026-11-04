@@ -1,5 +1,12 @@
 /** @file test_mur_layer.cpp
  * @brief Reject unsupported observations on the outermost Mur layer.
+ * @details Configuration: 8 by 6 by 10 cells with lengths 8, 6 and 10, open (Mur) x faces,
+ * periodic y and z faces, decomposition along z; R2 with the collocated and the staggered
+ * reading. FourierProbe boxes on x = 0 and x = 7 for E, B and raw B throw
+ * std::invalid_argument. A box on x = 1 and a \f$\Phi\f$ box on x = 0 do not throw. The
+ * Monitors constructor throws std::invalid_argument on this layout. Reference: refusal.
+ *
+ * CTest: chdr.diagnostics.mur-layer-refusals.serial.
  */
 #include <gtest/gtest.h>
 

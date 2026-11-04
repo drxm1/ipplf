@@ -1,12 +1,23 @@
 /** @file test_first_step.cpp
- * @brief Initial-state and one-step regression for the fixed coarse vacuum demo.
- * @details Tests 8x8x64 periodic cells, source-free Standard evolution and the
+ * @brief Initial-state and one-step regression for the coarse case of chdr-vacuum-wave.
+ * @details Tests 8 by 8 by 64 periodic cells, source-free Standard evolution and the
  * production setup helpers on one or two ranks. Our independent host oracle
- * substitutes the declared wave into Fallahi, MITHRA 2.0, arXiv:2009.13645v1,
+ * substitutes the declared wave into Fallahi, MITHRA 2.0, arXiv:2009.13645v1
+ * [fallahi2020mithra20fullwavesimulation],
  * "Wave Equation" (3.6)-(3.9) and "FDTD for Wave Equation" (3.11)-(3.15),
  * printed pp.12-13. It never calls referencePotential or solver reconstruction.
- * Code contract: StandardFDTDSolver::step (StandardFDTDSolver.hpp:65-75) and
- * FDTDSolverBase::solve/timeShift/evaluate_EB (FDTDSolverBase.hpp:23-26,60-63,109-127).
+ * Code contract: StandardFDTDSolver::step (StandardFDTDSolver.hpp) and
+ * FDTDSolverBase::solve/timeShift/evaluate_EB (FDTDSolverBase.hpp).
+ *
+ * Tolerances (expectErrors): potentials, E and B within 1e-10 of the oracle (potentials
+ * scaled by k), inactive components within 1e-12, source, history shift and history copy
+ * exactly 0, 4096 owned cells, and relative L2 errors of \f$E_x\f$ and \f$B_y\f$ against the
+ * continuum wave at most 0.01. Reference: exact lattice value (one-step oracle) and
+ * continuum analytic (relative L2).
+ *
+ * CTest: chdr.vacuum.unit.serial and chdr.vacuum.unit.mpi2 run the executable
+ * test-chdr-vacuum, which holds the 22 tests of this file, test_setup.cpp,
+ * test_diagnostics.cpp and test_policy.cpp. The two-rank entry uses shuffled order.
  */
 #include "Ippl.h"
 
@@ -93,7 +104,7 @@ namespace {
      * @details For this phi=0 case, \f$E_x=-(A_x^n-A_x^{n-1})/dt\f$ and
      * \f$B_y=(A_x^n(z+h_z)-A_x^n(z-h_z))/(2h_z)\f$.
      * These are our discrete substitutions in Fallahi, MITHRA 2.0, (3.8)-(3.9).
-     * IPPL's FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp:109-127) sets raw E/B times
+     * IPPL's FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp) sets raw E/B times
      * to (n-1/2)dt and n*dt;
      * the continuum entries use those respective times. At step=0, next is zero scratch.
      */
@@ -190,7 +201,7 @@ namespace {
     /** @brief Add this cell's observations to error; step must be 0 or 1.
      * @details Check fields, sources and inactive components; after one solve also
      * compare the shifted history to its deep snapshot and the duplicated newest arrays.
-     * History-copy contract: FDTDSolverBase::timeShift (FDTDSolverBase.hpp:60-63).
+     * History-copy contract: FDTDSolverBase::timeShift (FDTDSolverBase.hpp).
      * This helper makes no MPI calls.
      */
     void checkCell(const Cell& cell, const Reference& ref, int step, Errors& error) {
@@ -258,8 +269,9 @@ namespace {
      * @details Expected count is 8*8*64; source and history copies must be exact.
      * Potential errors are normalized by 1/k; E/B have unit amplitude. Relative L2
      * uses the global squared-error/reference sums described in checkContinuum.
-     * The cutoffs are our chosen regression requirements, explained in this demo's
-     * README.md, "Tests and source reading"; they are not thresholds stated by Fallahi.
+     * The cutoffs are our chosen regression requirements, explained in
+     * apps/vacuum-wave/README.md, section "Diagnostics and fixed acceptance"; they are not
+     * thresholds stated by Fallahi.
      * This tests initialization and one step only.
      */
     void expectErrors(const Errors& error) {
@@ -279,7 +291,7 @@ namespace {
     /** @brief Fresh production setup for each test; solver is destroyed before fields.
      * @details NaN poisoning makes missed initialization visible. E/B reference times
      * for phi=0 are -dt/2 and 0 initially, dt/2 and dt after solve, as implemented in
-     * FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp:109-127), using Fallahi's (3.8)-(3.9).
+     * FDTDSolverBase::evaluate_EB (FDTDSolverBase.hpp), using Fallahi's (3.8)-(3.9).
      * Current-history face halos feed reconstruction
      * and update; all owned values are checked. This is not a long-time convergence test.
      */
@@ -298,7 +310,8 @@ namespace {
         VacuumSolver* solver_m = &run_m.solver();
     };
 
-    /// @brief Verify both initial histories, zero scratch/source and initial raw E/B.
+    /// @brief Compare both initial histories, zero scratch/source and initial raw E/B with the
+    /// step-0 oracle, at the thresholds of expectErrors.
     TEST_F(VacuumFirstStepTest, InitializesHistoriesAndFields) {
         const auto initial = copyToHost(solver_m->A_n);
         const auto state   = snapshot(*solver_m, fields_m);
@@ -306,7 +319,8 @@ namespace {
         expectErrors(globalErrors(local, fields_m));
     }
 
-    /// @brief Verify one real solve, including exact history shift and E/B reconstruction.
+    /// @brief Compare the state after one solve with the step-1 oracle, including the exact
+    /// history shift and the E/B reconstruction, at the thresholds of expectErrors.
     TEST_F(VacuumFirstStepTest, AdvancesOneStep) {
         const auto initial = copyToHost(solver_m->A_n);
         run_m.advance();

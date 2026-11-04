@@ -42,6 +42,7 @@ set_tests_properties(chdr.vacuum.cli PROPERTIES LABELS "chdr;vacuum;integration"
 
 set_tests_properties(chdr.vacuum.propagation chdr.vacuum.cli PROPERTIES ENVIRONMENT
                                                                         "PYTHONDONTWRITEBYTECODE=1")
+set_property(TEST chdr.vacuum.propagation chdr.vacuum.cli APPEND PROPERTY LABELS mpi)
 
 # Fixtures force fresh successful runs before either readback consumes its manifest.
 set_tests_properties(chdr.vacuum.propagation PROPERTIES FIXTURES_SETUP ChdrVacuumWaveOutput)

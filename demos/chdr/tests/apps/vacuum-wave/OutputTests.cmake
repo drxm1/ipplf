@@ -32,6 +32,9 @@ function(chdr_add_output_test test_name ranks output_case)
                "${ranks}"
                SKIP_RETURN_CODE
                77)
+  if(ranks GREATER 1)
+    set_property(TEST "${test_name}" APPEND PROPERTY LABELS mpi)
+  endif()
 endfunction()
 
 chdr_add_output_test(chdr.vacuum.output.serial 1 valid $<TARGET_FILE:test-chdr-vacuum-output>)
@@ -44,7 +47,6 @@ if(MPIEXEC_EXECUTABLE)
   endforeach()
 else()
   foreach(_case IN ITEMS mpi2 failure.piece failure.wrapper failure.series failure.nonfinite)
-    chdr_vacuum_skip_test("chdr.vacuum.output.${_case}" "MPI launcher unavailable" output reader
-                          mpi)
+    chdr_vacuum_skip_test("chdr.vacuum.output.${_case}" "MPI launcher unavailable" output reader)
   endforeach()
 endif()

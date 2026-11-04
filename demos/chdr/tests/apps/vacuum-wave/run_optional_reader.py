@@ -1,3 +1,8 @@
+## @file run_optional_reader.py
+# @brief Launcher of chdr.vacuum.readback and chdr.vacuum.readback.partial.
+# @details It runs pvpython --disable-registry with the given script and arguments and
+# returns the exit status of pvpython. Without a pvpython executable it prints "SKIP:" and
+# returns 77, which CTest reports as a skip.
 """Run a real pvpython readback or report its absent dependency as CTest skip 77."""
 import argparse
 from pathlib import Path

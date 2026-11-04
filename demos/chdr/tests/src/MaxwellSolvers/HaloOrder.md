@@ -12,6 +12,14 @@ of width 2.5 cells, centered at x=4,z=24 and constant in y, intersects the
 side face near the z seam. It compares every owned sample over 256 steps
 against a serial witness and reports exact agreement of the binary64 bits.
 
+`HaloOrderMixed.cpp` repeats both checks for a configured Standard solver in a
+32x4x32 box with spacing (1,1,1), absorbing in x and periodic in y and z. The
+drift check uses a time step of 0.5 on the serial and on the world
+communicator. The old-order control must miss by at least `1e-2` on both,
+because its periodic ghost copies keep the values from before the Mur update.
+The pulse, centered at x=4,z=16 and constant in y, runs on two ranks only,
+with time steps 0.5 and `0.98/sqrt(3)`.
+
 `OpenBoundaryRegression` checks both stencils for 256 steps. Standard uses
 24x24x24 cells with spacing (1,1,1); NonStandard uses 16x16x48 cells with
 spacing (1,1,0.5). Both use a time step of 0.5. Periodic cases use the world

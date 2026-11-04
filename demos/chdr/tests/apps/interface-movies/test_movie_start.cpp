@@ -1,5 +1,22 @@
 /** @file test_movie_start.cpp
  * @brief Annulus placement, polarization and finite initial energy in an open material box.
+ * @details The tests check the starts of the eight movie cases of interface-movies
+ * (MovieCases.h) and the per-face Mur speeds of MovieFaceSolver:
+ * - StartPlacement: all eight starts, full and smoke size, pass checkMovieStart(); a start
+ *   centre moved onto the dielectric, or near the diagonal staircase at (22.1, 41.9),
+ *   throws std::invalid_argument.
+ * - UnitFaceSpeeds: after 48 steps, unit face speeds give the potential \f$A_n\f$ exactly
+ *   equal to that of the library manager (maximum difference zero); the speeds
+ *   (0.7, 0.7, 1, 1, 0.7, 0.7) differ by more than \f$10^{-12}\f$.
+ * - InitialFields: the smoke-size half-space TE start has zero potential components 0, 1
+ *   and 3 and zero \f$A_y\f$ inside the dielectric, in both histories; its aligned energy
+ *   is at least \f$1 - 10^{-12}\f$ times the discrete vector invariant.
+ * - TMInitialConstraint: both histories of the smoke-size half-space TM start have a
+ *   weighted divergence below \f$10^{-13}\f$ in every cell.
+ * Reference: self-consistency, and exact numerical equality with the library manager.
+ *
+ * CTest: chdr.interface.movies.unit.serial and chdr.interface.movies.unit.mpi2; the
+ * two-rank entry does not compare with the one-rank result.
  */
 #include <gtest/gtest.h>
 
@@ -8,7 +25,7 @@
 #include "core/simulation/ChDRSimulationManager.h"
 #include "opt-in/diagnostics/AlignedFieldEnergy.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
-#include "tests/core/solver/CoreTestSupport.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
 
 namespace {
     using namespace chdr;
@@ -28,6 +45,8 @@ namespace {
                        }));
     }
 
+    /// Eight cases at full and smoke size: the start passes checkMovieStart() and is zero at
+    /// its centre; a centre moved onto the dielectric face throws std::invalid_argument.
     TEST(Movies, StartPlacement) {
         for (const auto name : {"half-space", "brick", "slab", "diagonal", "half-space-tm",
                                 "brick-tm", "slab-tm", "diagonal-tm"}) {
@@ -63,6 +82,7 @@ namespace {
     }
 
     /// Unit speeds reproduce the library path; non-unit speeds prove the override is reached.
+    /// Smoke-size half-space case, 48 steps: difference exactly 0, and above 1e-12.
     TEST(Movies, UnitFaceSpeeds) {
         const auto input = apps::interfaceMovies::halfSpaceMovie(true);
         const auto map   = material::TwoMaterialMap{input.region_m, input.epsilon_m, 1.0};
@@ -101,7 +121,8 @@ namespace {
         EXPECT_GE(aligned, discrete * (1 - 1e-12));
     }
 
-    /// Both TM histories satisfy the weighted divergence constraint before boundary interaction.
+    /// Both TM histories satisfy the weighted divergence constraint before boundary interaction:
+    /// smoke-size half-space-tm case, maximum residual below 1e-13, aligned energy positive.
     TEST(Movies, TMInitialConstraint) {
         const auto input = apps::interfaceMovies::movieCase("half-space-tm", true);
         simulation::ChDRSimulationManager<> run(

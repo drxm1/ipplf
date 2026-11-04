@@ -66,7 +66,7 @@ retains its scalar value and private workspace. Record `formulationName()`,
 `formulationParameters().alpha_m` and `homogeneousPermittivity()` beside stencil,
 spatial reading and reconstruction. Medium tests cover source scaling, phase,
 stability and continuum convergence using independent expected values in
-`tests/core/solver/MediumOracles.h`. Rank comparisons repeat the same update on one and two ranks.
+`tests/core/solver/accuracy/MediumOracles.h`. Rank comparisons repeat the same update on one and two ranks.
 
 ## Periodic and Mur boundaries
 
@@ -171,7 +171,7 @@ values. `MurEdgeCornerFamilies` checks local edge/corner compatibility.
 `MurStability` checks fixed long trajectories, not stability for arbitrary
 initial data; `OpenBeam` compares a finite beam in an all-Mur box with a
 reference run using periodic transverse axes and Mur faces normal to x. The
-disabled reflection holdout is configured separately.
+anisotropic medium reflection case is configured separately.
 
 Tests labelled `record` also print dense three-mesh reflection tables, vacuum
 gauge and Gauss residuals, the field error from an unfilled physical ghost, and
@@ -322,8 +322,10 @@ discrete recurrence (deduction from Eq. (3.24)).
 
 ## Tests and evidence
 
-The solver tests are in `demos/chdr/tests/core/solver` and build the executable
-`test-chdr-solver` with `BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS`.
+The solver tests are in `demos/chdr/tests/core/solver`. The directories
+`support`, `operators`, `accuracy` and `mur` each build an executable named
+`test-chdr-solver-<directory>` with `BUILD_TESTING` and `IPPL_ENABLE_UNIT_TESTS`.
+The [test index](../../tests/README.md) lists every entry and its source files.
 The project Nix configuration also enables CHDR, FEL, FFT and SOLVERS with
 SERIAL and OPENMP. Use at most two compiler jobs for local development.
 
@@ -334,7 +336,9 @@ configuring. For an existing configured build, enable the relevant modules with:
 cmake -S . -B build -DBUILD_TESTING=ON -DIPPL_ENABLE_UNIT_TESTS=ON \
   -DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_FEL=ON \
   -DIPPL_ENABLE_FFT=ON -DIPPL_ENABLE_SOLVERS=ON
-cmake --build build --parallel 2 --target test-chdr-solver test-chdr-formulation
+cmake --build build --parallel 2 --target test-chdr-solver-support \
+  test-chdr-solver-operators test-chdr-solver-accuracy test-chdr-solver-mur \
+  test-chdr-formulation
 ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
   -LE 'long|record' --output-on-failure -j1
 ctest --test-dir build --no-tests=error -R '^chdr\.solver\.' \
@@ -352,7 +356,7 @@ The CTests separate bounded unit checks, long ladders and records. Tests run
 on one and two MPI ranks with one OpenMP thread per rank. Numerical assertions
 use global reductions. Rank fixtures compare global-index owned-cell dumps,
 including the source/potential seam cases. The rank-invariance field-statistic
-checks (`tests/core/solver/OwnedStatistics.h`) use balanced pairwise local sums
+checks (`tests/core/solver/support/OwnedStatistics.h`) use balanced pairwise local sums
 before their plain-double MPI sum. This keeps their rounding depth logarithmic
 in the cell count; the fixed sum over at most four components adds a bounded
 local depth (deduction from [Jeannerod and Rump, p. 7][roundoff]). The evolved
@@ -367,12 +371,12 @@ with the run log.
 | Test suites | Main checks |
 |---|---|
 | `Manufactured` | Source sign, all components and time labels; wrong-label control |
-| `Levels`, `GaugeWave`, `LevelEquivalence` | Discrete gauge cancellation, R1 closed form and bitwise R2/R2Prime equivalence |
+| `Levels`, `GaugeCancellation`, `LevelEquivalence` | Discrete gauge cancellation, R1 closed form and bitwise R2/R2Prime equivalence |
 | `Convergence`, `LongConvergence`, `StaggeredConvergence`, `LongStaggeredConvergence` | Mixed source-free and analytic sourced waves, compared at each output's label |
 | `LongGaugeGrowth` | Gauge norm in the first and last of ten periods |
 | `Dispersion`, `RecordDispersion` | Single-root cumulative phase and angular dispersion |
 | `TimeStep`, `TimeStepLong`, `TimeStepRecords` | Permitted range, effective safety factor, bounded/growing histories and endpoint records |
-| `ComovingT7` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
+| `Comoving` | Co-moving mode and bunch-train reconstruction versus exact symbols and leading-order predictions |
 | `RankGather`, `RankCases`, `SerialReference`, `StableStatistics` | Owned fields and well-conditioned reductions across rank layouts |
 | `ChdrSolverContract` | Construction contract of `ChdrSolver`, and its evolution against IPPL's Standard solver on the vacuum plane wave |
 | `Operators`, `CompactOperators`, `BoxSetup` | Difference symbols, periodic halos and geometry |
@@ -383,12 +387,12 @@ The manufactured test checks that the update adds its source without averaging;
 the smooth sourced-wave record does not test evanescent near-field response.
 That application remains a separate experiment.
 
-The `DISABLED_Holdout` suite is excluded from normal runs. It uses a different
-wave vector and anisotropic cells and is run once after development checks
-and their evidence are complete. The collocated case checks field/Gauss
-convergence, discrete identities and rank agreement; the staggered case is an
-additional record. Do not tune against its result. The exact inputs and
-numerical assertions are defined in `Convergence.h` and the named test bodies.
+The `AnisotropicConvergence` suite uses a different wave vector and anisotropic
+cells. Its two-rank entries carry the `long` label. The collocated case checks
+field/Gauss convergence, discrete identities and rank agreement; the staggered
+case checks finiteness and records the orders, identities and rank differences.
+The exact inputs and
+numerical assertions are defined in `tests/core/solver/accuracy/Convergence.h` and the named test bodies.
 
 The four upstream Maxwell examples remain compile-only. The Standard example's
 update, dispersion and rank claims are covered here by `Manufactured`,

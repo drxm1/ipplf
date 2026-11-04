@@ -1,3 +1,21 @@
+/** @file PeriodicAxes.cpp
+ * @brief Halo fill and halo accumulation of IPPL field layouts with one periodicity flag per
+ * axis, and the refusal of mixed layouts by the multigrid preconditioner.
+ * @details The box has 6 by 5 by 4 cells of unit spacing. The fill and accumulation tests run
+ * for all 8 periodicity masks (bit \f$d\f$ set: axis \f$d\f$ is periodic), and each mask runs
+ * with the split along \f$x\f$, \f$y\f$ and \f$z\f$ in turn. After fillHalo(), every allocated
+ * cell must hold the integer label of its owned source cell; a ghost beyond an open face has
+ * no source and keeps the sentinel \f$-1\f$. After accumulateHalo(), every owned cell (ghosts
+ * excluded) must hold the sum of the ghost deposits that map to it. The oracle
+ * haloSourceIndex() in BoundaryOracles.h gives the source cell: a ghost wraps on a periodic
+ * axis and has no source beyond an open face. Labels and sums are integers, so the comparison
+ * is exact (EXPECT_EQ). The multigrid preconditioner must throw IpplException for the layout
+ * that is open in \f$x\f$ and periodic in \f$y\f$ and \f$z\f$. It must accept 16 by 16 by 16
+ * layouts that are all open or all periodic.
+ *
+ * Reference: exact lattice value; refusal. CTest entries: chdr.src.PeriodicAxes.serial (one
+ * rank) and chdr.src.PeriodicAxes.mpi2 (two ranks).
+ */
 #include "Ippl.h"
 
 #include "../MaxwellSolvers/BoundaryOracles.h"
@@ -11,7 +29,7 @@ namespace {
     using Field = ippl::Field<double, 3, Mesh, Mesh::DefaultCentering>;
     constexpr std::array<int, 3> cells{6, 5, 4};
 
-    /// Every periodicity pattern is checked along each possible decomposition axis.
+    /// Periodicity flags from a three-bit mask: bit d set means that axis d is periodic.
     Axes periodicAxes(unsigned mask) {
         return {bool(mask & 1), bool(mask & 2), bool(mask & 4)};
     }
@@ -119,6 +137,9 @@ namespace {
     }
 }  // namespace
 
+/// For all 8 masks and 3 split axes, the periodicity queries of the layout follow the mask, and
+/// fillHalo() writes the exact source label into every allocated cell (ghosts beyond an open
+/// face keep the sentinel -1).
 TEST(PeriodicAxes, FillEveryGhost) {
     for (unsigned mask = 0; mask < 8; ++mask) {
         for (unsigned split = 0; split < 3; ++split) {
@@ -135,6 +156,8 @@ TEST(PeriodicAxes, FillEveryGhost) {
     }
 }
 
+/// The constructor with one periodicity flag for all axes (split along z) gives the same fill
+/// as the all-open mask 0 and the all-periodic mask 7.
 TEST(PeriodicAxes, BooleanInterface) {
     for (bool periodic : {false, true}) {
         Box box(periodicAxes(0), 2);
@@ -144,6 +167,8 @@ TEST(PeriodicAxes, BooleanInterface) {
     }
 }
 
+/// For all 8 masks and 3 split axes, accumulateHalo() adds every ghost deposit exactly once to
+/// its owned source cell and adds no deposit from beyond an open face.
 TEST(PeriodicAxes, AccumulateEveryGhost) {
     for (unsigned mask = 0; mask < 8; ++mask) {
         for (unsigned split = 0; split < 3; ++split) {
@@ -155,6 +180,7 @@ TEST(PeriodicAxes, AccumulateEveryGhost) {
     }
 }
 
+/// The multigrid preconditioner throws IpplException for mask 6: open in x, periodic in y and z.
 TEST(PeriodicAxes, MixedMultigridIsRejected) {
     Box box(periodicAxes(6), 2);
     auto op = [](Field& field) {
@@ -164,7 +190,8 @@ TEST(PeriodicAxes, MixedMultigridIsRejected) {
     EXPECT_THROW(multigrid.init_fields(box.field), IpplException);
 }
 
-/// Uniform layouts remain accepted, with enough cells for coarse levels on both rank counts.
+/// Uniform layouts (16 by 16 by 16, all open or all periodic) remain accepted, with enough cells
+/// for coarse levels on both rank counts.
 TEST(PeriodicAxes, UniformMultigridIsAccepted) {
     const ippl::NDIndex<3> domain(ippl::Index(16), ippl::Index(16), ippl::Index(16));
     for (bool periodic : {false, true}) {

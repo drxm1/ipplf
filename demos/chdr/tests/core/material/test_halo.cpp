@@ -1,5 +1,14 @@
 /** @file test_halo.cpp
  * @brief Exact source-cell checks for faces, edges, corners and physical/inter-rank intersections.
+ * @details The grid of OwnerTestSupport.h has 12 by 14 by 16 cells, and IndexMap gives each
+ * cell a distinct integer. The number of allocated cells of the MaterialOwner permittivity
+ * that differ bitwise from their source cell must be exactly 0. The source cell comes from
+ * extendedValue() in OwnerOracles.h: wrap on a periodic axis, clamp on an open axis. Axis
+ * patterns: all periodic, all open and the 6 mixed patterns, each with the 3 split axes.
+ *
+ * Reference: exact lattice value. CTest entries: chdr.material.Halo.serial and
+ * chdr.material.Halo.mpi2 (filter MaterialHalo.*). Rank seams and their intersections with the
+ * global faces exist only in the mpi2 entry.
  */
 #include <gtest/gtest.h>
 
@@ -37,9 +46,11 @@ namespace chdr::material::test {
         }
     }
 
+    /// All axes periodic (wrap), 3 split axes: no allocated cell differs from its source cell.
     TEST(MaterialHalo, PeriodicSourceCells) {
         checkHalos(true);
     }
+    /// All axes open (clamp), 3 split axes: no allocated cell differs from its source cell.
     TEST(MaterialHalo, PhysicalSourceCells) {
         checkHalos(false);
     }
