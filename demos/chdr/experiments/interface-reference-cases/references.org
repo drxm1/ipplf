@@ -4,8 +4,9 @@
 
 * Purpose and assumptions
 
-This document derives the continuum and aligned-grid references used to interpret
-plane-pulse reflection and transmission. The continuum solution is the physical
+This document derives the continuum and aligned-grid references and the
+periodic tilted-plane construction used to interpret plane-pulse reflection and
+transmission. The continuum solution is the physical
 reference. The discrete solution checks whether an aligned numerical interface
 reproduces the recurrence that the scheme is intended to solve. Agreement with
 the discrete solution does not establish agreement with the continuum solution.
@@ -503,7 +504,8 @@ documentation that use an =RC-= label refer to these definitions.
 | RC-13 | A matched comparison with another electromagnetic code for a stated reference problem. Identify the underlying case as well as the other implementation and matched settings. |
 
 This document derives the plane-interface references needed for RC-1, RC-2 and
-the continuum part of RC-9. Other entries fix the meaning of their labels; their
+the continuum comparison and periodic measurement construction for RC-9.
+Other entries fix the meaning of their labels; their
 full reference derivations and measurement qualifications belong with their
 implementations. The discrete potential invariant available in the solver must
 be identified as such; it does not by itself establish the physical energy and
@@ -625,8 +627,442 @@ observable conventions. If finite illumination is used, include an aligned
 control with the same beam definition and extraction. Document the resolution
 and time-step policy and any unavoidable differences in the resolved rows.
 Assess boundary, angular/reference and extraction effects before attributing a
-difference to the interface discretization. No particular rotated method or
-measured convergence result is established by this document.
+difference to the interface discretization. The following section specifies one
+periodic construction. Its derivation does not establish measured convergence.
+
+* Exactly periodic tilted-plane construction
+<<tilted-construction>>
+
+This section describes the =periodic_tilted_plane= path for vacuum incidence
+onto a dielectric with \(\varepsilon_d\geq1\), using Standard differences,
+O1-VS and R2. The interface tilt \(\alpha\) and incidence angle \(\theta\)
+are independent signed inputs, with \(0<\lvert\alpha\rvert<90^\circ\) and
+\(\lvert\theta\rvert<90^\circ\). The construction changes the compatible
+cell shape when needed; it does not round the requested tilt to a grid diagonal.
+It uses a normal-localised periodic pulse, without a finite tangent envelope.
+The aligned discrete-interface coefficients are not an oracle for its staircase.
+
+** Normal coordinates, signed face offset and material samples
+
+Write
+\[
+ c=\cos\alpha>0,\quad s=\sin\alpha,\quad \beta=\lvert s\rvert,
+ \quad\eta=\operatorname{sign}s,\qquad
+ \mathbf n=(c,0,s),\quad\mathbf t=(-s,0,c).
+\]
+Here \(c,s\) are trigonometric factors; the vacuum wave speed remains one.
+The requested face is \(\mathbf n\cdot\mathbf x=\delta\). In this
+section the recorded coordinate \(u\) increases towards the incident vacuum:
+an incoming wave travels towards decreasing \(u\). This orientation differs
+from the incident-to-transmitted coordinate used in the introductory Fresnel
+derivation. The fixed \(E_y\) and \(H_y\) amplitude bases remain unchanged.
+The formulas below are coordinate/reciprocal-lattice deductions from the
+plane-wave phase and Bloch relation in [[ref-oskooi][Oskooi and Johnson, §4.5, Eq. (4.30)]].
+
+For positive coprime integers \(p,q\) and a positive integer \(M\), choose
+\[
+ h_z=\frac{cp}{\beta q}h_x,\quad N_x=Mp,\quad N_z=Mq,\quad
+ L_x=N_xh_x,\quad L_z=N_zh_z,\quad P=cL_x=\beta L_z.
+\]
+The primitive material translation and its tangent length are
+\[
+ \mathbf T_0=(-\eta ph_x,0,qh_z),\qquad
+ \mathbf n\cdot\mathbf T_0=0,\qquad
+ L_0=\mathbf t\cdot\mathbf T_0=ph_x/\beta,\qquad L_t=ML_0.
+\]
+The primitive normal row spacing is \(d_n=ch_x/q\). At cell centres,
+\[
+ \mathbf n\cdot\mathbf x_{ik}
+ =\frac{d_n}{2}\,[q(2i+1)+\eta p(2k+1)].
+\]
+Thus the bracket is an integer row label; Cartesian box translations change
+it by integer multiples of \(2Mpq\). =TiltedMaterialMap= wraps that integer
+before applying the signed offset. With dielectric width \(D\), incident
+width \(H\), and \(D+H=P\), the sampled dielectric satisfies
+\[
+ \zeta=(\mathbf n\cdot\mathbf x_{ik}-\delta)\bmod P,
+ \qquad \zeta=0\ \text{or}\ H\leq\zeta<P.
+\]
+This is the closed interval \([\delta-D,\delta]\), repeated normally.
+At zero offset, integer comparisons resolve exact interface ties. Nonzero
+offsets use the recorded floating-point offset after integer wrapping. This is
+centre sampling with no sub-cell average. A two-dimensional staircase has no
+single represented-face displacement comparable to the aligned scalar \(x_M\).
+
+The phase anchor chosen by =tiltedAnchor= is
+\[
+ \mathbf a=(-\eta L_x/2,0,L_z/2)+\delta\mathbf n,
+ \qquad\mathbf n\cdot\mathbf a=\delta,
+ \qquad\mathbf t\cdot\mathbf a=L_t/2.
+\]
+For a lifted point \(\widetilde{\mathbf x}\), the stored coordinates are
+\(u=\mathbf n\cdot(\widetilde{\mathbf x}-\mathbf a)\) and
+\(v=\mathbf t\cdot(\widetilde{\mathbf x}-\mathbf a)\). Moving
+\(\delta\) therefore moves the face and the source/probe construction
+consistently along the normal, while retaining the tangent origin.
+
+** Exactly periodic carriers and the incidence convention
+
+Let \(a,j\) be integers, and set \(b=j+\eta a\). The Cartesian carrier
+\[
+ k_x=2\pi a/L_x,\qquad k_z=2\pi b/L_z
+\]
+has unit phase under both Cartesian box translations. These identities are
+exact algebraically; their numerical evaluations retain floating-point roundoff.
+Taking its normal and
+tangent projections gives
+\[
+ \kappa=-s k_x+c k_z=\frac{2\pi j}{L_t},\qquad
+ k_n=c k_x+s k_z=\frac{2\pi}{P}(a+\eta s^2j).
+\]
+Varying \(a\) at fixed \(j\) constructs a packet in the normal coordinate
+with one tangent wavenumber. A pure normal translation by \(P\) gives the
+common phase \(\exp(2\pi i\eta s^2j)\), which need not equal one.
+Periodicity is imposed in Cartesian coordinates; it must not be replaced by an
+assumed independent unit-periodic normal coordinate. These identities follow
+by substitution in the Bloch phase, not by imposing an additional boundary rule.
+
+The recorded incidence angle is the signed /continuum reference angle/
+\[
+ \theta(\omega)=\arcsin\!\frac{\kappa}{\omega}
+\]
+for vacuum incidence. Consequently, for nonzero requested \(\theta_0\),
+the resolved frequency is \(\omega_0=\kappa/\sin\theta_0\); at normal
+incidence \(j=0\) and the requested frequency is retained. This is the
+fixed-tangent-wavenumber frequency/angle relation of
+[[ref-oskooi][Oskooi and Johnson, §4.5, pp. 85–86]] and
+[[ref-ellingson][Ellingson, §§5.6–5.8]], with a signed tangent convention.
+The lattice phase angle \(\operatorname{atan2}(\kappa,-k_n^-)\) need
+not equal \(\theta\); a group-velocity direction is a third quantity.
+The C++ continuum utility returns the angle's nonnegative magnitude. Retain
+the sign of =kappa= and =actual_angle_degrees= when plotting signed incidence.
+
+The automatic layout search quantises \(j\), adjusts \(\omega_0\), and
+increases \(M\) until the estimated isolation widths fit. The requested
+and actual resolution and cell shape are separate metadata. Automatic primitive
+candidates use coprime \(p,q\leq6\), ranked by the logarithmic change in
+the requested z/x cell ratio; an explicit pair may use values up to 16.
+These are current search limits, not restrictions of the carrier algebra. An explicitly
+pinned =period_cells_multiplier= and signed =tangent_mode= require an explicit
+primitive pair. =resolvePinnedTiltedPeriod= checks their angle/sign consistency
+and rejects a period too short for the recomputed gates and probe layout.
+Scaling \(M,j\) by the same positive integer keeps \(\kappa\), and hence
+\(\omega_0\) at fixed nonzero incidence, unchanged. The remaining normal
+period is assigned to the incident layer; =separation_factor= separately
+enlarges the minimum layer widths. Neither mechanism silently changes the tilt.
+
+** Four directional roots and a sufficient principal-branch restriction
+
+For a candidate normal wavenumber, define
+\[
+ k_x=ck_n-s\kappa,\qquad k_z=sk_n+c\kappa,\qquad
+ F(k_n)=\frac{4\sin^2(k_xh_x/2)}{h_x^2}
+       +\frac{4\sin^2(k_zh_z/2)}{h_z^2},\qquad
+ W(\omega)=\frac{2\sin(\omega\Delta t/2)}{\Delta t}.
+\]
+In medium \(\varepsilon\), the roots solve
+\(F(k_n)=\varepsilon W^2\). This is the rotated-coordinate substitution
+in [[ref-fallahi][Fallahi, Eq. (3.17)]], with wave speed
+\(1/\sqrt\varepsilon\). Differentiating at fixed \(\kappa\), following
+[[ref-trefethen][Trefethen, §1, Eqs. (1.4)–(1.5)]], gives
+\[
+ v_n=\left.\frac{\partial\omega}{\partial k_n}\right|_\kappa
+ =\frac{c\sin(k_xh_x)/h_x+s\sin(k_zh_z)/h_z}
+        {\varepsilon W\cos(\omega\Delta t/2)}.
+\]
+For \(0<\omega\Delta t<\pi\), the denominator is positive. The
+two roots are labelled by the sign of \(v_n\), independently in each
+medium. Use \(k_i^-\), \(k_i^+\), \(k_d^-\), \(k_d^+\) for
+the four directions. The reflected root is \(k_i^+\), not an assumed
+\(-k_i^-\): at fixed nonzero \(\kappa\), \(F(k_n)\) need not be even.
+
+The implemented root search deliberately restricts the admissible branch.
+Within \(\lvert k_xh_x\rvert,\lvert k_zh_z\rvert<\pi/2\),
+\[
+ F''(k_n)=2c^2\cos(k_xh_x)+2s^2\cos(k_zh_z)>0.
+\]
+Hence there is at most one grazing minimum \(k_g\). The code requires
+the derivative to bracket that minimum and the target to lie above it, then
+bisects each monotone side. In addition it requires
+\[
+ K\max(h_x,h_z)<\sqrt2,\qquad K=\sqrt\varepsilon\,W.
+\]
+For any Cartesian principal root, \(\lvert K_x\rvert,\lvert K_z\rvert
+\leq K\), with \(K_ell=2\sin(k_\ell h_\ell/2)/h_\ell\).
+The displayed bound therefore implies both strict phase inequalities above.
+Thus the two roots exhaust this qualified principal branch. This is a
+sufficient-bound deduction from Fallahi's symbols, not a general solver for
+all dispersion branches or a stability/accuracy theorem. The zero-frequency,
+zero-\(\kappa\) timing endpoint uses the limiting speeds
+\(v_n=\pm1/\sqrt\varepsilon\); measured coefficient bins remain positive
+frequency. Unsupported branches are rejected before allocating the simulation.
+
+** Material-period Floquet orders
+
+The material period along the tangent is \(L_0\), not the larger box
+period \(L_t\). Its possible scattering orders have
+\[
+ \kappa_\ell=\kappa+2\pi\ell/L_0,\qquad\ell\in\mathbb Z,
+\]
+by the reciprocal-period argument in [[ref-oskooi][Oskooi and Johnson, §4.5, p. 84]].
+The following is a sufficient /discrete/ exclusion bound, derived here.
+For each Cartesian direction \(m=x,z\), let
+\[
+ x_m=\min(1,h_mK/2),\qquad C_m=\frac{\arcsin x_m}{x_m},\qquad C_m(0)=1.
+\]
+On the principal branch, monotonicity of \(\arcsin x/x\) gives
+\(\lvert k_m\rvert\leq C_m\lvert K_m\rvert\). Applying
+Cauchy–Schwarz to the tangent projection then gives
+\[
+ \lvert -s k_x+c k_z\rvert\leq
+ B_t(\varepsilon,\omega)
+ :=K\sqrt{s^2C_x^2+c^2C_z^2}.
+\]
+Since every nonzero order has
+\(\lvert\kappa_\ell\rvert\geq2\pi/L_0-\lvert\kappa\rvert\),
+\[
+ m_F(\omega)=2\pi/L_0-\lvert\kappa\rvert
+             -\max_{\varepsilon\in\{1,\varepsilon_d\}}B_t(\varepsilon,\omega)>0
+\]
+excludes all nonzero propagating orders in either homogeneous medium.
+For the supported \(\varepsilon_d\geq1\), the dielectric gives the larger
+bound and is the one evaluated by =tiltedOrderMargin=.
+
+The record's =floquet_margin= covers the timing samples and requested
+measurement bins; =retained_floquet_margin= checks every retained carrier.
+These two finite sets must remain distinguishable. A positive margin does not
+exclude evanescent orders, prove a negligible field near the staircase, or
+qualify the finite observation gate. Those require separate extraction and
+distance/layout controls.
+
+** Retained packet, weighted curl and omitted-mode accounting
+
+Let \(k_0=k_i^-(\omega_0)\), \(f\) be =cutoff_fraction=, and
+\(\tau\) be =tail_sigmas=. The implementation sets
+\[
+ \sigma_k=\frac{(1-f)(k_g-k_0)}{\tau},\qquad
+ g_a=\exp\!\left[-\frac{(k_{n,a}-k_0)^2}{2\sigma_k^2}\right].
+\]
+The finite Cartesian principal carrier set satisfies
+\(2\lvert a\rvert<N_x\) and \(2\lvert j+\eta a\rvert<N_z\).
+Within it, the retained carriers have
+\(\lvert k_{n,a}-k_0\rvert<\tau\sigma_k\) and negative incident
+group velocity. Each retained carrier must satisfy the continuum propagation,
+directional-root and Floquet checks. The source modes and weights are written
+to =modes.csv=; requested observation bins need not coincide with them.
+The current setup requires at least 16 retained modes, \(\tau>3\),
+\(0\leq f<1\), and strictly positive \(f\) for nonzero incidence.
+These guards do not themselves establish spectral or extraction accuracy.
+The observation grid is uniform in normal wavenumber around \(k_0\), then
+mapped through the incident dispersion; it is not generally uniform in frequency.
+
+For source centre \(\mathbf a+S\mathbf n\), define
+\[
+ \psi(\mathbf x,t)=\sum_{a\in\mathcal R}g_a
+ \cos\!\left[k_{n,a}(u-S)+\kappa v-\omega_a t\right].
+\]
+The scalar potential is initialised to zero. TE uses \(A_y=\psi\).
+TM uses the compatible staggered differences
+\[
+ A_x=-D_z\psi/\varepsilon_x,\qquad
+ A_z=D_x\psi/\varepsilon_z.
+\]
+Here the face coefficients are the harmonic coefficients used by the solver.
+With the same coefficients in the weighted divergence,
+\(D_x(\varepsilon_xA_x)+D_z(\varepsilon_zA_z)
+=-D_xD_z\psi+D_zD_x\psi=0\).
+This cancellation is a discrete-curl deduction from
+[[ref-ryu][Ryu et al., Appendix A, Eqs. (19)–(24)]], with the weighted gauge
+quantity identified in [[ref-chew][Chew, Eqs. (14), (15), (19)]]. It does not
+establish that a nonzero packet tail already overlapping the material is a
+pure incoming homogeneous solution. That error still needs qualification.
+
+For vacuum incident modes, the reconstructed channel weights are
+\[
+ Q_a^{\rm TE}=W_a,\qquad
+ Q_a^{\rm TM}=W_a^2\cos(\omega_a\Delta t/2),\qquad
+ W_a=W(\omega_a).
+\]
+They follow from the same centred time difference and R2 magnetic average
+derived above; the time labels are those of =LevelContract=. Both are
+nonnegative on the supported positive-frequency branch. For the omitted
+members \(\mathcal O\) of the enumerated principal carrier set, the
+triangle inequality gives the homogeneous channel-amplitude bound
+\[
+ \lvert F_{\mathcal O}(\mathbf x,t)\rvert
+ \leq\sum_{a\in\mathcal O}g_aQ_a,
+ \qquad
+ f_{\rm omit}=\frac{\sum_{a\in\mathcal O}g_aQ_a}
+                    {\sum_{a\in\mathcal R}g_aQ_a}.
+\]
+=discarded_field_weight_fraction= is this L1 weight ratio. Its denominator is
+the retained /weight sum/, not a lower bound on the actual field at an arbitrary
+point. It is not an energy fraction, a relative error in a weak coefficient,
+a bound on an infinite continuum Gaussian tail, or a bound on interface and
+return contamination. This is a triangle-inequality deduction for the stated
+finite superposition. Increasing the box changes modal density and therefore
+the unnormalised pulse amplitude because each carrier retains its Gaussian
+weight. Compare incident-normalised coefficients, and retain the actual spectrum
+when assessing whether two linear scattering experiments match.
+
+** Four-direction envelope timing and return paths
+
+Write the positive speed magnitudes as
+\(v_i^-=-v_n(k_i^-)\), \(v_i^+=v_n(k_i^+)\), and similarly
+\(v_d^-,v_d^+\). For ideal point probes at \(u=\pm d\), source
+distance \(S\), dielectric width \(D\), incident width \(H\), and
+\(P=D+H\), the centre travel times are:
+
+| Path | Centre travel time |
+|------+--------------------|
+| Desired reflection | \(S/v_i^-+d/v_i^+\) |
+| Desired transmission | \(S/v_i^-+d/v_d^-\) |
+| Second-face return to transmitted probe | \(S/v_i^-+D/v_d^-+(D-d)/v_d^+\) |
+| Second-face return to incident probe | \(S/v_i^-+D/v_d^-+D/v_d^++d/v_i^+\) |
+| Negative wrap to incident probe | \((S+H-d)/v_i^-+D/v_d^-\) |
+| Positive reflected wrap to transmitted probe | \(S/v_i^-+H/v_i^++(D-d)/v_d^+\) |
+| Analytic homogeneous incident image | \((S-d+P)/v_i^-\) |
+| Complete negative wrap to transmitted probe | \((S+H)/v_i^-+(D+d)/v_d^-\) |
+| Complete positive wrap to incident probe | \(S/v_i^-+(H+d)/v_i^++D/v_d^+\) |
+
+Each entry is the sum of its directional path lengths divided by the
+corresponding group speeds. It is a ray-envelope deduction from the
+group-velocity interpretation in [[ref-trefethen][Trefethen, §§1–2]], under the
+one-propagating-order hypothesis checked above. Reflected and reverse-medium
+speeds must not be replaced by their opposite-direction counterparts.
+
+The nominal initial half-width is \(w=\tau/\sigma_k\), rounded up to
+primitive normal rows. At each sampled frequency the timing interval is
+the displayed centre time plus or minus \(w/v_i^-\). =TiltedTiming::window=
+takes the earliest and latest values across its finite normal-wavenumber sample.
+Finite probe boxes use a conservative interval \([d_{\min},d_{\max}]\)
+from their component-coordinate extent: desired gates use the latest arrival,
+and return exclusions use the earliest. The code rounds gates up to integer
+steps, adds three guard steps and =gate_padding_steps=, then chooses layer
+widths and a compatible period. These guards and sampled extrema are setup
+choices, not an analytic error bound. A truncated Gaussian mode sum has no
+compact normal support; dispersive broadening, tails and finite sampling
+remain reasons to compare longer gates and larger separations/periods.
+
+** Finite-gate analytic incident transform
+
+The positive-kernel DTFT follows [[ref-oskooi][Oskooi and Johnson, §4.3, Eq. (4.6)]],
+with the common \(1/(2\pi)\) omitted as above. For the half-step labels
+\(t_m=(m-1/2)\Delta t\), \(m=0,\ldots,G-1\), a finite geometric sum gives
+\[
+ \mathcal D_G(\nu)=\Delta t\sum_{m=0}^{G-1}e^{i\nu t_m}
+ =\Delta t\,G\,\frac{\operatorname{sinc}(Ga)}{\operatorname{sinc}(a)}
+       e^{ia(G-2)},\qquad a=\nu\Delta t/2,
+ \quad\operatorname{sinc}(a)=\frac{\sin a}{a}.
+\]
+This is a direct summation deduction, not a continuous/infinite-time transform.
+=tiltedSinc= uses its limiting expansion at zero. The admitted positive
+frequencies keep \(\omega\pm\omega_a\) away from nonzero exact temporal
+aliases where the written quotient would also need its removable limit.
+
+Set \(\phi_a=k_{n,a}(u-S)+\kappa v\), and
+\(C_a^\pm=e^{\pm i\phi_a}\mathcal D_G(\omega\mp\omega_a)\).
+The analytic incident channels are
+\[
+ \widehat E_y^{\rm inc}=\sum_a g_a\frac{iW_a}{2}(C_a^+-C_a^-),\qquad
+ \widehat H_y^{\rm inc}=\sum_a g_a
+ \frac{W_a^2\cos(\omega_a\Delta t/2)}{2}(C_a^++C_a^-).
+\]
+These expressions expand the real sine/cosine channels, so both temporal
+frequency signs remain in the finite gate. The incident normalization uses
+the incident probe's actual gate; the transmitted gate may differ and is
+recorded separately. The analytic sum is exact for the retained homogeneous
+incident mode history, up to floating-point evaluation. It does not make a
+finite-gate fit an exact monochromatic scattering measurement.
+
+** Lifted point spectra and complex amplitude projection
+
+For each wrapped component point \((x,y,z)\), store integer windings
+\(\ell_x,\ell_z\) and use
+\[
+ \widetilde{\mathbf x}=(x+\ell_xL_x,y,z+\ell_zL_z).
+\]
+The implementation chooses a common lift from the anchor's box windings and
+rejects a probe patch crossing a Cartesian edge or intersecting the sampled
+interface, including the surrounding component stencils. It does not silently
+snap or split that patch. Both windings can be nonzero for signed offsets.
+An initial carrier is unchanged by these Cartesian translations because its
+phase increments are integer multiples of \(2\pi\). An outgoing root fitted
+on a local homogeneous patch need not itself be a global Cartesian box mode;
+the same lift is therefore essential to its face phase. This follows directly
+from the carrier phase identities and [[ref-schneider][Schneider's propagation correction]].
+
+At frequency \(\omega\), form one unit-modulus basis per direction,
+\(b_j(k_n)=\exp[i(k_nu_j+\kappa v_j)]\). For point data \(f_j\),
+expanding the least-squares objective gives
+\[
+ \sum_j\lvert f_j-A b_j\rvert^2
+ =\sum_j\lvert f_j\rvert^2
+  -2\operatorname{Re}\!\left\{\overline A\sum_jf_j\overline b_j\right\}
+  +N_p\lvert A\rvert^2,
+ \qquad
+ A=\frac1{N_p}\sum_j f_j\overline b_j.
+\]
+The last equality is the minimiser of the displayed quadratic; this is the
+unweighted one-column projection used by =fitTiltedAmplitude=. Its physical
+incident-subtraction/phase convention follows
+[[ref-oskooi][Oskooi and Johnson, §4.3]] and [[ref-schneider][Schneider, §5.8.2]];
+the minimisation algebra is given here explicitly.
+
+Let \(I_j\) be the analytic incident transform, \(U_j\) the incident-side
+total transform, and \(V_j\) the transmitted-side transform. Fit
+\[
+ A_i=\langle I_j\overline{b_j(k_i^-)}\rangle_i,\quad
+ A_r=\langle(U_j-I_j)\overline{b_j(k_i^+)}\rangle_i,\quad
+ A_t=\langle V_j\overline{b_j(k_d^-)}\rangle_t,\qquad
+ r=A_r/A_i,\quad t=A_t/A_i.
+\]
+The fitted amplitudes already refer to the anchor; no additional aligned
+point-probe phase factor is applied. For each fit the recorded residual is
+\[
+ \rho=\frac{\sqrt{\langle\lvert f_j-A b_j\rvert^2\rangle}}
+                {\lvert A_i\rvert}.
+\]
+The denominator is the incident amplitude even for the reflected fit; this
+avoids dividing by a vanishing physical reflection. All three residuals must
+be at most =fit_residual_limit=, and \(\lvert A_i\rvert\) must be at least
+=incident_floor= times the largest fitted incident amplitude among selected
+bins. Failed bins retain their raw spectra and fitted amplitudes; ratios are
+invalid and carry a reason.
+
+A residual measures the part of the data outside the fitted basis. A parallel
+contaminating component can bias \(A\) while leaving a small residual.
+Positive Floquet margins do not remove evanescent orders, and finite gates can
+mix neighbouring source modes. Therefore retain incoming and scattered residuals,
+change probe distance/extent, compare homogeneous starts, and vary gates/layout
+before attributing a continuum discrepancy to material discretisation. These
+are qualifications, not a claimed universal accuracy threshold. Continuum
+power weights applied to fitted amplitudes remain continuum flux estimates,
+not an exact discrete energy balance or an integration of unmeasured orders.
+
+** Tilted output contract and comparison scope
+
+Plane schema two sets =geometry= to =periodic_tilted_plane=. The record
+retains the normal/tangent vectors, signed requested face and anchor, primitive
+and box periods, actual spacing and requested shape, signed tangent mode and
+wavenumber, actual frequency vector, source placement, gates, omitted-weight
+ratio, Floquet margins and fit criteria. =spectra.csv= stores all three signed
+normal roots and velocities, the complex incident/reflected/transmitted face
+amplitudes, dimensionless \(r,t\), residuals, validity and reasons.
+=probe-spectra.csv= stores the original point ordering, actual wrapped
+coordinates, both windings, \(u,v\), and raw analytic-incident/total transforms.
+Transmitted-side incident columns are zero placeholders, not a second incident
+normalization. Raw transforms and face amplitudes remain in normalized solver
+units even when the separate displayed angular-frequency column uses SI units.
+
+The Python raw-data audit recomputes the fits and ratios using the recorded
+directional roots; agreement checks extraction consistency, not the correctness
+of those roots or the scattering model. The independent C++ continuum reference
+uses the recorded \(\omega,\kappa\) and media. A tilted run must request
+continuum-only reference output; it must never inherit aligned lattice
+coefficients merely because those functions are available. Matched controls
+must preserve the actual media, frequency, \(\kappa\), cell/time-step policy
+and intended pulse band, while recording deliberate layout or extraction changes.
 
 * Formula-to-code correspondence
 
@@ -646,6 +1082,16 @@ Use the source revision recorded with a result when interpreting this table.
 | Component coordinates and times | [[file:../../core/base/LevelContract.h][LevelContract.h]] | Physical spatial offsets and half-step labels. |
 | Accumulated spectra | [[file:../../opt-in/diagnostics/FourierProbe.h][FourierProbe.h]] | Actual frequency vector, gate, window, coordinates and finite time transform. |
 | Harmonic constitutive coefficient | [[file:../../core/material/O1VSCoefficients.h][O1VSCoefficients.h]] | The material-face rule assumed by the TM discrete derivation. |
+| Tilted geometry and automatic/pinned periods | =tiltedGeometry=, =resolveTiltedRow=, =resolvePinnedTiltedPeriod= in [[file:../../apps/planar-interface/TiltedInput.h][TiltedInput.h]] | Exact requested tilt, compatible shape and independently recorded actual frequency. |
+| Directional roots and speeds | =tiltedConvexInterval=, =tiltedGrazingRoot=, =tiltedRoots= in [[file:../../apps/planar-interface/TiltedDispersion.h][TiltedDispersion.h]] | The qualified convex principal branch and separate normal directions. |
+| Nonzero-order exclusion | =tiltedOrderMargin= in the same header | Sufficient principal-branch Floquet margin, using the primitive material period. |
+| Packet and observation frequencies | =completeTiltedSpectrum=, =selectTiltedModes=, =selectTiltedBins= in [[file:../../apps/planar-interface/TiltedSetup.h][TiltedSetup.h]] | Source width, retained Cartesian modes, L1 omission accounting and actual measurement bins. |
+| Directional return estimates | =TiltedTiming::window=, =tiltedOtherWidth=, =tiltedIncidentWidth= in the same header | Desired/return path intervals with four directional speeds and finite probe extent. |
+| Tilted material and phase coordinates | =TiltedMaterialMap=, =tiltedAnchor=, =tiltedLift=, =tiltedCoordinates= in [[file:../../apps/planar-interface/TiltedPulse.h][TiltedPulse.h]] | Integer material rows, signed face, selected anchor and explicit Cartesian winding. |
+| Tilted histories and finite-gate reference | =TiltedPulse=, =tiltedTimeSum=, =tiltedIncidentTransform= in the same header | Retained potential modes and the exact finite analytic incident DTFT. |
+| Tilted face fit and residual | =fitTiltedAmplitude=, =tiltedFitError=, =fitTiltedBin=, =qualifyTiltedFit= in [[file:../../apps/planar-interface/TiltedMeasurement.h][TiltedMeasurement.h]] | Raw point subtraction, separate directional projection and incident-normalized residuals. |
+| Tilted provenance and raw files | =recordTiltedGeometry=, =recordTiltedQualification=, =writeTiltedPoints=, =writeTiltedModes= in [[file:../../apps/planar-interface/TiltedOutput.h][TiltedOutput.h]] | Geometry/qualification metadata and reconstructible modes, coordinates and spectra. |
+| Independent record/projection audit | =load_run= in [[file:read_run.py][read_run.py]]; =evaluate= and =extraction_residuals= in [[file:references.py][references.py]] | Schema, signed angle and lifted-coordinate checks; reconstruction of raw-to-published amplitudes, ratios and residuals. |
 
 The existing =spectra.csv= columns =r_real=, =r_imag=, =t_real= and =t_imag=
 are the parts of the face-referred measured coefficients, not reference values.
@@ -675,8 +1121,10 @@ reference was used. The record should identify:
 
 Keep continuum references, discrete references and measured spectra separately
 identifiable. Store the selected raw data required to reconstruct derived
-coefficients and figures. A reference utility may reuse the host formula
-functions listed above; its future command-line interface is not specified here.
+coefficients and figures. The reference utility reuses the host formula
+functions listed above; its actual interface and Python invocation records are
+specified in [[file:README.md][the reference-tools README]]. Preserve =modes.csv= and
+=probe-spectra.csv= for tilted data alongside the run record and derived spectra.
 No output should imply that a reference calculation has been verified merely
 because the utility ran successfully.
 
@@ -747,3 +1195,12 @@ because the utility ran successfully.
   [[https://hal.science/hal-02100732v2][HAL author version hal-02100732v2, 2019]].
   Harmonic coefficient for equal half-cell distances: §7.1, Example 7.1,
   printed p. 22 of the author version. Key: =eymard2000FiniteVolume=.
+
+<<ref-chew>>
+- Weng Cho Chew, “Vector Potential Electromagnetic Theory with Generalized
+  Gauge for Inhomogeneous Anisotropic Media,”
+  [[https://arxiv.org/abs/1406.4780v1][arXiv:1406.4780v1 (2014)]]. Weighted gauge/divergence:
+  Eqs. (14), (15), (19), author-PDF pp. 3–4. Equation (18) specifies the
+  gauge coefficient; it is not a discrete divergence-of-curl identity. The
+  weighted discrete-curl cancellation above is derived with Ryu's difference
+  operators. Key: =chew2014generalizedgauge=.
