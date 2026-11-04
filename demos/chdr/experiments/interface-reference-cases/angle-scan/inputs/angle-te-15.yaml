@@ -1,0 +1,18 @@
+schema_version: 1
+case: plane
+units: {system: normalized}
+parameters:
+  polarization: TE
+  incidence: vacuum
+  epsilon: 2.13
+  courant: 0.9
+  angle_degrees: 15
+  cells_per_wavelength: 20
+  cell_shape_y: 2
+  cell_shape_z: 2
+  frequency_bins: 41
+  band_sigmas: 3
+  incident_floor: 1e-8
+observations:
+  diagnostics: {every: 10}
+  fields: {every: 500, include_final: true}
