@@ -2,8 +2,9 @@
 
 Build `planar-interface` with `IPPL_ENABLE_CHDR=ON`. By default lengths use cell units;
 the speed of light, vacuum permittivity and vacuum permeability are one. Every
-case has one planar dielectric of relative permittivity 2.13 with its normal
-along x, in a box that is periodic on every axis.
+case has an x-normal planar dielectric in a box periodic on every axis. Packet
+presets use relative permittivity 2.13; the plane measurement can choose another
+permittivity of at least one. The incidence plane is x-z, with y out of plane.
 
 ```sh
 OMP_NUM_THREADS=1 planar-interface --input half-space.yaml
@@ -42,24 +43,89 @@ fields use SI; energy-column conventions are described in the
 
 ## Plane-pulse reflection measurement
 
-The `plane` mode is the exact-lattice measurement configuration: a quasi
-one-dimensional box, an exact lattice plane pulse at normal incidence from
-vacuum, and two Fourier probes. It prints the complex reflection and
-transmission amplitudes, their Fresnel and exact lattice references, and the
-energy drift to standard output. The historical `plane` command writes no files.
-YAML with `case: plane` and `output.directory` also saves these measured complex
-amplitudes in `spectra.csv` and writes `run.json`. Reflection and transmission
-amplitudes remain dimensionless; the frequency column uses inverse code time or
-rad/s according to the selected units. The material solver uses
-harmonic face permittivities and the generalized-gauge potential equations
+The `plane` case uses an exact periodic lattice pulse and two Fourier probes.
+TE measures the fixed Cartesian electric component E_y; TM measures H_y. Empty
+parameters select the recorded normal-incidence example. YAML parameters resolve
+a new row before field allocation, including the mesh, pulse, probe locations,
+separate gates and step count. All presets and requested rows use this same path.
+
+```yaml
+schema_version: 1
+case: plane
+units: {system: normalized}
+parameters:
+  polarization: TM
+  incidence: vacuum
+  epsilon: 2.13
+  angle_degrees: 30
+  cells_per_wavelength: 20
+  cell_shape_y: 1
+  cell_shape_z: 1
+output: {directory: plane-30-tm}
+observations:
+  diagnostics: {every: 10}
+```
+
+The two input forms below are exclusive. At fixed cell shape, `angle_degrees`
+uses the nearest integer transverse cell count and adjusts the central frequency
+to retain the requested continuum incidence angle. The actual cells per
+dielectric wavelength can therefore differ from the requested value.
+`transverse_period` instead keeps the requested frequency/resolution and derives
+the continuum angle; its length must be an integer number of at least two z cells.
+Both use one tangential period. This follows from periodic phase matching
+[Oskooi and Johnson, section 4.5](https://arxiv.org/abs/1301.5366).
+
+| Parameter | Meaning and default |
+|---|---|
+| `polarization` | `TE` or `TM`; default `TE`. |
+| `incidence` | `vacuum` or `dielectric`; default `vacuum`. |
+| `epsilon` | Dielectric relative permittivity, at least one; default 2.13. |
+| `angle_degrees` | Continuum phase angle relative to the interface normal, strictly between -90 and 90; default zero when no period is supplied. |
+| `transverse_period` | Alternative physical period in normalized code-length units; mutually exclusive with angle. |
+| `cells_per_wavelength` | Requested dielectric resolution at the central frequency, greater than two; default 20. |
+| `cell_shape_y`, `cell_shape_z` | Cell spacings relative to h_x=1; both default to one and remain fixed during angle resolution. |
+| `courant` | Fraction of the Standard vacuum CFL limit, strictly between zero and one; default 0.9. |
+| `tail_sigmas` | Gaussian spectral/envelope extent, greater than three; default 8. |
+| `cutoff_fraction` | Fraction of the normal-wavenumber interval above the shared propagation cutoff excluded from the useful band; default zero at normal incidence and 0.5 otherwise. Must be in [0,1), and positive at oblique incidence. |
+| `probe_cells` | Interface-to-probe offset in x cells, with the electric half-cell offset added for TE; default 3. |
+| `timing_samples` | Samples over the useful normal-wavenumber band for travel-time estimates; default 513, minimum 17. |
+| `separation_factor` | Factor of at least one enlarging both computed layers; default one. |
+| `gate_padding_steps` | Additional samples after the computed gate ends; default zero. Layer sizes are recomputed to exclude returns through the extended gates. |
+
+Only propagating incident/transmitted bands are supported by this measurement.
+The material face remains aligned with x. Its position follows the resolved
+layer thickness; general shifted/rotated input is not yet implemented.
+The layout uses numerical group velocities and checks second-interface returns,
+both periodic wraps and the analytic incident's periodic image. It is a sampled
+arrival estimate, not a rigorous error bound. Qualify a new configuration with
+denser timing samples and enlarged layers/gates before making an accuracy claim.
+The dispersion is [Fallahi, section 3.1.3, Eq. (3.17)](https://arxiv.org/abs/2009.13645);
+the group velocity is its derivative
+[Trefethen, section 1](https://doi.org/10.1137/1024038).
+
+`parameters: {preset: normal}`, `{preset: brewster}` and
+`{preset: dielectric}` select the three recorded numerical layouts, including
+their explicit gate lengths. A preset cannot be combined with physical parameter
+overrides; use a requested row for those. These are ordinary configurations, not
+separate evolution paths.
+
+Standard output contains measured central reflection/transmission, effective
+angle/resolution and energy drift. Continuum/lattice comparison formulas remain
+separate from the measurement. With `output.directory`, `spectra.csv` contains
+the three existing frequencies and complex face-referred amplitude ratios;
+`run.json` adds the effective plane settings under `effective.plane`.
+Those authoritative plane settings use normalized code units even for SI output;
+the existing output factors provide the conversion. Spectrum amplitudes are
+dimensionless; its frequency column uses inverse code time or rad/s according
+to the selected output units. The material solver uses harmonic face
+permittivities and the generalized-gauge potential equations
 [Chew, 2014, section 2](https://arxiv.org/abs/1406.4780).
 
-This measurement retains its full preset mesh, duration and Fourier gates.
-`smoke: true` and duration changes are rejected. The supported observations are
-`fourier` and `diagnostics`: Fourier probes sample every state and apply their
-existing gates internally; diagnostics may change their cadence but must include
-the initial and final states. Neither observation can be disabled. The plane
-case does not produce field frames.
+The supported observations are `fourier` and `diagnostics`: Fourier probes sample
+every completed state and apply their resolved gates internally; diagnostics may
+change cadence but must include the initialized and final states. Neither can be
+disabled. An explicit duration may extend the run but cannot truncate either
+gate. The plane case does not yet produce field frames.
 
 ## Packet cases
 
@@ -80,7 +146,9 @@ renders them.
 ## Checks
 
 `ctest -R chdr.interface -E movies -LE long` runs the plane-pulse
-checks at normal incidence against the independent lattice and Fresnel values
+checks at normal incidence against the independent lattice and Fresnel values,
+strict plane input checks and a new oblique row qualified with denser timing
+sampling and enlarged layers/gates
 (`test_plane_interface.cpp` calls `PlanePulse.h` directly; it does not run the
 `planar-interface` executable) and the four-step smoke run of the half-space
 case of `planar-interface`, using YAML with separate field and diagnostic

@@ -10,6 +10,7 @@
 
 #include "apps/planar-interface/InterfaceRun.h"
 #include "apps/planar-interface/PacketCase.h"
+#include "apps/planar-interface/PlaneInput.h"
 #include "apps/planar-interface/PlanePulse.h"
 #include "core/input/Application.h"
 #include "core/input/RunInput.h"
@@ -93,13 +94,9 @@ namespace chdr::apps::planarInterface {
         runPacketOutput(request, selected, run);
     }
 
-    /// Preserve the fixed probe gates and reference case while accepting its full duration in SI.
-    int checkPlaneInput(const input::RunInput& request, const NormalPlane& p) {
+    /// Spectrum sampling remains at every completed state; diagnostic cadence is independent.
+    int checkPlaneSchedules(const input::RunInput& request) {
         input::validateObservationNames(request, {"fourier", "diagnostics"});
-        if (input::booleanParameter(request, "smoke", false)
-            || input::resolvedSteps(request, p.dt_m, p.steps_m) != p.steps_m)
-            throw std::invalid_argument(
-                "plane requires its existing mesh and complete probe gates");
         const auto fourier = input::observationSchedule(request, "fourier", {});
         const auto energy =
             input::observationSchedule(request, "diagnostics", {.includeFinal_m = true});
@@ -113,21 +110,24 @@ namespace chdr::apps::planarInterface {
         return energy.every_m;
     }
 
-    /// Preserve the existing dimensionless comparison printed by the plane case.
-    void printPlaneResult(const NormalPlane& p, const PlaneResult& result) {
+    /// A user duration may extend the evolution, but cannot truncate either resolved probe gate.
+    int checkPlaneInput(const input::RunInput& request, PlaneRow& p) {
+        p.steps_m = input::resolvedSteps(request, p.dt_m, p.steps_m);
+        if (p.steps_m < std::max(p.gateIncident_m, p.gateOther_m))
+            throw std::invalid_argument("plane duration must include both complete probe gates");
+        return checkPlaneSchedules(request);
+    }
+
+    /// Print measured values; continuum and lattice references belong to the comparison utility.
+    void printPlaneResult(const PlaneRow& p, const PlaneResult& result) {
         if (ippl::Comm->rank() != 0)
             return;
-        const double n = std::sqrt(p.epsilon_m), r = (1 - n) / (1 + n);
-        const double kt = 2 * std::asin(n * std::sin(p.omega0_m * p.dt_m / 2) / p.dt_m);
-        // Sine matching at the two adjacent cell centres gives the exact TE lattice
-        // coefficients [yee1966MaxwellIsotropicMedia, Eqs. (5)-(6); deduction].
         std::cout << std::setprecision(17) << "r=" << result.r_m[0] << " t=" << result.t_m[0]
-                  << " Fresnel=" << r << ',' << 1 + r
-                  << " lattice=" << std::sin((p.kx0_m - kt) / 2) / std::sin((p.kx0_m + kt) / 2)
-                  << ',' << std::sin(p.kx0_m) / std::sin((p.kx0_m + kt) / 2)
+                  << " omega0=" << p.omega0_m << " angle=" << p.actualAngleDegrees_m
+                  << " cells_per_wavelength=" << p.cellsPerWavelength_m
                   << " energy drift=" << result.drift_m << '\n';
         if (!std::cout)
-            throw std::runtime_error("Failed to write plane comparison");
+            throw std::runtime_error("Failed to write plane measurement");
     }
 
     /// Save existing complex amplitudes; only their frequency coordinate has physical units.
@@ -147,12 +147,50 @@ namespace chdr::apps::planarInterface {
             throw std::runtime_error("Failed to write plane spectra");
     }
 
-    /// Describe the measured case while its manager still owns the solver and its layout.
-    output::RunRecordDescription describePlane(const NormalPlane& p, InterfaceSolver& solver,
+    /// Record the requested and realized spectral parameters in normalized code units.
+    void recordPlaneSpectrum(conduit_cpp::Node node, const PlaneRow& p) {
+        node["polarization"]                   = p.polarization_m == Polarization::TE ? "TE" : "TM";
+        node["incidence"]                      = p.incidentFromVacuum_m ? "vacuum" : "dielectric";
+        node["epsilon"]                        = p.epsilon_m;
+        node["requested_angle_degrees"]        = p.requestedAngleDegrees_m;
+        node["actual_angle_degrees"]           = p.actualAngleDegrees_m;
+        node["requested_cells_per_wavelength"] = p.requestedCellsPerWavelength_m;
+        node["cells_per_wavelength"]           = p.cellsPerWavelength_m;
+        node["omega0"]                         = p.omega0_m;
+        node["kz"]                             = p.kz_m;
+        node["kx0"]                            = p.kx0_m;
+        node["sigma_k"]                        = p.sigmaK_m;
+        node["tail_sigmas"]                    = p.tailSigmas_m;
+        node["cutoff_fraction"]                = p.cutoffFraction_m;
+        node["frequency_units"]                = "normalized";
+        node["angle_definition"] = "continuum phase angle relative to interface normal";
+    }
+
+    /// Record component positions and the actual finite observation intervals.
+    void recordPlaneGeometry(conduit_cpp::Node node, const PlaneRow& p) {
+        node["geometry"]          = "aligned_plane";
+        const bool tm             = p.polarization_m == Polarization::TM;
+        node["coordinate_units"]  = "normalized";
+        node["incidence_plane"]   = "xz";
+        node["component"]         = tm ? "H_y" : "E_y";
+        node["face_position"]     = p.dielectricCells_m * p.h_m[0];
+        node["incident_probe_x"]  = p.incidentProbe_m;
+        node["other_probe_x"]     = p.otherProbe_m;
+        node["probe_z"]           = (tm ? 1 : 0.5) * p.h_m[2];
+        node["gate_incident"]     = p.gateIncident_m;
+        node["gate_other"]        = p.gateOther_m;
+        node["timing_samples"]    = p.timingSamples_m;
+        node["separation_factor"] = p.separationFactor_m;
+    }
+
+    /// Describe the measured case while its manager still owns the solver and layout.
+    output::RunRecordDescription describePlane(const PlaneRow& p, InterfaceSolver& solver,
                                                const input::RunInput& request, int cadence) {
         const simulation::RunBox box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m};
-        auto result = output::describeRun("planar-interface", box, solver, p.steps_m,
-                                          "case=plane polarization=TE epsilon=2.13");
+        auto result =
+            output::describeRun("planar-interface", box, solver, p.steps_m, "case=plane plane=zx");
+        recordPlaneSpectrum(result.effective_m["plane"], p);
+        recordPlaneGeometry(result.effective_m["plane"], p);
         output::recordObservation(result, "fourier", {});
         output::recordObservation(result, "diagnostics",
                                   {.every_m = cadence, .includeFinal_m = true});
@@ -164,11 +202,11 @@ namespace chdr::apps::planarInterface {
 
     /// Run the existing plane measurement and save its result through the common record writer.
     void runPlane(const input::RunInput& request) {
-        const NormalPlane p;
+        auto p            = planeRow(request);
         const int cadence = checkPlaneInput(request, p);
         output::prepareRunDirectory(request.outputDirectory_m, ippl::Comm->getCommunicator());
         std::optional<output::RunRecordDescription> description;
-        const auto result = measurePlane(p, false, cadence, 0, {}, [&](auto& solver, const auto&) {
+        const auto result = measurePlane(p, cadence, 0, {}, [&](auto& solver, const auto&) {
             description = describePlane(p, solver, request, cadence);
         });
         printPlaneResult(p, result);
@@ -179,9 +217,9 @@ namespace chdr::apps::planarInterface {
 
     /// Validate case-specific keys before constructing any distributed field state.
     void runConfigured(const input::RunInput& request) {
-        input::validateParameters(request, {"smoke"});
         if (request.caseName_m == "plane")
             return runPlane(request);
+        input::validateParameters(request, {"smoke"});
         input::validateObservationNames(request, {"fields", "diagnostics"});
         if (request.outputDirectory_m.empty())
             for (const auto& [name, options] : request.observations_m)

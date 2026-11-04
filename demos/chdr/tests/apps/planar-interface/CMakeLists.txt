@@ -1,14 +1,19 @@
 include(AddIpplTest)
 add_ippl_test(test-plane-interface COMPILE_ONLY SOURCES test_plane_interface.cpp)
-target_link_libraries(test-plane-interface PRIVATE chdr-core chdr-diagnostics chdr-testing)
+target_link_libraries(test-plane-interface PRIVATE chdr-core chdr-application chdr-diagnostics
+                                                   chdr-testing)
 add_test(NAME chdr.interface.normal COMMAND test-plane-interface
                                             --gtest_filter=PlaneInterface.Normal)
 add_test(NAME chdr.interface.long.brewster COMMAND test-plane-interface
                                                    --gtest_filter=PlaneInterface.Brewster)
+add_test(NAME chdr.interface.row-input COMMAND test-plane-interface
+                                               --gtest_filter=PlaneInterface.RowInput)
+add_test(NAME chdr.interface.resolved-oblique COMMAND test-plane-interface
+                                                      --gtest_filter=PlaneInterface.ResolvedOblique)
 set_tests_properties(
-  chdr.interface.normal chdr.interface.long.brewster
-  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800 LABELS
-             "chdr;interface")
+  chdr.interface.normal chdr.interface.long.brewster chdr.interface.row-input
+  chdr.interface.resolved-oblique PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false"
+                                             TIMEOUT 1800 LABELS "chdr;interface")
 set_tests_properties(chdr.interface.long.brewster PROPERTIES LABELS "chdr;interface;long")
 # planar-interface runs its half-space case for four steps on a small box.
 add_test(

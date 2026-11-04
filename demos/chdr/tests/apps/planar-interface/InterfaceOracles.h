@@ -2,7 +2,7 @@
  * @brief Expected values of the planar-interface tests: lattice dispersion and normal root of the
  * staggered Standard scheme in a uniform medium, exact lattice reflection and transmission of a
  * planar dielectric face on a cell boundary (TE and TM), the continuum Fresnel coefficients in the
- * same bases, and the frozen parameters of the plane-pulse runs.
+ * same bases. Run configurations are separate from these independent formulas.
  * @details Units \f$c = \varepsilon_0 = \mu_0 = 1\f$, \f$\mu_r = 1\f$, \f$\varepsilon \ge 1\f$,
  * \f$n = \sqrt\varepsilon\f$. The face normal is x. "Medium 1" (\f$\varepsilon_1\f$) holds the
  * incident wave and "medium 2" the transmitted one, on whichever side of the face they lie: the
@@ -14,7 +14,9 @@
  * p. 14]. TE: \f$\mathbf E\f$ along the discrete transverse direction
  * \f$\hat{\mathbf s} = \hat{\mathbf x}\times\mathbf K_t/K_t\f$ (\f$\hat{\mathbf z}\f$ for
  * \f$k_z = 0\f$); TM: \f$\mathbf H\f$ along it. r and t are ratios of \f$E_s\f$ (TE) or \f$H_s\f$
- * (TM) at the face, so the phase is referred to the face. These host functions are written
+ * (TM) at the face, so the phase is referred to the face. A common sign change of the
+ * amplitude basis leaves these ratios unchanged; the x-z application uses fixed +y.
+ * These host functions are written
  * independently of the solver; the tests take their expected values from here.
  */
 #pragma once
@@ -23,13 +25,11 @@
 #include <complex>
 #include <numbers>
 
+#include "apps/planar-interface/PlaneRow.h"
+
 namespace chdr::apps::planarInterface {
     using Complex = std::complex<double>;
     using Vec3    = std::array<double, 3>;
-    enum class Polarization {
-        TE,
-        TM
-    };
     enum class LatticeRoot {
         Propagating,
         Evanescent,
@@ -139,7 +139,7 @@ namespace chdr::apps::planarInterface {
      * in the \f$H_s\f$ basis \f$r = -\Gamma_{\mathrm{TM}} = (\varepsilon_2k_{1x} -
      * \varepsilon_1k_{2x})
      * /(\varepsilon_2k_{1x} + \varepsilon_1k_{2x})\f$ and \f$t = 1 - \Gamma_{\mathrm{TM}} = 1 +
-     * r\f$ [ibid., Eq. (5.187), p. 78] (Deduction). Serves the type-B checks.
+     * r\f$ [ibid., Eq. (5.187), p. 78] (Deduction). Serves the continuum comparisons.
      */
     inline LatticeCoefficients fresnelCoefficients(Polarization p, double eps1, double eps2,
                                                    double ky, double kz, double omega) {
@@ -152,90 +152,4 @@ namespace chdr::apps::planarInterface {
         return {r, 1.0 + r, k1, k2};
     }
 
-    /** @brief Frozen parameters of one plane-pulse run in a periodic box; \f$h_x = 1\f$ is the unit
-     * of length.
-     * @details The dielectric fills the cells \f$[0, D)\f$, the face is at \f$x_I = D\f$. The start
-     * is the exact discrete sum of the box modes \f$k_m = 2\pi m/N_x\f$ with one sign of \f$k_x\f$
-     * and the weight \f$e^{-(\lvert k_m\rvert - k_{x0})^2/(2\sigma_k^2)}\f$ for
-     * \f$\lvert\lvert k_m\rvert - k_{x0}\rvert < 9\sigma_k\f$ (boxModes of them), each at its
-     * lattice frequency in the incident medium; \f$\sigma_k = (1 - f)(k_{x0} -
-     * k_{\mathrm{cut}})/q\f$ with \f$k_{\mathrm{cut}}\f$ the incident-medium \f$k_x\f$ at the
-     * frequency where the vacuum side reaches its fixed-\f$k_y\f$ cutoff (0 for incidence from
-     * vacuum). The envelope half-width is \f$w = q/\sigma_k\f$; the pulse centre lies probeCells +
-     * w beyond the face on the incident side. The probe samples sit probeCells cells beyond the
-     * face on each side (TE:
-     * \f$E_z\f$ at the cell centre, physical distance probeCells + 1/2, index \f$x - 1/2\f$; TM:
-     * averaged \f$B_z\f$ on the x-face, index \f$x - 1\f$). A gate holds the samples 0 to gate-1
-     * (label \f$(k - 1/2)\Delta t\f$); steps is the number of solves. Box lengths, gates and steps
-     * come from timing every contaminating path (second-face reflection, periodic wraps, the
-     * periodic image of the closed-form incident) per spectral component with the lattice group
-     * velocity; each such path must arrive after the end of the gate it would disturb.
-     */
-    struct PlaneRun {
-        Polarization polarization;
-        double epsilon;
-        bool incidentFromVacuum;
-        int cellsX, cellsY, cellsZ, dielectricCells, transversePeriods, probeCells;
-        Vec3 h;
-        double courant, q, f;
-        int gateIncident, gateOther, steps, boxModes;
-        double dt = 0, ky = 0, omega0 = 0, cellsPerWavelength = 0, kx0 = 0, omegaCut = 0, kCut = 0,
-               sigmaK = 0, envelopeHalfWidth = 0, pulseCentre = 0, incidentProbe = 0,
-               otherProbe      = 0;
-        int incidentProbeIndex = 0, otherProbeIndex = 0;
-    };
-
-    /// Derived values of a run from its frozen integers and ratios (omega0 and ky set before).
-    inline PlaneRun completeRun(PlaneRun r) {
-        const double epsIn = r.incidentFromVacuum ? 1 : r.epsilon, D = r.dielectricCells;
-        const double side = r.incidentFromVacuum ? 1 : -1;
-        r.dt              = r.courant
-               / std::sqrt(1 / (r.h[0] * r.h[0]) + 1 / (r.h[1] * r.h[1]) + 1 / (r.h[2] * r.h[2]));
-        r.cellsPerWavelength = 2 * std::numbers::pi / (std::sqrt(r.epsilon) * r.omega0 * r.h[0]);
-        r.kx0                = latticeNormal(r.omega0, r.ky, 0, epsIn, r.h, r.dt).kx.real();
-        r.omegaCut = r.ky == 0 ? 0 : 2 / r.dt * std::asin(r.dt * symbolK(r.ky, r.h[1]) / 2);
-        r.kCut     = r.incidentFromVacuum
-                         ? 0
-                         : latticeNormal(r.omegaCut, r.ky, 0, epsIn, r.h, r.dt).kx.real();
-        r.sigmaK   = (1 - r.f) * (r.kx0 - r.kCut) / r.q;
-        r.envelopeHalfWidth  = r.q / r.sigmaK;
-        r.pulseCentre        = D + side * (r.probeCells + r.envelopeHalfWidth);
-        const double offset  = r.polarization == Polarization::TE ? 0.5 : 1.0;
-        r.incidentProbe      = D + side * (r.probeCells + 1 - offset);
-        r.otherProbe         = D - side * (r.probeCells + 1 - offset);
-        r.incidentProbeIndex = static_cast<int>(std::lround(r.incidentProbe - offset));
-        r.otherProbeIndex    = static_cast<int>(std::lround(r.otherProbe - offset));
-        return r;
-    }
-
-    /// TE at normal incidence from vacuum onto \f$\varepsilon_r = 2.13\f$, 20 cells per dielectric
-    /// wavelength (\f$\omega_0 = 2\pi/(20n)\f$), cubic cells, \f$S = 0.9\f$, \f$q = 8\f$, \f$f =
-    /// 0\f$.
-    inline PlaneRun normalIncidenceRun() {
-        PlaneRun r{Polarization::TE, 2.13, true, 812, 2,    2,    211,  0, 3,
-                   {1, 1, 1},        0.9,  8,    0,   1175, 1178, 1180, 59};
-        r.ky     = 0;
-        r.omega0 = 2 * std::numbers::pi / (20 * std::sqrt(2.13));
-        return completeRun(r);
-    }
-    /// TM from vacuum at the Brewster angle \f$\arctan n\f$ at the band centre
-    /// (\f$\omega_0 = k_y\sqrt{1 + \varepsilon}/n\f$), one period over 18 cells of \f$h_y = 2\f$,
-    /// cells \f$(1, 2, 2)\f$, \f$S = 0.9\f$, \f$q = 7\f$, \f$f = 0.5\f$.
-    inline PlaneRun brewsterIncidenceRun() {
-        PlaneRun r{Polarization::TM, 2.13, true, 3581, 18,   2,    1484, 1, 3,
-                   {1, 2, 2},        0.9,  7,    0.5,  6759, 6755, 6761, 88};
-        r.ky     = 2 * std::numbers::pi / (18 * 2);
-        r.omega0 = r.ky * std::sqrt(1 + 2.13) / std::sqrt(2.13);
-        return completeRun(r);
-    }
-    /// TM from the dielectric \f$\varepsilon_r = 3.4\f$ at 18 degrees at the band centre
-    /// (\f$\omega_0 = k_y/(n\sin18^\circ)\f$), one period over 52 cells of \f$h_y = 1.25\f$, cells
-    /// \f$(1, 1.25, 0.85)\f$, \f$S = 0.9\f$, \f$q = 7\f$, \f$f = 0.3\f$.
-    inline PlaneRun obliqueDielectricRun() {
-        PlaneRun r{Polarization::TM, 3.4, false, 1828, 52,   2,    949,  1, 3,
-                   {1, 1.25, 0.85},  0.9, 7,     0.3,  3787, 3785, 3789, 78};
-        r.ky     = 2 * std::numbers::pi / (52 * 1.25);
-        r.omega0 = r.ky / (std::sqrt(3.4) * std::sin(std::numbers::pi / 10));
-        return completeRun(r);
-    }
 }  // namespace chdr::apps::planarInterface
