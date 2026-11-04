@@ -30,7 +30,13 @@ recorded anchor run's media, polarization and central frequency. The curves cove
 0–80 degrees or the largest supplied angle if it is greater, and include every
 measured central angle. All reference values and transmission flux weights come
 from the C++ calculator. Phase curves are broken at unresolved branch jumps;
-no phase value is assigned to a reference zero.
+no phase value is assigned to a reference zero. Signed incidence angles remain
+signed on the plots. For negative rows, the displayed range extends to at least
+-80 degrees; a negative-only scan ends at zero. The reference utility evaluates
+the absolute angle, and `analysis.json` retains both angle vectors and their
+mapping. This uses the even dependence on tangential wavenumber in the TE/TM
+Fresnel derivations in [references.org](../references.org), from Ellingson
+sections 5.6–5.7. No coefficient formula is duplicated in Python.
 
 Each frequency bin has its own continuum reference angle, because the pulse has
 fixed tangential wavenumber. Invalid bins are retained in tables with reasons and

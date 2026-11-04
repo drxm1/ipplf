@@ -36,31 +36,54 @@ def groups(rows):
     return result
 
 
+def angle_samples(data):
+    """Cover the measured signs, retaining the existing positive-only curve range."""
+    measured = {item.run_m.plane["actual_angle_degrees"] for item in data}
+    start = min(-80, min(measured)) if min(measured) < 0 else 0
+    stop = max(80, max(measured)) if min(measured) >= 0 or max(measured) > 0 else 0
+    return sorted(set(np.linspace(start, stop, 321)) | measured)
+
+
+def signed_curve_rows(table, angles):
+    """Retain signed plot coordinates beside the nonnegative reference angle.
+
+    The Fresnel roots and fixed-component coefficients depend on the square of
+    the tangential wavenumber. Their invariance under its sign reversal follows
+    from the TE/TM derivations in ../references.org (Ellingson, sections 5.6–5.7).
+    """
+    return tuple(row | {"plot_angle_degrees": angle} for row, angle in zip(table.rows_m, angles))
+
+
+def curve_provenance(item, table, angles):
+    return {"polarization": item.run_m.plane["polarization"], "anchor_run": item.identifier_m,
+            "omega_code": item.run_m.plane["omega0"], "directory": str(table.directory_m),
+            "reference_record": str(table.directory_m / "reference.json"),
+            "plot_angles_degrees": angles, "reference_angles_degrees": [abs(angle) for angle in angles],
+            "angle_mapping": "signed plot angle maps to absolute continuum reference angle"}
+
+
 def dense_curves(data, args):
     """Preserve one explicit continuum calculation per polarization and its anchor run."""
     anchors = {}
     for item in data:
         anchors.setdefault(item.run_m.plane["polarization"], item)
-    stop = max(80, max(item.run_m.plane["actual_angle_degrees"] for item in data))
-    angles = sorted(set(np.linspace(0, stop, 321)) |
-                    {item.run_m.plane["actual_angle_degrees"] for item in data})
+    angles = angle_samples(data)
     curves, provenance = {}, []
     for polarization, item in anchors.items():
-        table = angle_curve(item.run_m, args.reference_binary, angles, args.output / ("continuum-" + polarization))
-        curves[polarization] = table
-        provenance.append({"polarization": polarization, "anchor_run": item.identifier_m,
-                           "omega_code": item.run_m.plane["omega0"], "directory": str(table.directory_m),
-                           "reference_record": str(table.directory_m / "reference.json")})
+        table = angle_curve(item.run_m, args.reference_binary, [abs(angle) for angle in angles],
+                            args.output / ("continuum-" + polarization))
+        curves[polarization] = signed_curve_rows(table, angles)
+        provenance.append(curve_provenance(item, table, angles))
     update_status(args.output, reference_curve="dense C++ continuum angle calculation", reference_curves=provenance)
     return curves
 
 
-def curve_values(table, quantity, phase_floor=None):
+def curve_values(rows, quantity, phase_floor=None):
     """Use the recorded reference validity and omit undefined phase near zeros."""
     angles, values = [], []
-    for row in table.rows_m:
+    for row in rows:
         value = coefficient(row, "continuum", quantity)
-        angles.append(row["continuum_angle_degrees"])
+        angles.append(row["plot_angle_degrees"])
         if not row["continuum_valid"] or value is None or (phase_floor is not None and abs(value) <= phase_floor):
             values.append(np.nan)
         else:
@@ -94,8 +117,8 @@ def power_figure(rows, curves, output):
         for quantity, marker in (("R", "o"), ("T", "s")):
             line, = axes[0].plot(angle, [row[quantity] for row in selected], marker,
                                 label=polarization + " " + quantity + " measured")
-            reference = curves[polarization].rows_m
-            axes[0].plot([row["continuum_angle_degrees"] for row in reference],
+            reference = curves[polarization]
+            axes[0].plot([row["plot_angle_degrees"] for row in reference],
                          [row["continuum_" + quantity] for row in reference], "--",
                          color=line.get_color(), label=polarization + " " + quantity + " Fresnel")
         axes[1].plot(angle, [row["R_plus_T_minus_one"] for row in selected], "o-", label=polarization)
