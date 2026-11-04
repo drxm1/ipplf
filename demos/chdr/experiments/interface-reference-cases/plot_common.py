@@ -212,9 +212,12 @@ def save_figure(figure, directory: Path, name: str) -> None:
 
 
 def run_label(run: PlaneRun) -> str:
-    return (f"{run.plane['polarization']}, "
-            f"$\\theta_0={run.plane['actual_angle_degrees']:.4g}^\\circ$, "
-            f"$N_d={run.plane['cells_per_wavelength']:.5g}$")
+    label = (f"{run.plane['polarization']}, "
+             f"$\\theta_0={run.plane['actual_angle_degrees']:.4g}^\\circ$, "
+             f"$N_d={run.plane['cells_per_wavelength']:.5g}$")
+    if "interface_tilt_degrees" in run.plane:
+        label += f"; interface $\\alpha={run.plane['interface_tilt_degrees']:.4g}^\\circ$"
+    return label
 
 
 def _column(rows, name: str) -> np.ndarray:

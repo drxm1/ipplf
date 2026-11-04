@@ -1,0 +1,30 @@
+schema_version: 1
+case: plane
+units: {system: normalized}
+parameters:
+  polarization: TE
+  incidence: vacuum
+  epsilon: 2.13
+  courant: 0.9
+  angle_degrees: 0
+  interface_tilt_degrees: 17
+  primitive_cells_x: 2
+  primitive_cells_z: 3
+  cells_per_wavelength: 80
+  cell_size: 0.25
+  cell_shape_y: 2
+  cell_shape_z: 2
+  tail_sigmas: 6
+  cutoff_fraction: 0
+  frequency_bins: 41
+  band_sigmas: 3
+  incident_floor: 1e-8
+  probe_cells: 18
+  probe_half_width_cells: 3
+  fit_residual_limit: 0.001
+  timing_samples: 513
+  separation_factor: 1.25
+  gate_padding_steps: 8
+observations:
+  diagnostics: {every: 20}
+  fields: {enabled: false}
