@@ -1,0 +1,714 @@
+#+title: Planar-interface reference calculations
+#+date: 2026-11-04
+#+startup: showall latexpreview
+
+* Purpose and assumptions
+
+This document derives the continuum and aligned-grid references used to interpret
+plane-pulse reflection and transmission. The continuum solution is the physical
+reference. The discrete solution checks whether an aligned numerical interface
+reproduces the recurrence that the scheme is intended to solve. Agreement with
+the discrete solution does not establish agreement with the continuum solution.
+The discrete reference below is for the Standard stencil with the staggered
+O1-VS material treatment; another stencil or constitutive rule needs its own
+discrete derivation.
+
+The media considered here are linear, isotropic, lossless and nondispersive,
+with relative permeability one and positive relative permittivities
+\(\varepsilon_1,\varepsilon_2\). There is no prescribed surface charge or
+surface current. Formulae use solver units \(c=\varepsilon_0=\mu_0=1\), so
+\(n_j=\sqrt{\varepsilon_j}\) and \(\mathbf B=\mathbf H\). These are the
+nonmagnetic plane-interface assumptions of [[ref-ellingson][Ellingson, §§5.6–5.7]].
+Dimensional output must be converted consistently before these expressions are
+evaluated; amplitude ratios and the power fractions below are dimensionless.
+
+The main derivations assume propagating incident and transmitted waves. Complex
+roots are available in the reference code, but an evanescent-wave experiment
+also needs a suitable measurement and normalization. It is not established by
+the propagating-wave extraction described here.
+
+This is a reference specification, not a set of measured results. Each numerical
+comparison must retain its actual inputs, calculated reference values and run
+provenance as described in [[provenance][Reference data and reproducibility]].
+
+* Coordinates, amplitudes and Fourier convention
+
+The incidence plane is x-z; y is out of plane. In a local interface coordinate
+system, let \(u\) increase from the incident medium 1 into medium 2, with the
+face at \(u=0\). Let \(\hat{\mathbf n}\) point along increasing \(u\), keep
+\(\hat{\mathbf s}=\hat{\mathbf y}\) fixed, and choose
+\(\hat{\mathbf t}=\hat{\mathbf n}\times\hat{\mathbf s}\). The tangent
+coordinate is \(v\). For incidence towards +x these directions are
+\(\hat{\mathbf n}=\hat{\mathbf x}\) and
+\(\hat{\mathbf t}=\hat{\mathbf z}\). The same out-of-plane basis is used
+for incident, reflected and transmitted amplitudes. This is a relabelling of
+the normal/tangent construction in [[ref-ellingson][Ellingson, §§5.6–5.7]].
+
+A positive-frequency mode has the convention
+\[
+ F(\mathbf x,t)=\operatorname{Re}\left\{
+ F_0 e^{i\mathbf k\cdot\mathbf x-i\omega t}\right\},\qquad \omega>0.
+\]
+The time transform uses the positive sign,
+\[
+ \widehat F(\omega)=\int F(t)e^{+i\omega t}\,dt.
+\]
+The code uses forward normalization one. This differs by a constant factor
+from the convention printed in [[ref-oskooi][Oskooi and Johnson, Eq. (4.6)]],
+which cancels in consistently normalized ratios. Ellingson uses
+\(e^{+i\omega t}\) phasors; when a coefficient is complex, its time-convention
+conversion must be made explicitly. Real propagating Fresnel coefficients are
+unchanged by that conjugation.
+
+TE amplitudes are ratios of the fixed Cartesian component \(E_y\). TM
+amplitudes are ratios of the fixed component \(H_y=B_y\). Write their common
+scalar notation as \(F\), with incident amplitude one at the face:
+\[
+ \begin{aligned}
+ F_1(u,v)&=\left(e^{ik_1u}+r e^{-ik_1u}\right)e^{i\kappa v},
+       &&u<0,\\
+ F_2(u,v)&=t e^{ik_2u}e^{i\kappa v},&&u>0.
+ \end{aligned}
+\]
+Here \(\kappa\) is the conserved signed tangential wavenumber, and
+\(k_1,k_2>0\) are normal wavenumber magnitudes for propagating modes. The
+coefficient phase is referred to the face. The common tangential phase follows
+from matching fields at every point of the planar boundary
+[[ref-ellingson][Ellingson, Eqs. (5.122), (5.145)–(5.147) and §5.8]].
+
+* Continuum reflection and transmission
+
+** Normal wavenumbers and incidence angle
+
+The homogeneous dispersion relation and tangential phase matching give
+\[
+ k_j=\sqrt{\varepsilon_j\omega^2-\kappa^2},\qquad
+ \sin\theta_j=\frac{\lvert\kappa\rvert}{\sqrt{\varepsilon_j}\,\omega}.
+\]
+The incidence angle \(\theta_1\) is measured relative to the face normal,
+not relative to a mesh axis. These are the nonmagnetic form of Snell's law
+and the plane-wave dispersion relation in [[ref-ellingson][Ellingson, §§5.6–5.8]].
+For the propagating comparisons below, require
+\(\varepsilon_j\omega^2>\kappa^2\) in both media. At a cutoff the normal
+flux vanishes and the ordinary incident-flux normalization becomes degenerate.
+
+** TE: fixed electric component
+
+For the selected phasor sign, Faraday's law gives
+\(\mathbf H=\mathbf k\times\mathbf E/\omega\). With
+\(\mathbf E=E_y\hat{\mathbf s}\), the tangential magnetic component of a
+mode with signed normal wavenumber \(k_u\) is \(k_u E_y/\omega\).
+Continuity of tangential electric and magnetic fields therefore gives
+\[
+ 1+r_E=t_E,\qquad k_1(1-r_E)=k_2t_E.
+\]
+Eliminating \(t_E\) yields
+\[
+ r_E=\frac{k_1-k_2}{k_1+k_2},\qquad
+ t_E=\frac{2k_1}{k_1+k_2}=1+r_E.
+\]
+This derives the wavenumber form of [[ref-ellingson][Ellingson, Eqs. (5.142) and
+(5.147)]] after replacing impedance and angle by
+\(\eta_j=1/\sqrt{\varepsilon_j}\) and
+\(\cos\theta_j=k_j/(\sqrt{\varepsilon_j}\omega)\).
+
+** TM: fixed magnetic component
+
+Ampere's law gives
+\(\mathbf E=-\mathbf k\times\mathbf H/(\omega\varepsilon_j)\).
+For \(\mathbf H=H_y\hat{\mathbf s}\), the tangential electric component
+is \(-k_uH_y/(\omega\varepsilon_j)\). The two boundary equations become
+\[
+ 1+r_H=t_H,\qquad
+ \frac{k_1}{\varepsilon_1}(1-r_H)
+   =\frac{k_2}{\varepsilon_2}t_H.
+\]
+Solving them gives
+\[
+ r_H=\frac{\varepsilon_2k_1-\varepsilon_1k_2}
+           {\varepsilon_2k_1+\varepsilon_1k_2},\qquad
+ t_H=\frac{2\varepsilon_2k_1}
+           {\varepsilon_2k_1+\varepsilon_1k_2}=1+r_H.
+\]
+These are magnetic-amplitude coefficients. Ellingson's reflected TM basis
+uses the opposite magnetic direction, so his electric-field coefficient
+\(\Gamma_{\mathrm{TM}}\) obeys
+\(r_H=-\Gamma_{\mathrm{TM}}\) and
+\(t_H=1-\Gamma_{\mathrm{TM}}\). The sign change is explained explicitly
+in [[ref-ellingson][Ellingson, §5.7, Eq. (5.156), Eq. (5.187), and the discussion
+preceding Eq. (5.191)]]. A plot of \(r_H\) must not be labelled as that
+electric-field reflection coefficient.
+
+** Normal incidence and the Brewster case
+
+At normal incidence, \(\kappa=0\) and \(k_j=n_j\omega\). Substitution in
+the preceding coefficients gives
+\[
+ r_E=\frac{n_1-n_2}{n_1+n_2},\quad
+ r_H=\frac{n_2-n_1}{n_1+n_2},\quad
+ t_E=\frac{2n_1}{n_1+n_2},\quad
+ t_H=\frac{2n_2}{n_1+n_2}.
+\]
+The opposite signs of \(r_E\) and \(r_H\) describe the chosen component
+bases, not different reflected powers. This is the normal-incidence limit
+discussed in [[ref-ellingson][Ellingson, §§5.6–5.7]]. For identical media all
+four expressions reduce to zero reflection and unit transmission.
+
+For unequal nonmagnetic media, the TM numerator vanishes when
+\(\varepsilon_2k_1=\varepsilon_1k_2\). Squaring and substituting the
+dispersion relations gives
+\[
+ \kappa_B^2=\frac{\varepsilon_1\varepsilon_2}
+                  {\varepsilon_1+\varepsilon_2}\omega^2,
+ \qquad
+ \tan\theta_B=\sqrt{\frac{\varepsilon_2}{\varepsilon_1}}.
+\]
+This is a derivation of [[ref-ellingson][Ellingson, Eq. (5.253)]]. At that angle
+\(r_H=0\) and \(t_H=1\). The reflection phase and a relative reflection
+error are undefined at an exact zero. Use an absolute complex or magnitude
+error there. If the media are identical, reflection vanishes at every angle;
+there is no unique Brewster angle to obtain by cancelling their difference.
+
+** Power fractions
+
+Using the time-average Poynting vector
+\(\langle\mathbf S\rangle=\tfrac12\operatorname{Re}
+(\mathbf E\times\mathbf H^*)\)
+[[ref-ellingson][Ellingson, Eq. (3.98)]], the incoming normal flux of a
+propagating mode is
+\[
+ S_{u,E}=\frac{k_j}{2\omega}\lvert E_y\rvert^2,
+ \qquad
+ S_{u,H}=\frac{k_j}{2\omega\varepsilon_j}\lvert H_y\rvert^2.
+\]
+These follow by inserting the field relations used above. Dividing reflected
+and transmitted normal fluxes by the incident flux then gives
+\[
+ \begin{aligned}
+ R_E&=\lvert r_E\rvert^2,&
+ T_E&=\frac{k_2}{k_1}\lvert t_E\rvert^2,\\
+ R_H&=\lvert r_H\rvert^2,&
+ T_H&=\frac{\varepsilon_1k_2}{\varepsilon_2k_1}\lvert t_H\rvert^2.
+ \end{aligned}
+\]
+Substituting the Fresnel expressions gives \(R+T=1\) for this lossless,
+propagating continuum problem. Transmission is not generally
+\(\lvert t\rvert^2\). These weights apply to the stated component
+normalizations; do not use the electric weight with magnetic-amplitude data.
+
+Applying these /continuum/ weights to numerical amplitudes is a comparison
+with continuum flux. It is not an exact discrete conservation identity.
+Likewise, a conserved potential-energy diagnostic is a different observable
+from normal Poynting flux. The measured quantity and the reference must remain
+distinct in tables and plot labels.
+
+* Homogeneous lattice dispersion
+
+For spacings \(h_x,h_y,h_z\) and time step \(\Delta t\), define
+\[
+ K_a=\frac{2}{h_a}\sin\left(\frac{k_ah_a}{2}\right),\qquad
+ W=\frac{2}{\Delta t}\sin\left(\frac{\omega\Delta t}{2}\right).
+\]
+Substitution of a Fourier mode into a centred second difference gives
+\(-K_a^2\), and substitution into the leapfrog second time difference gives
+\(-W^2\). Hence the homogeneous transverse mode obeys
+\[
+ \varepsilon_j W^2=K_x^2+K_y^2+K_z^2.
+\]
+This is [[ref-fallahi][Fallahi, Eq. (3.17)]] with the vacuum wave speed replaced
+by \(1/\sqrt{\varepsilon_j}\). For the transverse, zero-gauge-residual
+potential mode, the divergence correction vanishes and the same relation
+applies; this deduction uses the staggered discrete calculus of
+[[ref-ryu][Ryu et al., Appendix A, Eqs. (19)–(27)]]. It is not a claim about
+an arbitrary potential state containing scalar or longitudinal modes.
+
+For an aligned x-normal face, let \(K_t^2=K_y^2+K_z^2\). In the present
+x-z experiments \(k_y=0\), but the oracle also accepts the general pair.
+Solving the preceding relation for the positive normal root gives
+\[
+ q_j=\frac{h_x^2}{4}\left(\varepsilon_jW^2-K_t^2\right),\qquad
+ k_j^{\mathrm{lat}}=\frac{2}{h_x}\arcsin\sqrt{q_j},
+ \qquad 0<q_j<1.
+\]
+This is the propagating interior branch evaluated by =latticeNormal=.
+The code also classifies complex evanescent and sawtooth branches. Endpoint
+values \(q_j=0\) or \(q_j=1\) require separate treatment even when an API
+classifies them with the real branch: they are not ordinary travelling modes
+with nonzero normal group velocity.
+
+For fixed transverse wavenumbers, differentiating the dispersion relation
+gives the normal group velocity
+\[
+ v_{g,x}=\frac{\partial\omega}{\partial k_x}
+ =\frac{\sin(k_xh_x)}
+ {h_x\varepsilon_jW\cos(\omega\Delta t/2)}.
+\]
+The differentiation is a deduction from [[ref-fallahi][Fallahi, Eq. (3.17)]],
+using the group-velocity definition in [[ref-trefethen][Trefethen, §1,
+Eqs. (1.4)–(1.5)]]. This velocity, evaluated over the retained pulse band,
+is relevant to arrival times. A continuum speed or the central phase velocity
+does not by itself bound the arrival of every spectral component.
+
+The lattice wavevector, its group-velocity direction and the continuum angle
+assigned to \((\omega,\kappa)\) need not coincide. This is a consequence of
+the numerical dispersion relation, not a change of the requested continuum
+reference angle [[ref-fallahi][Fallahi, §3.1.3]]. Record the actual frequencies,
+wavenumbers, spacings and time step used for every comparison.
+
+* Exact coefficients of the aligned discrete interface
+
+The following derivation requires a flat material jump on a cell boundary,
+uniform spacing normal to it, cell-centred material values, and the harmonic
+normal-face permittivity used by the operator. It assumes the transverse field
+sector discussed above. It does not apply unchanged to a staircase obtained
+by sampling a tilted interface.
+
+The recurrences follow by eliminating the complementary field from staggered
+Faraday and Ampere differences: [[ref-yee][Yee, Eqs. (5)–(6)]], with the potential
+field correspondence from [[ref-ryu][Ryu et al., Appendix A]]. The following
+interface elimination is an explicit deduction, rather than a formula quoted
+from either paper. It reproduces =latticeCoefficients= in
+[[file:../../tests/apps/planar-interface/InterfaceOracles.h][InterfaceOracles.h]].
+Here \(h=h_x\), and \(k_1,k_2\) denote /lattice/ normal roots throughout
+this section.
+
+** TE: two adjacent cell centres
+
+The electric samples obey
+\[
+ E_{j+1}+E_{j-1}-2E_j
+   +h^2\left(\varepsilon_jW^2-K_t^2\right)E_j=0.
+\]
+Place the interface at zero and the centres at \((j+\tfrac12)h\), with
+medium 1 for \(j\le-1\) and medium 2 for \(j\ge0\). Away from the face,
+the homogeneous recurrence has the two modes used above. At the adjacent
+centres, each recurrence demands that the neighbouring value agree with the
+extension of its own regional solution. Thus
+\[
+ \begin{aligned}
+ e^{ik_1h/2}+r_E^{\mathrm{lat}}e^{-ik_1h/2}
+   &=t_E^{\mathrm{lat}}e^{ik_2h/2},\\
+ e^{-ik_1h/2}+r_E^{\mathrm{lat}}e^{ik_1h/2}
+   &=t_E^{\mathrm{lat}}e^{-ik_2h/2}.
+ \end{aligned}
+\]
+Eliminating the transmitted amplitude gives
+\[
+ 2i\sin\left(\frac{(k_1-k_2)h}{2}\right)
+   =2i r_E^{\mathrm{lat}}
+      \sin\left(\frac{(k_1+k_2)h}{2}\right).
+\]
+Back-substitution then gives
+\[
+ r_E^{\mathrm{lat}}=
+ \frac{\sin((k_1-k_2)h/2)}{\sin((k_1+k_2)h/2)},\qquad
+ t_E^{\mathrm{lat}}=
+ \frac{\sin(k_1h)}{\sin((k_1+k_2)h/2)}.
+\]
+No electric sample sits at the face in this reduced recurrence. Consequently,
+the extrapolated amplitudes need not satisfy
+\(t_E^{\mathrm{lat}}=1+r_E^{\mathrm{lat}}\) at finite spacing. In the
+continuum limit, expanding each sine recovers the TE Fresnel expressions.
+These statements follow from the displayed matching equations; they are not
+extra interface conditions imposed on the numerical solution.
+
+** TM: one stored interface-face value
+
+Magnetic samples lie on normal faces \(u=mh\). The corresponding recurrence is
+\[
+ \frac{H_{m+1}-H_m}{\varepsilon_{m+1/2}}
+ -\frac{H_m-H_{m-1}}{\varepsilon_{m-1/2}}
+ +h^2\left(W^2-\frac{K_t^2}{\varepsilon_{x,m}}\right)H_m=0.
+\]
+In homogeneous regions \(\varepsilon_{x,m}\) is the regional permittivity.
+At the material face the code uses
+\[
+ \varepsilon_{x,0}=
+   \frac{2\varepsilon_1\varepsilon_2}{\varepsilon_1+\varepsilon_2},
+ \qquad
+ \frac{1}{\varepsilon_{x,0}}
+   =\frac12\left(\frac{1}{\varepsilon_1}+\frac{1}{\varepsilon_2}\right).
+\]
+The harmonic construction for equal distances between a face and neighbouring
+cell centres is derived in [[ref-eymard][Eymard et al., §7.1, Example 7.1]]. Its
+use here is the actual constitutive rule in
+[[file:../../core/material/O1VSCoefficients.h][O1VSCoefficients.h]],
+not a general exact rule for an arbitrarily located or tilted material face.
+
+There is one stored value at \(m=0\), so
+\(H_0=1+r_H^{\mathrm{lat}}=t_H^{\mathrm{lat}}\). The adjacent values are
+\[
+ H_{-1}=e^{-ik_1h}+r_H^{\mathrm{lat}}e^{ik_1h},\qquad
+ H_1=t_H^{\mathrm{lat}}e^{ik_2h}.
+\]
+The two homogeneous dispersion relations and the harmonic face value imply
+\[
+ h^2\left(W^2-\frac{K_t^2}{\varepsilon_{x,0}}\right)
+ =\frac{1-\cos(k_1h)}{\varepsilon_1}
+  +\frac{1-\cos(k_2h)}{\varepsilon_2}.
+\]
+Insert these expressions into the interface recurrence. Its cosine terms
+cancel, leaving
+\[
+ \frac{\sin(k_1h)}{\varepsilon_1}(1-r_H^{\mathrm{lat}})
+  =\frac{\sin(k_2h)}{\varepsilon_2}(1+r_H^{\mathrm{lat}}).
+\]
+Therefore
+\[
+ r_H^{\mathrm{lat}}=
+ \frac{\varepsilon_2\sin(k_1h)-\varepsilon_1\sin(k_2h)}
+      {\varepsilon_2\sin(k_1h)+\varepsilon_1\sin(k_2h)},\qquad
+ t_H^{\mathrm{lat}}=1+r_H^{\mathrm{lat}}.
+\]
+This elimination completes the discrete deduction from the recurrence above.
+Expanding the sines as the mesh is refined recovers the fixed-magnetic-basis
+Fresnel expressions. A finite-grid Brewster minimum need not be at the
+continuum Brewster angle: its numerator contains \(\sin(k_jh)\), rather than
+\(k_j\). The two references answer different questions and should both be
+identified explicitly.
+
+* Initial pulse, field labels and measured coefficients
+
+** A periodic pulse is a superposition of lattice modes
+
+The aligned initializer superposes signed normal modes from the periodic box
+with one fixed tangential wavenumber. Each normal mode is assigned its own
+homogeneous lattice frequency. The Gaussian weights in normal wavenumber
+localise the envelope normally to the face; a single tangential wavenumber
+does not give transverse amplitude localisation. These properties follow from
+the mode sum in [[file:../../apps/planar-interface/PlanePulse.h][PlanePulse.h]] and
+the periodic phase condition in [[ref-oskooi][Oskooi and Johnson, §4.5,
+Eq. (4.30)]]. The finite mode sum is periodic and is not a compactly supported
+packet. Its tails and repeated copies must be considered in placement and timing.
+
+For one scalar mode \(\psi=\cos(\mathbf k\cdot\mathbf x-\omega t)\),
+the x-z TE start uses \(A_y=\psi\). With zero scalar potential, the time
+difference gives the electric sample
+\[
+ E_y[k]=-W\sin\left(\mathbf k\cdot\mathbf x
+                       -\omega(k-\tfrac12)\Delta t\right).
+\]
+The TM start uses the weighted discrete curl with signs
+\(A_x=-D_z\psi\), \(A_z=+D_x\psi\) in the incident homogeneous medium.
+Taking its curl gives \(B_y=\varepsilon_1W^2\psi\). Averaging the raw
+magnetic values at consecutive integer times therefore gives
+\[
+ \overline B_y[k]=\varepsilon_1W^2\cos(\omega\Delta t/2)
+ \cos\left(\mathbf k\cdot\mathbf x-\omega(k-\tfrac12)\Delta t\right).
+\]
+These are direct substitutions in the discrete curl/time reconstruction of
+[[ref-ryu][Ryu et al., Appendix A]], specialised to the signs and labels in
+[[file:../../core/base/LevelContract.h][LevelContract.h]] and =PlanePulse=.
+The incident reference must include the same time average as the observed
+magnetic channel. The factor \(\cos(\omega\Delta t/2)\) is not optional.
+
+For the staggered field representation with R2 reconstruction, the relevant
+labels are:
+
+| Channel | Offset from its cell centre, in cell-width units | Time at completed step \(k\) |
+|---------+--------------------------------------------------+-------------------------------|
+| Electric y | \((0,1/2,0)\) | \((k-1/2)\Delta t\) |
+| Averaged magnetic y | \((1/2,0,1/2)\) | \((k-1/2)\Delta t\) |
+| Raw magnetic y | \((1/2,0,1/2)\) | \(k\Delta t\) |
+
+This table is an implementation contract from =positionOffset= and
+=halfStepLabel= in =LevelContract=; the general staggered construction is
+described by [[ref-ryu][Ryu et al., Appendix A]]. In particular, electric and
+magnetic components with the same integer probe index need not occupy the
+same physical x-z point. Use the recorded physical component coordinates.
+
+** Transform the same labelled signal in the measurement and reference
+
+For a gate \(k_0\le k<k_0+N\), the running probe evaluates
+\[
+ \widehat F(\omega)=\Delta t\sum_{k=k_0}^{k_0+N-1}
+ w_k F[k]e^{i\omega t_k}.
+\]
+Here \(t_k\) is the channel's actual label, and \(w_k\) is the selected
+window. The definition is implemented by
+[[file:../../opt-in/diagnostics/FourierProbe.h][FourierProbe.h]] and is the finite
+sum corresponding to [[ref-oskooi][Oskooi and Johnson, §4.3, Eq. (4.6)]], with
+the normalization stated above. There is no division by the number of samples
+and no implicit spatial-area factor.
+
+The analytic incident waveform must be evaluated at the same component
+coordinates and labels and transformed with the same gate and window. A
+finite real waveform has both frequency signs, so replacing its finite sum
+by the amplitude of just one complex carrier is not generally equivalent.
+Incident subtraction and normalization follow [[ref-oskooi][Oskooi and Johnson,
+§4.3]]. A coefficient is usable only where the incident transform is sufficiently
+resolved and nonzero; see also [[ref-schneider][Schneider, Eqs. (5.96)–(5.99)]].
+
+** Transfer the probe phase to the interface
+
+Let \(x_R\) be the incident-side probe, \(x_T\) the transmitted-side probe,
+and \(x_I\) the requested interface position. Let \(k_i\) and \(k_t\) be
+the /signed laboratory x components/ of the incident and transmitted waves;
+the reflected component is \(k_r=-k_i\). This convention handles incidence
+from either side. Let \(I\) denote the analytic incident transform at
+\(x_R\), \(S\) the total transform there, and \(U\) the transmitted
+transform at \(x_T\). For probes at the same tangential coordinate, write
+each travelling amplitude as its face amplitude times its propagation factor.
+Solving for the face ratios gives
+\[
+ \begin{aligned}
+ r(x_I)&=\left(\frac{S}{I}-1\right)
+       e^{-2ik_i(x_I-x_R)},\\
+ t(x_I)&=\frac{U}{I}
+       e^{i[k_t(x_I-x_T)-k_i(x_I-x_R)]}.
+ \end{aligned}
+\]
+This is the two-probe, signed-wavevector version of the phase transfer derived
+in [[ref-schneider][Schneider, §5.8.2, Eqs. (5.98)–(5.99)]]. The reflection
+factor follows from the same calculation with \(k_r=-k_i\). In numerical
+data, use the appropriate /lattice/ propagation roots for this propagation
+correction, then compare the face ratios with the continuum reference at
+the recorded \((\omega,\kappa)\). For differing tangential positions the
+full spatial phase, including that tangential displacement, must be retained.
+
+These expressions assume that the gates isolate the intended incident,
+reflected and transmitted signals. A reference formula does not remove
+contamination from the second material face, a periodic return or an outer
+boundary. Qualify the chosen measurement by changing the relevant separation
+or gate while still retaining the desired pulse. Use numerical group velocities
+over the useful band when planning those checks
+[[ref-trefethen][Trefethen, §§1–2]]; the final evidence comes from the selected
+simulation controls, not from a central-frequency travel-time estimate alone.
+
+* Reference cases and their specialisation
+
+** Normal incidence and mesh refinement
+
+Set \(\kappa=0\), choose the incident and transmitted permittivities, and
+evaluate the normal-incidence continuum coefficients above. The reference is
+frequency independent for these nondispersive media. The lattice reference
+uses the actual \(\omega,\mathbf h,\Delta t\) and changes as the mesh or
+time step changes [[ref-fallahi][Fallahi, Eq. (3.17)]].
+
+A refinement comparison must keep the intended physical problem and coefficient
+convention fixed. Record the actual wavelength resolution, the time-step policy,
+the measured band and the isolation checks. Compare complex error and magnitude
+error separately; phase is reported only for nonzero amplitudes. No observed
+order follows merely from labelling three meshes as coarse, medium and fine.
+
+** Oblique incidence and the angle scan
+
+For a periodic tangential length \(L_t\), ordinary periodic fields require
+\(\kappa L_t=2\pi m\), with integer \(m\). For a chosen central continuum
+angle \(\theta_0>0\), phase matching therefore gives
+\[
+ \omega_0=\frac{\lvert\kappa\rvert}
+ {\sqrt{\varepsilon_1}\sin\theta_0},\qquad
+ \theta(\omega)=\arcsin\left(
+ \frac{\lvert\kappa\rvert}{\sqrt{\varepsilon_1}\omega}\right).
+\]
+These are deductions from [[ref-oskooi][Oskooi and Johnson, §4.5, Eq. (4.30)
+and pp. 85–86]]. A single fixed-\(\kappa\) pulse samples a range of angles
+across its frequency band. Evaluate the Fresnel reference at each measured
+frequency; do not use the central-angle coefficient for the entire band.
+
+Keeping the cell shape fixed while selecting an integer transverse cell count
+may require adjusting \(\omega_0\) to retain \(\theta_0\). In that case the
+requested and actual cells per wavelength differ. Save the actual values and
+evaluate the reference from them. The frequency axis, reference angle axis and
+resolution labels must describe that same resolved row.
+
+For the Brewster comparison, select the central continuum angle derived above
+and compare the measured reflection with both the zero continuum value and the
+generally nonzero finite-grid lattice value. This separates continuum agreement
+from reproduction of the discrete interface. Absolute reflection error is the
+appropriate quantity at the continuum zero [[ref-ellingson][Ellingson, §5.10]].
+
+** Shifted interface and phase origin
+
+A requested continuum face and the transition represented by cell-centred
+material sampling are distinct. For the current aligned sampling rule, a
+small movement of the requested face can leave all cell values unchanged.
+When the face passes a cell centre, a material value changes according to the
+predicate's equality convention. The sampled transition then moves by a whole
+cell. This follows directly from
+[[file:../../core/material/PlanarSlab.h][PlanarSlab::contains]] and the
+cell-centred material sampling; a shifted-face run must record both positions.
+
+Let \(x_M\) denote the represented material face and \(x_I\) the requested
+face. Re-expressing coefficients at a new phase origin gives
+\[
+ r(x_I)=r(x_M)e^{i(k_r-k_i)(x_I-x_M)},\qquad
+ t(x_I)=t(x_M)e^{i(k_t-k_i)(x_I-x_M)}.
+\]
+This is the preceding phase-transfer derivation applied to two reference
+positions [[ref-schneider][Schneider, §5.8.2]]. If the coefficients and roots
+are propagating, this origin change affects phase without changing magnitude.
+When \(x_I-x_M=O(h)\), expansion of the exponential gives an \(O(h)\)
+complex discrepancy from registration alone for a nonzero coefficient. That
+deduction does not imply an \(O(h)\) magnitude error, nor a universal observed
+order when other errors are comparable.
+
+The primary shifted-face comparison refers phase to the requested face.
+Re-referring the same data to the represented face is useful for diagnosing
+registration, but must be identified as a different comparison. It must not
+silently replace the requested continuum geometry.
+
+** Rotated interface and finite-width illumination
+
+The continuum plane can be rotated about the x-z origin. For a normal rotated
+from +x towards +z by \(\alpha\), its equation is
+\[
+ x\cos\alpha+z\sin\alpha=\delta.
+\]
+This is a direct rotation of \(x=\delta\); \(\delta\) remains the signed
+normal distance from the origin. The continuum derivation above uses the
+normal/tangent components and therefore applies with the chosen incidence
+angle relative to this face [[ref-ellingson][Ellingson, §§5.6–5.8]]. This
+geometric statement does not extend the aligned /discrete/ oracle to a
+sampled tilted interface.
+
+The choice of rotated initial modes, finite box, boundary conditions and
+spectral extraction requires qualification. The incident direction and all
+probe phases must agree with the chosen geometry. A fit to one outgoing
+direction is not automatically the total outgoing power; spatial components
+not represented by that fit must be considered
+[[ref-oskooi][Oskooi and Johnson, §4.5, pp. 84–86]].
+
+A finite transverse envelope is also possible. To see what it changes, let
+\(v\) be the tangent coordinate and use the spatial transform with kernel
+\(e^{-i\kappa v}\). A change of variable gives
+\[
+ \mathcal F_v\{a(v/w)e^{i\kappa_0v}\}(\kappa)
+   =w\widehat a\bigl(w(\kappa-\kappa_0)\bigr),\qquad w>0.
+\]
+This is a Fourier scaling/shift deduction from the transform definition in
+[[ref-oskooi][Oskooi and Johnson, Eq. (4.6)]], applied to space with the stated
+sign. Finite transverse width introduces a distribution of tangential
+wavenumbers, hence a distribution of propagating incidence angles at each
+frequency. Each continuum plane-wave component has its own Fresnel coefficient.
+Assigning the whole beam only the central-angle coefficient is an approximation;
+it needs a beam-width study or an angular-spectrum reference. In particular,
+the noncentral components of a beam centred at Brewster need not have zero
+reflection [[ref-ellingson][Ellingson, §5.10]].
+
+Comparable aligned and rotated runs must match the media, incident side,
+polarization, interface-relative incidence, physical spectral content and
+observable conventions. If finite illumination is used, include an aligned
+control with the same beam definition and extraction. Document the resolution
+and time-step policy and any unavoidable differences in the resolved rows.
+Assess boundary, angular/reference and extraction effects before attributing a
+difference to the interface discretization. No particular rotated method or
+measured convergence result is established by this document.
+
+* Formula-to-code correspondence
+
+The following names identify the current implementations of these calculations.
+Use the source revision recorded with a result when interpreting this table.
+
+| Calculation | Symbol or file | Meaning |
+|-------------+----------------+---------|
+| Spatial and temporal difference symbols | =symbolK=, =symbolW= in [[file:../../tests/apps/planar-interface/InterfaceOracles.h][InterfaceOracles.h]] | Homogeneous lattice dispersion. |
+| Normal lattice root | =latticeNormal= in the same header | Root and branch classification at the supplied frequency and transverse wavevector. |
+| Aligned discrete amplitudes | =latticeCoefficients= in the same header | TE cell-centre and TM harmonic-face matching derived above. |
+| Continuum amplitudes | =fresnelCoefficients= in the same header | TE electric and fixed-basis TM magnetic Fresnel ratios. |
+| Incident waveform and phase-referred measurement | [[file:../../apps/planar-interface/PlanePulse.h][PlanePulse.h]] | Discrete initial modes, labelled incident spectrum, subtraction and propagation correction. |
+| Component coordinates and times | [[file:../../core/base/LevelContract.h][LevelContract.h]] | Physical spatial offsets and half-step labels. |
+| Accumulated spectra | [[file:../../opt-in/diagnostics/FourierProbe.h][FourierProbe.h]] | Actual frequency vector, gate, window, coordinates and finite time transform. |
+| Harmonic constitutive coefficient | [[file:../../core/material/O1VSCoefficients.h][O1VSCoefficients.h]] | The material-face rule assumed by the TM discrete derivation. |
+
+The existing =spectra.csv= columns =r_real=, =r_imag=, =t_real= and =t_imag=
+are the parts of the face-referred measured coefficients, not reference values.
+The frequency column is =angular_frequency= in solver units or
+=angular_frequency_rad_per_s= for SI output. Reference calculations must use
+the corresponding converted units and recorded polarization. Raw point/box
+spectra and derived coefficients have different meanings; retain their labels
+when additional output columns are introduced.
+
+* Reference data and reproducibility
+<<provenance>>
+
+For every reported comparison, preserve the actual reference table alongside
+the measured data. A formula and a plot alone do not identify which numerical
+reference was used. The record should identify:
+
+- The input file and resolved physical/numerical row: media, incident side,
+  polarization, geometry, frequency vector, wavevector, mesh and time step.
+- The measured channel, physical probe coordinates, time labels, gate/window,
+  transform normalization and interface phase origin.
+- The reference type, applicable assumptions, source revision, exact evaluation
+  command/inputs, numerical output and the version of this derivation.
+- The conversion from externally supplied reference data, if any, including
+  source/version, units, basis and every extraction or interpolation step.
+- The measured files and comparison/figure commands, valid-bin criteria and
+  omitted bins, together with boundary, angular and extraction control runs.
+
+Keep continuum references, discrete references and measured spectra separately
+identifiable. Store the selected raw data required to reconstruct derived
+coefficients and figures. A reference utility may reuse the host formula
+functions listed above; its future command-line interface is not specified here.
+No output should imply that a reference calculation has been verified merely
+because the utility ran successfully.
+
+* Sources
+
+<<ref-ellingson>>
+- Steven W. Ellingson, /Electromagnetics, Vol. 2/, Virginia Tech Publishing,
+  2020, v1.0. [[https://doi.org/10.21061/electromagnetics-vol-2][doi:10.21061/electromagnetics-vol-2]].
+  Time-average Poynting vector: Eq. (3.98). TE: §5.6, Eqs. (5.142), (5.147),
+  printed pp. 74–75. TM: §5.7, Eqs. (5.156), (5.187), (5.191), printed
+  pp. 76–79. Brewster angle: §5.10, Eq. (5.253), printed p. 87.
+  Key used in source comments: =ellingson2020ElectromagneticsVol2=.
+
+<<ref-fallahi>>
+- Arya Fallahi, /MITHRA 2.0: A Full-Wave Simulation Tool for Free Electron
+  Lasers/, 2020. [[https://arxiv.org/abs/2009.13645v1][arXiv:2009.13645v1]].
+  Standard-stencil dispersion: §3.1.3, Eq. (3.17), printed p. 14.
+  Key: =fallahi2020mithra20fullwavesimulation=.
+
+<<ref-trefethen>>
+- Lloyd N. Trefethen, “Group Velocity in Finite Difference Schemes,”
+  /SIAM Review/ 24(2), 113–136 (1982).
+  [[https://doi.org/10.1137/1024038][doi:10.1137/1024038]]. Group velocity:
+  §1, Eqs. (1.4)–(1.5), p. 115; pulse propagation: §2.
+  Key: =trefethen1982GroupVelocity=.
+
+<<ref-oskooi>>
+- Ardavan Oskooi and Steven G. Johnson, “Electromagnetic Wave Source
+  Conditions,” chapter 4 of /Advances in FDTD Computational Electrodynamics:
+  Photonics and Nanotechnology/, Artech House, 2013, pp. 65–100.
+  [[https://arxiv.org/abs/1301.5366v1][Author manuscript, arXiv:1301.5366v1]].
+  Discrete source consistency: §4.2.2, pp. 69–70. Incident subtraction and
+  Fourier convention: §4.3, Eq. (4.6), pp. 70–72. Periodicity, tangential
+  wavevector and frequency-dependent angle: §4.5, Eq. (4.30), pp. 83–86.
+  Key: =oskooi2013sources=.
+
+<<ref-schneider>>
+- John B. Schneider, /Understanding the Finite-Difference Time-Domain
+  Method/, Washington State University, 2010; author PDF dated 2026-03-22.
+  [[https://eecs.wsu.edu/~schneidj/ufdtd/][Author's book website]]. Incident-normalized
+  spectra and propagation correction: §5.8.2, Eqs. (5.96)–(5.99), printed
+  p. 137. Key: =schneider2010UnderstandingFdtd=.
+
+<<ref-yee>>
+- Kane S. Yee, “Numerical Solution of Initial Boundary Value Problems
+  Involving Maxwell's Equations in Isotropic Media,” /IEEE Transactions
+  on Antennas and Propagation/ 14(3), 302–307 (1966).
+  [[https://doi.org/10.1109/TAP.1966.1138693][doi:10.1109/TAP.1966.1138693]]. Staggered updates:
+  Eqs. (5)–(6), p. 303. The interface coefficients above are derived here;
+  Yee's paper is not cited as a source of a harmonic material average or those
+  coefficient formulae. Key: =yee1966MaxwellIsotropicMedia=.
+
+<<ref-ryu>>
+- Christopher Jayun Ryu, Aiyin Y. Liu, Wei E. I. Sha and Weng Cho Chew,
+  “Finite-Difference Time-Domain Simulation of the Maxwell–Schrödinger
+  System,” /IEEE Journal on Multiscale and Multiphysics Computational
+  Techniques/ 1, 40–47 (2016).
+  [[https://doi.org/10.1109/JMMCT.2016.2605378][doi:10.1109/JMMCT.2016.2605378]],
+  [[https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf][author manuscript]].
+  Appendix A, Eqs. (19)–(27), gives the staggered difference/curl construction.
+  Specific output labels and the magnetic time average are defined by
+  =LevelContract=, not by the paper. Key: =ryu2016potentialfdtd=.
+
+<<ref-eymard>>
+- Robert Eymard, Thierry Gallouët and Raphaèle Herbin, “Finite Volume
+  Methods,” /Handbook of Numerical Analysis/ 7, 713–1020 (2000).
+  [[https://doi.org/10.1016/S1570-8659(00)07005-8][doi:10.1016/S1570-8659(00)07005-8]],
+  [[https://hal.science/hal-02100732v2][HAL author version hal-02100732v2, 2019]].
+  Harmonic coefficient for equal half-cell distances: §7.1, Example 7.1,
+  printed p. 22 of the author version. Key: =eymard2000FiniteVolume=.
