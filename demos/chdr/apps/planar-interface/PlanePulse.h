@@ -158,13 +158,15 @@ namespace chdr::apps::planarInterface {
     /// Observe every completed field state, independently of the energy diagnostic cadence.
     inline void advancePlaneMeasurement(InterfaceRun& run, const PlaneRow& p, PlaneResult& result,
                                         PlaneFourierProbe& incident, PlaneFourierProbe& other,
-                                        int cadence) {
+                                        int cadence, const InterfaceRun::Observer& observer) {
         double baseline = 0;
         run.advance(p.steps_m, [&](long long k, auto& state, const auto& owner) {
             incident.sample();
             other.sample();
             if (k % cadence == 0 || k == p.steps_m)
                 observePlaneEnergy(state, owner, k, result, baseline);
+            if (observer)
+                observer(k, state, owner);
         });
     }
 
@@ -198,15 +200,16 @@ namespace chdr::apps::planarInterface {
             {.safetyFactor_m = p.courant_m});
     }
 
-    /** @brief Run one resolved row through the common initialization and measurement path.
-     * Optional checks run while the solver and material owner remain alive. Complex
-     * coefficients are available only on rank zero; no reference values enter the evolution.
+    /** @brief Initialize and measure a caller-owned run, optionally observing its same states.
+     * @details The caller may own a field writer whose lifetime ends before the run, including
+     * on exceptions. Output observes the same evolution after the full-rate Fourier samples;
+     * its cadence cannot remove a Fourier sample. Coefficients are available only on rank zero.
      */
-    inline PlaneResult measurePlane(
-        const PlaneRow& p, int cadence = 1, int seam = 0,
+    inline PlaneResult measurePlaneRun(
+        InterfaceRun& run, const PlaneRow& p, int cadence,
         std::function<void(InterfaceSolver&, const material::MaterialOwner&)> initialCheck = {},
-        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> finalCheck   = {}) {
-        auto run = planeRun(p, cadence, seam);
+        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> finalCheck   = {},
+        InterfaceRun::Observer observer                                                    = {}) {
         PlanePulse pulse(p);
         run.load(pulse);
         if (initialCheck)
@@ -216,10 +219,19 @@ namespace chdr::apps::planarInterface {
         auto incident =
             planeProbe(run.solver(), p, p.incidentProbeIndex_m, p.gateIncident_m, frequencies);
         auto other = planeProbe(run.solver(), p, p.otherProbeIndex_m, p.gateOther_m, frequencies);
-        advancePlaneMeasurement(run, p, result, incident, other, cadence);
+        advancePlaneMeasurement(run, p, result, incident, other, cadence, observer);
         extractPlaneResult(p, pulse, incident, other, result);
         if (finalCheck)
             finalCheck(run.solver(), run.material());
         return result;
+    }
+
+    /// Own a complete measurement when no external observer needs to borrow its fields.
+    inline PlaneResult measurePlane(
+        const PlaneRow& p, int cadence = 1, int seam = 0,
+        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> initialCheck = {},
+        std::function<void(InterfaceSolver&, const material::MaterialOwner&)> finalCheck   = {}) {
+        auto run = planeRun(p, cadence, seam);
+        return measurePlaneRun(run, p, cadence, initialCheck, finalCheck);
     }
 }  // namespace chdr::apps::planarInterface

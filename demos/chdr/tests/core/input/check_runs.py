@@ -9,6 +9,9 @@ columns, plane spectra) must equal the code-unit number times its factor within 
 tolerance of 2e-12. File names, step lists, extents and record fields must be equal, and the
 time step of the run record must equal the VTK dt exactly. CTest entry: chdr.input.runs.si,
 which exists only when CMake finds Python 3.
+The plane case also runs with sparse frames in both unit systems. Its spectra must
+equal the corresponding frames-disabled CSV byte for byte, with material and nonzero
+profile data, independent frame/diagnostic schedules and explicit component/time labels.
 
 Scale substitutions: fitzpatrick2014ClassicalElectromagnetism, Eqs. (1.1), (1.3),
 (1.11)-(1.16), (4.70), (6.85); constants: mohr2025Codata2022, Table XXXIII.
@@ -37,7 +40,7 @@ def close(actual, expected, label):
         rel_tol=2e-12, abs_tol=1e-280), (label, actual, expected)
 
 
-def run(binary, directory, movie, duration=None, plane=False):
+def run(binary, directory, movie, duration=None, plane=False, frames=False):
     directory.mkdir()
     output = directory / 'output'
     units = ('system: normalized' if duration is None else
@@ -51,6 +54,10 @@ def run(binary, directory, movie, duration=None, plane=False):
     if not plane:
         document += ('observations:\n  fields: {every: 3, include_final: true}\n'
                      f'  diagnostics: {{every: {2 if movie else 1}, include_final: true}}\n')
+    else:
+        document += 'observations:\n  diagnostics: {every: 257}\n'
+        if frames:
+            document += '  fields: {every: 500, include_final: true}\n'
     path = directory / 'input.yaml'
     path.write_text(document + ('parameters: {smoke: true}\n' if movie else ''))
     result = subprocess.run([binary, '--input', str(path)], capture_output=True, text=True,
@@ -78,10 +85,10 @@ def vtk(path, binary):
     return tree.find('ImageData').attrib, metadata, arrays
 
 
-def check_frames(normal, physical, record, movie):
+def check_frames(normal, physical, record, movie, steps=(0, 3, 4)):
     series = [json.loads((path / 'wave.pvti.series').read_text())['files']
               for path in (normal, physical)]
-    assert [row['name'] for row in series[0]] == [f'wave-{k}.pvti' for k in (0, 3, 4)]
+    assert [row['name'] for row in series[0]] == [f'wave-{k}.pvti' for k in steps]
     assert [row['name'] for row in series[1]] == [row['name'] for row in series[0]]
     dt, cells = record['effective']['solver']['time_step'], record['effective']['box']['cells']
     for left, right in zip(*series):
@@ -111,10 +118,11 @@ def check_frames(normal, physical, record, movie):
                 close(b, a * factor, key)
 
 
-def check_csv(left, right, movie):
+def check_csv(left, right, movie, steps=None):
     rows = [list(csv.DictReader(line for line in text.splitlines() if not line.startswith('#')))
             for text in (left, right)]
-    assert [int(row['step']) for row in rows[0]] == ([0, 2, 4] if movie else list(range(5)))
+    expected = steps if steps is not None else [0, 2, 4] if movie else list(range(5))
+    assert [int(row['step']) for row in rows[0]] == expected
     assert len(rows[0]) == len(rows[1])
     for normal, physical in zip(*rows):
         for key, value in normal.items():
@@ -202,6 +210,43 @@ def check_plane(binary, directory):
         assert item['effective']['plane']['schema_version'] == 1
         assert item['effective']['plane']['central_bin'] == 0
         assert item['effective']['completed_solves'] > 0
+        assert item['effective']['observations']['fields']['enabled'] == 0
+    assert json.loads((normal / 'wave.pvti.series').read_text())['files'] == []
+    check_plane_frames(binary, directory, normal, physical, record, duration)
+
+
+def check_plane_frames(binary, directory, normal, physical, record, duration):
+    """Sparse output must preserve spectra and label a usable raw field profile."""
+    frames, frame_record, _ = run(binary, directory / 'frames', False, plane=True, frames=True)
+    si_frames, si_record, _ = run(binary, directory / 'si-frames', False, duration * TIME,
+                                  plane=True, frames=True)
+    assert (normal / 'spectra.csv').read_bytes() == (frames / 'spectra.csv').read_bytes()
+    assert (physical / 'spectra.csv').read_bytes() == (si_frames / 'spectra.csv').read_bytes()
+    final = record['effective']['completed_solves']
+    check_records(frame_record, si_record, final)
+    check_frames(frames, si_frames, frame_record, True, (0, 500, 1000, final))
+    check_csv((frames / 'energy.csv').read_text(), (si_frames / 'energy.csv').read_text(),
+              True, list(range(0, final, 257)) + [final])
+    check_plane_profile(frames, frame_record)
+
+
+def check_plane_profile(frames, frame_record):
+    """Read a physical component and its material/position labels from binary VTK."""
+    wrapper = ET.parse(frames / 'wave-0.pvti')
+    _, labels, arrays = vtk(frames / wrapper.find('.//Piece').attrib['Source'], True)
+    output = frame_record['effective']['output']['fields']
+    assert output['plane'] == 'zx'
+    assert output['component_offsets'] == labels['component_offsets']
+    assert output['electric_time_offset_steps'] == -0.5
+    assert output['magnetic_time_offset_steps'] == 0
+    assert labels['component_offsets'] == [0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5,
+                                           0, 0.5, 0.5, 0.5, 0, 0.5, 0.5, 0.5, 0]
+    profile = arrays['E_raw'][1::3]
+    assert all(math.isfinite(value) for value in profile) and max(map(abs, profile)) > 0
+    material = ET.parse(frames / 'material.pvti')
+    _, _, values = vtk(frames / material.find('.//Piece').attrib['Source'], False)
+    assert set(values['epsilon_r']) == {1.0, frame_record['effective']['plane']['epsilon']}
+    assert 'plane=zx polarization=TE' in (frames / 'energy.csv').read_text().splitlines()[0]
 
 
 if __name__ == '__main__':

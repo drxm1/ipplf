@@ -66,6 +66,7 @@ parameters:
 output: {directory: plane-30-tm}
 observations:
   diagnostics: {every: 10}
+  fields: {enabled: false}
 ```
 
 The two input forms below are exclusive. At fixed cell shape, `angle_degrees`
@@ -152,11 +153,27 @@ available. The incident floor is an explicit conditioning criterion for the
 spectral ratio, not a proof of the remaining error
 [Schneider, section 5.8.2](https://eecs.wsu.edu/~schneidj/ufdtd/).
 
-The supported observations are `fourier` and `diagnostics`: Fourier probes sample
-every completed state and apply their resolved gates internally; diagnostics may
-change cadence but must include the initialized and final states. Neither can be
-disabled. An explicit duration may extend the run but cannot truncate either
-gate. The plane case does not yet produce field frames.
+The observations are `fourier`, `diagnostics` and optional `fields`. Fourier
+probes sample every completed state and apply their resolved gates internally;
+diagnostics may change cadence but must include the initialized and final states.
+Neither can be disabled. An explicit duration may extend the run but cannot
+truncate either gate.
+
+Fields are disabled by default. To save sparse frames from the same evolution,
+set `observations.fields: {every: 100, include_final: true}` and supply an output
+directory. The common `first`, `last`, `every`, `include_final` and `enabled`
+controls apply; declaring `fields: {}` enables the default every-100-step schedule
+including the final state. Field output does not change Fourier sampling or gates.
+Recorded runs also write `energy.csv`, a material map and `wave.pvti.series`;
+the series is empty when fields are disabled. These files use the existing
+`interface-movies/render_movie.py` renderer with `plane=zx` metadata, selecting
+E_y for TE and raw B_y for TM. Raw electric frames have time `(step-0.5)*dt` and
+raw magnetic frames have time `step*dt`; the Fourier magnetic channel instead
+uses the solver's temporally averaged H_y. VTK and `run.json` retain component
+offsets and time labels. Use those labels when comparing a field profile with
+another frame or an analytic reference. The labels are defined by the solver's
+[LevelContract](../../core/base/LevelContract.h); raw magnetic reconstruction uses
+the discrete curl of [Ryu et al., author manuscript, Appendix A, Eq. (24)](https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf).
 
 ## Packet cases
 
@@ -185,3 +202,7 @@ sampling and enlarged layers/gates
 case of `planar-interface`, using YAML with separate field and diagnostic
 cadences. The Brewster and two-rank oblique dielectric seam checks carry the
 `long` label.
+The existing `chdr.input.runs.si` integration check also compares plane spectra
+with frames enabled and disabled, checks the sparse frame/energy schedules,
+reads a nonzero electric profile and verifies material, component/time labels
+and SI conversions.

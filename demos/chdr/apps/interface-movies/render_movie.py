@@ -148,7 +148,9 @@ class MovieRenderer:
             self.field = "B_raw" if metadata.get("polarization") == "TM" else "E_raw"
         self.time_unit, self.field_unit, self.length_unit = output_units(self.directory, self.field)
         self.plane = args.plane or metadata.get("plane", "xy")
-        if metadata.get("polarization") == "TM":
+        if metadata.get("case") == "plane":
+            self.caveat = "Periodic plane pulse"
+        elif metadata.get("polarization") == "TM":
             self.caveat = "Preliminary: nonzero Gauss residual under Mur"
             if metadata.get("case", "").startswith("diagonal"):
                 self.caveat += "\nDiagonal interface and boundary treatment not validated"

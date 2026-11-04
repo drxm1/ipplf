@@ -96,7 +96,7 @@ namespace chdr::apps::planarInterface {
 
     /// Spectrum sampling remains at every completed state; diagnostic cadence is independent.
     int checkPlaneSchedules(const input::RunInput& request) {
-        input::validateObservationNames(request, {"fourier", "diagnostics"});
+        input::validateObservationNames(request, {"fourier", "diagnostics", "fields"});
         const auto fourier = input::observationSchedule(request, "fourier", {});
         const auto energy =
             input::observationSchedule(request, "diagnostics", {.includeFinal_m = true});
@@ -108,6 +108,17 @@ namespace chdr::apps::planarInterface {
             throw std::invalid_argument(
                 "plane requires diagnostics from its initial through final state");
         return energy.every_m;
+    }
+
+    /// Plane frames are opt-in; their default cadence is independent of energy and Fourier data.
+    output::FieldRunSettings planeOutputSettings(const input::RunInput& request, int cadence) {
+        auto result            = output::fieldRunSettings(request, 100);
+        result.diagnostics_m   = {.every_m = cadence, .includeFinal_m = true};
+        result.fieldsEnabled_m = request.observations_m.contains("fields")
+                                 && input::observationEnabled(request, "fields");
+        if (result.fieldsEnabled_m && request.outputDirectory_m.empty())
+            throw std::invalid_argument("Plane field frames require an output directory");
+        return result;
     }
 
     /// A user duration may extend the evolution, but cannot truncate either resolved probe gate.
@@ -226,36 +237,79 @@ namespace chdr::apps::planarInterface {
         node["coefficient_phase_origin"] = "requested_face";
     }
 
+    /// VTK raw B has integer time; the magnetic Fourier channel instead averages adjacent times.
+    void recordPlaneFields(conduit_cpp::Node node, const InterfaceSolver& solver,
+                           const input::RunInput& request) {
+        node["plane"]                      = "zx";
+        node["electric_field"]             = "E_raw";
+        node["magnetic_field"]             = "B_raw";
+        node["electric_time_offset_steps"] = -0.5;
+        node["magnetic_time_offset_steps"] = 0.0;
+        node["coordinate_units"]           = request.units_m.isSI() ? "m" : "normalized";
+        node["time_units"]                 = request.units_m.isSI() ? "s" : "normalized";
+        node["component_offset_units"]     = "cell_fraction";
+        node["component_order"]            = "E_x,E_y,E_z,B_x,B_y,B_z";
+        const auto offsets                 = output::fieldOffsets(solver.levelContract());
+        node["component_offsets"].set(std::vector<double>(offsets.begin(), offsets.end()));
+    }
+
+    /// Preserve the renderer's x-z view and select the y component for either polarization.
+    std::string planeMetadata(const PlaneRow& p) {
+        return std::string("case=plane plane=zx polarization=")
+               + (p.polarization_m == Polarization::TM ? "TM" : "TE");
+    }
+
     /// Describe the measured case while its manager still owns the solver and layout.
     output::RunRecordDescription describePlane(const PlaneRow& p, InterfaceSolver& solver,
-                                               const input::RunInput& request, int cadence) {
+                                               const input::RunInput& request,
+                                               const output::FieldRunSettings& settings) {
         const simulation::RunBox box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m};
         auto result =
-            output::describeRun("planar-interface", box, solver, p.steps_m, "case=plane plane=zx");
+            output::describeRun("planar-interface", box, solver, p.steps_m, planeMetadata(p));
         recordPlaneSpectrum(result.effective_m["plane"], p);
         recordPlaneGeometry(result.effective_m["plane"], p);
         recordPlaneBand(result.effective_m["plane"], p);
         output::recordObservation(result, "fourier", {});
-        output::recordObservation(result, "diagnostics",
-                                  {.every_m = cadence, .includeFinal_m = true});
+        output::recordFieldRunOutput(result, request, settings);
         recordPlaneSpectrumUnits(result.effective_m["output/spectra"], request);
+        recordPlaneFields(result.effective_m["output/fields"], solver, request);
+        return result;
+    }
+
+    /// Finish and destroy output before its borrowed run, also preserving that order on failure.
+    PlaneResult measureRecordedPlane(const input::RunInput& request, const PlaneRow& p,
+                                     const output::FieldRunSettings& settings,
+                                     output::RunRecordDescription& description) {
+        auto run = planeRun(p, settings.diagnostics_m.every_m, 0);
+        std::optional<output::FieldRunOutput> writer;
+        if (!request.outputDirectory_m.empty())
+            writer.emplace(request.outputDirectory_m,
+                           simulation::RunBox{{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m},
+                           run.solver(), run.material(), planeMetadata(p), request.units_m);
+        const auto result =
+            measurePlaneRun(run, p, settings.diagnostics_m.every_m, {}, {},
+                            [&](long long k, auto& state, const auto& owner) {
+                                if (writer)
+                                    writer->observe(k, state, owner, p.steps_m, settings);
+                            });
+        if (writer)
+            writer->finish();
+        description = describePlane(p, run.solver(), request, settings);
         return result;
     }
 
     /// Run the existing plane measurement and save its result through the common record writer.
     void runPlane(const input::RunInput& request) {
-        auto p            = planeRow(request);
-        const int cadence = checkPlaneInput(request, p);
-        output::prepareRunDirectory(request.outputDirectory_m, ippl::Comm->getCommunicator());
-        std::optional<output::RunRecordDescription> description;
-        const auto result = measurePlane(p, cadence, 0, {}, [&](auto& solver, const auto&) {
-            description = describePlane(p, solver, request, cadence);
-        });
-        description->effective_m["plane/incident_peak"] = result.incidentPeak_m;
-        description->effective_m["plane/mode_count"] = static_cast<conduit_int64>(result.modes_m);
+        auto p              = planeRow(request);
+        const int cadence   = checkPlaneInput(request, p);
+        const auto settings = planeOutputSettings(request, cadence);
+        output::RunRecordDescription description;
+        const auto result = measureRecordedPlane(request, p, settings, description);
+        description.effective_m["plane/incident_peak"] = result.incidentPeak_m;
+        description.effective_m["plane/mode_count"]    = static_cast<conduit_int64>(result.modes_m);
         printPlaneResult(p, result);
         writePlaneResult(request, result);
-        output::writeRunRecord(request.outputDirectory_m, request, *description,
+        output::writeRunRecord(request.outputDirectory_m, request, description,
                                ippl::Comm->getCommunicator());
     }
 
