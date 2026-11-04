@@ -143,8 +143,9 @@ def phase_figure(rows, curves, output, phase_floor):
             line, = ax.plot(angle, phase, "o", label=polarization + " measured")
             ax.plot(reference_angle, expected, "--", color=line.get_color(), label=polarization + " Fresnel")
             ax.set(xlabel="actual central incidence angle [degrees]", ylabel=f"phase({quantity}) [rad]")
-            phase_limits(ax, phase, expected)
             ax.legend()
+    for ax in axes:
+        phase_limits(ax, *(line.get_ydata() for line in ax.lines))
     figure.suptitle("Phase relative to the continuum branch; undefined near reference zeros")
     save_figure(figure, output, "angle-phase")
 
