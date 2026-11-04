@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 from read_run import RunDataError, load_run, sha256_file
@@ -177,8 +178,83 @@ def live_process(pid):
         return False
 
 
+def cancellation_binary(path):
+    fixture = path / "fixture"
+    fixture.mkdir()
+    write_synthetic(fixture, synthetic_record(), synthetic_sample())
+    binary = path / "simulation"
+    child = "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print(os.getpid(),flush=True); time.sleep(60)"
+    binary.write_text(f"#!{sys.executable}\nimport pathlib,shutil,subprocess,sys,yaml\n"
+                      "data=yaml.safe_load(pathlib.Path(sys.argv[2]).read_text())\n"
+                      "mode=data['parameters']['mode']\n"
+                      f"if mode=='completed': shutil.copytree({str(fixture)!r},data['output']['directory'])\n"
+                      "elif mode=='failed': sys.exit(7)\n"
+                      "else:\n print('launcher',file=sys.stderr,flush=True)\n"
+                      f" subprocess.Popen([sys.executable,'-c',{child!r}]).wait()\n")
+    binary.chmod(0o755)
+    return binary
+
+
+def cancellation_inputs(path):
+    inputs = []
+    for name in ("completed", "failed", "running", "queued"):
+        item = path / (name + ".yaml")
+        item.write_text(f"case: plane\nparameters: {{mode: {name}}}\n")
+        inputs.append(str(item))
+    return inputs
+
+
+def wait_for_descendant(root, process):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and process.poll() is None:
+        for output in root.glob("0002-running/*/stdout.txt"):
+            text = output.read_text().strip()
+            if text:
+                return int(text)
+        time.sleep(.02)
+    raise AssertionError("Cancellation reproduction did not start its descendant")
+
+
+def interrupt_scan(path):
+    root, binary = path / "scan", cancellation_binary(path)
+    command = [sys.executable, str(Path(__file__).with_name("scan.py")), "--binary", str(binary),
+               "--output-root", str(root), "--jobs", "1", "--max-cores", "1", *cancellation_inputs(path)]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    descendant = None
+    try:
+        descendant = wait_for_descendant(root, process)
+        process.send_signal(signal.SIGINT)
+        stdout, stderr = process.communicate(timeout=8)
+        manifest = json.loads(next(root.glob("scan-*.json")).read_text())
+        return process.returncode, descendant, manifest, stdout, stderr
+    finally:
+        if descendant is not None and live_process(descendant):
+            os.killpg(os.getpgid(descendant), signal.SIGKILL)
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=2)
+
+
 @unittest.skipUnless(sys.platform.startswith("linux"), "Process-state check uses Linux procfs")
 class TimeoutTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec("yaml"), "PyYAML is needed by the runner")
+    def test_cli_sigint_preserves_rows_and_stops_all_attempts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            code, descendant, record, stdout, stderr = interrupt_scan(Path(directory))
+            self.assertEqual(code, 130, stderr.decode())
+            self.assertEqual(record["status"], "cancelled")
+            self.assertEqual([item["status"] for item in record["attempts"]],
+                             ["completed", "failed", "cancelled", "cancelled"])
+            self.assertEqual(record["attempts"][1]["returncode"], 7)
+            self.assertFalse(live_process(descendant), "SIGINT left a running descendant")
+            self.assertTrue(record["cancellation_cleanup"])
+            self.assertTrue(stdout.strip())
+            for item in record["attempts"]:
+                saved = json.loads((Path(item["directory"]) / "attempt.json").read_text())
+                self.assertEqual(saved["status"], item["status"])
+            queued = Path(record["attempts"][3]["directory"])
+            self.assertNotIn("launcher", (queued / "stderr.txt").read_text())
+
     def test_timeout_stops_descendant_after_launcher_exits(self):
         child = "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print(os.getpid(),flush=True); time.sleep(60)"
         parent = f"import subprocess,sys; print('launcher',file=sys.stderr,flush=True); subprocess.Popen([sys.executable,'-c',{child!r}]).wait()"

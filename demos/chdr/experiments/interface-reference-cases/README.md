@@ -75,6 +75,14 @@ timeout. Process-group signals cover local descendants that remain in that group
 remote MPI workers or workers that start a separate session require their
 launcher's job cleanup.
 
+Pressing `Ctrl-C` cancels the scan and returns exit status 130. The runner blocks
+new process launches, terminates all registered local attempt groups, then joins
+its workers. Running and queued attempts are recorded as `cancelled`; rows that
+already completed or failed retain those statuses. The final manifest includes
+the cancellation reason and group-cleanup results, alongside the retained logs
+and inputs. A further interrupt is ignored while this bounded cleanup and record
+write finish. Cancellation does not require a per-attempt timeout.
+
 Each row receives a fresh directory:
 
 ```text

@@ -20,6 +20,7 @@ import re
 import shutil
 import signal
 import subprocess
+import threading
 import time
 import uuid
 
@@ -37,6 +38,42 @@ class ScanSettings:
     mpi_m: str = "mpiexec"
     mpi_arguments_m: tuple[str, ...] = ()
     timeout_m: float | None = None
+
+
+class ScanCancelled(Exception):
+    """An attempt was interrupted or prevented from starting by scan cancellation."""
+
+
+class AttemptProcesses:
+    """Serialize launch registration against cancellation, including queued attempts."""
+    def __init__(self):
+        self.lock_m = threading.Lock()
+        self.cancelled_m = False
+        self.processes_m = set()
+        self.interrupted_m = set()
+
+    def launch(self, command: list[str], **options) -> subprocess.Popen:
+        with self.lock_m:
+            if self.cancelled_m:
+                raise ScanCancelled("Scan cancelled before this attempt started")
+            process = subprocess.Popen(command, start_new_session=True, **options)
+            self.processes_m.add(process)
+            return process
+
+    def interrupted(self, process: subprocess.Popen) -> bool:
+        with self.lock_m:
+            return process in self.interrupted_m
+
+    def remove(self, process: subprocess.Popen) -> None:
+        with self.lock_m:
+            self.processes_m.discard(process)
+
+    def cancel(self) -> list[dict]:
+        with self.lock_m:
+            self.cancelled_m = True
+            processes = tuple(self.processes_m)
+            self.interrupted_m.update(processes)
+        return _stop_groups(processes)
 
 
 def _now() -> str:
@@ -187,22 +224,94 @@ def _stop_group(process: subprocess.Popen) -> bool:
     return _wait_group(process, 2)
 
 
-def _wait_command(record: dict, settings: ScanSettings, output, errors, environment: dict) -> int:
-    process = subprocess.Popen(record["command"], stdout=output, stderr=errors, env=environment,
-                               cwd=record["working_directory"], start_new_session=True)
+def _wait_groups(processes: tuple, seconds: float) -> tuple:
+    deadline = time.monotonic() + seconds
+    remaining = processes
+    while remaining and time.monotonic() < deadline:
+        remaining = tuple(process for process in remaining if _group_present(process))
+        if remaining:
+            time.sleep(.02)
+    return remaining
+
+
+def _group_present(process: subprocess.Popen) -> bool:
+    process.poll()
     try:
-        return process.wait(timeout=settings.timeout_m)
+        os.killpg(process.pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def _stop_groups(processes: tuple) -> list[dict]:
+    """Signal every active group before waiting, so cleanup does not scale with job count."""
+    for process in processes:
+        _signal_group(process, signal.SIGTERM)
+    for process in _wait_groups(processes, 2):
+        _signal_group(process, signal.SIGKILL)
+    remaining = _wait_groups(processes, 2)
+    result = []
+    for process in processes:
+        try:
+            process.wait(timeout=0)
+            result.append({"pid": process.pid, "returncode": process.returncode,
+                           "process_group_still_present": process in remaining})
+        except subprocess.TimeoutExpired:
+            result.append({"pid": process.pid, "cleanup_error": "launcher_did_not_exit_after_SIGKILL"})
+    return result
+
+
+def _command_returncode(process: subprocess.Popen, timeout: float | None,
+                        active: AttemptProcesses) -> int:
+    deadline = None if timeout is None else time.monotonic() + timeout
+    while True:
+        if active.interrupted(process):
+            raise ScanCancelled("Scan cancelled while this attempt was running")
+        remaining = .1 if deadline is None else max(0, min(.1, deadline - time.monotonic()))
+        try:
+            result = process.wait(timeout=remaining)
+            if active.interrupted(process):
+                raise ScanCancelled("Scan cancelled while this attempt was running")
+            return result
+        except subprocess.TimeoutExpired:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(process.args, timeout)
+
+
+def _wait_process(process: subprocess.Popen, record: dict, settings: ScanSettings,
+                  active: AttemptProcesses) -> int:
+    try:
+        record["returncode"] = _command_returncode(process, settings.timeout_m, active)
+        return record["returncode"]
     except subprocess.TimeoutExpired:
+        if active.interrupted(process):
+            raise ScanCancelled("Scan cancelled while this attempt was running")
         disappeared = _stop_group(process)
         record.update(returncode=process.returncode, timeout_cleanup="group_signalled_launcher_reaped",
                       process_group_still_present=not disappeared)
+        raise
+    except ScanCancelled:
         raise
     except BaseException:
         _stop_group(process)
         raise
 
 
-def _execute(directory: Path, record: dict, settings: ScanSettings, binary_hash: str) -> None:
+def _wait_command(record: dict, settings: ScanSettings, output, errors, environment: dict,
+                  active: AttemptProcesses) -> int:
+    process = active.launch(record["command"], stdout=output, stderr=errors, env=environment,
+                            cwd=record["working_directory"])
+    try:
+        return _wait_process(process, record, settings, active)
+    except ScanCancelled:
+        record["returncode"] = process.poll()
+        raise
+    finally:
+        active.remove(process)
+
+
+def _execute(directory: Path, record: dict, settings: ScanSettings, binary_hash: str,
+             active: AttemptProcesses) -> None:
     if sha256_file(settings.binary_m) != binary_hash:
         raise ValueError("Executable changed before this row; use an immutable binary copy")
     environment = dict(os.environ, OMP_NUM_THREADS=str(settings.threads_m), OMP_PROC_BIND="false")
@@ -210,7 +319,7 @@ def _execute(directory: Path, record: dict, settings: ScanSettings, binary_hash:
                   ranks=settings.ranks_m, threads=settings.threads_m, timeout_seconds=settings.timeout_m)
     _atomic_json(directory / "attempt.json", record)
     with (directory / "stdout.txt").open("x") as output, (directory / "stderr.txt").open("x") as errors:
-        record["returncode"] = _wait_command(record, settings, output, errors, environment)
+        record["returncode"] = _wait_command(record, settings, output, errors, environment, active)
     if record["returncode"]:
         raise ValueError(f"Simulation exited with code {record['returncode']}")
     if sha256_file(settings.binary_m) != binary_hash:
@@ -227,11 +336,14 @@ def _completed(directory: Path, record: dict) -> None:
                                for name in ("run.json", "spectra.csv")}
 
 
-def _run_attempt(directory: Path, record: dict, settings: ScanSettings, binary_hash: str) -> dict:
+def _run_attempt(directory: Path, record: dict, settings: ScanSettings, binary_hash: str,
+                 active: AttemptProcesses | None = None) -> dict:
     started = time.monotonic()
     try:
-        _execute(directory, record, settings, binary_hash)
+        _execute(directory, record, settings, binary_hash, active or AttemptProcesses())
         _completed(directory, record)
+    except ScanCancelled as error:
+        record.update(status="cancelled", error_type=type(error).__name__, error=str(error))
     except Exception as error:
         record.update(status="failed", error_type=type(error).__name__, error=str(error))
     finally:
@@ -275,16 +387,54 @@ def run_scan(inputs: list[Path], settings: ScanSettings) -> Path:
     return manifest
 
 
-def _finish_scan(prepared: list, settings: ScanSettings, record: dict, manifest: Path) -> None:
+def _pool_results(pool, prepared: list, settings: ScanSettings, record: dict,
+                  manifest: Path, active: AttemptProcesses) -> None:
+    futures = {pool.submit(_run_attempt, directory, dict(item), settings, record["binary_sha256"], active): index
+               for index, (directory, item) in enumerate(prepared) if item["status"] == "prepared"}
+    for future in as_completed(futures):
+        record["attempts"][futures[future]] = future.result()
+        _atomic_json(manifest, record)
+
+
+def _execute_pool(prepared: list, settings: ScanSettings, record: dict, manifest: Path) -> bool:
+    active = AttemptProcesses()
     with ThreadPoolExecutor(max_workers=settings.jobs_m) as pool:
-        futures = {pool.submit(_run_attempt, directory, dict(item), settings, record["binary_sha256"]): index
-                   for index, (directory, item) in enumerate(prepared) if item["status"] == "prepared"}
-        for future in as_completed(futures):
-            record["attempts"][futures[future]] = future.result()
+        try:
+            _pool_results(pool, prepared, settings, record, manifest, active)
+        except KeyboardInterrupt:
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+            record.update(status="cancelling", cancellation="SIGINT")
+            record["cancellation_cleanup"] = active.cancel()
             _atomic_json(manifest, record)
-    record["status"] = "completed" if all(item["status"] == "completed" for item in record["attempts"]) else "failed"
-    record["finished_utc"] = _now()
-    _atomic_json(manifest, record)
+        except BaseException:
+            active.cancel()
+            raise
+    return active.cancelled_m
+
+
+def _refresh_cancelled(prepared: list, record: dict) -> None:
+    for index, (directory, _) in enumerate(prepared):
+        item = json.loads((directory / "attempt.json").read_text())
+        if item["status"] in ("preparing", "prepared"):
+            item.update(status="cancelled", error_type="ScanCancelled",
+                        error="Scan cancelled before this attempt was submitted", finished_utc=_now())
+            _atomic_json(directory / "attempt.json", item)
+        record["attempts"][index] = item
+
+
+def _finish_scan(prepared: list, settings: ScanSettings, record: dict, manifest: Path) -> None:
+    previous = signal.getsignal(signal.SIGINT)
+    try:
+        cancelled = _execute_pool(prepared, settings, record, manifest)
+        if cancelled:
+            _refresh_cancelled(prepared, record)
+        completed = all(item["status"] == "completed" for item in record["attempts"])
+        record["status"] = "cancelled" if cancelled else ("completed" if completed else "failed")
+        record["finished_utc"] = _now()
+        _atomic_json(manifest, record)
+    finally:
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGINT, previous)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -309,7 +459,8 @@ def main() -> int:
     try:
         manifest = run_scan(args.inputs, settings)
         print(manifest)
-        return 0 if json.loads(manifest.read_text())["status"] == "completed" else 1
+        status = json.loads(manifest.read_text())["status"]
+        return 130 if status == "cancelled" else (0 if status == "completed" else 1)
     except (OSError, ValueError) as error:
         parser.exit(2, f"scan: {error}\n")
 
