@@ -38,7 +38,7 @@ The normal-incidence ladders therefore keep the physical central frequency
 fixed. Automatic primitive-pair selection is deliberately not used for these
 comparisons, because it can change cell shape between meshes.
 
-`aligned-controls/` uses the actual adjusted shape, the same material,
+The normal rows in `aligned-controls/` use the actual adjusted shape, the same material,
 polarization, resolution, time-step policy and central frequency. Its aligned
 face is the common physical coordinate 500; each measurement transfers phase
 to its own requested face. Translation of the origin does not change the
@@ -46,6 +46,19 @@ face-referred half-space coefficients; see the phase-transfer derivation in
 [references.org](../references.org), following Schneider §5.8.2. A staircase
 has no single represented-face displacement, so the tilted record does not
 invent one.
+
+The oblique aligned controls retain the actual cell shape, requested dielectric
+resolution 20, central continuum incidence 30 degrees and time-step policy.
+Their `shape-17`/`shape-33` names identify the corresponding cell shape; their
+material interface is grid aligned. These rows omit `face_position` so the C++
+resolver selects qualified layer widths. Ordinary aligned periodicity generally
+requires a different frequency adjustment from the tilted construction.
+Record both actual frequencies, tangential wavenumbers, resolutions and Gaussian
+widths; they are retained in `analysis.json` and its aligned-control record.
+The comparison table marks unequal central reference parameters explicitly,
+and such rows are not overlaid as exact matches in convergence figures. For
+the selected nondispersive media the central continuum angle target agrees,
+but the finite-grid resolutions and finite pulses are not identical.
 
 Equal requested spectral controls do not make the lattice normal roots equal.
 Consequently the actual Gaussian width can differ between an aligned and a
@@ -75,6 +88,12 @@ boundary conditions documented in [references.org](../references.org).
   factor changes with it to retain the same queried normal-wavenumber range;
   actual frequency equality is still checked from the records.
 - `layout`: larger separation, denser timing sampling and a longer gate.
+- `period`: a larger pinned period with the baseline period multiplier's parity,
+  retaining baseline timing and probe settings. Verify the actual coordinates
+  relative to the phase anchor, gates and queried frequencies before comparing.
+  This avoids a probe-rounding change that can accompany an unconstrained
+  period enlargement. The retained mode grid and incident amplitude still
+  change with the domain; this is not an identical finite pulse.
 - `probe-distance`: the box centre moves from 12 to 18 x-cell widths from the face.
 - `probe-extent`: the Cartesian half-width changes from two to three cells.
 - `n80-isolation`: combined layout, distance and extent changes on the finest
