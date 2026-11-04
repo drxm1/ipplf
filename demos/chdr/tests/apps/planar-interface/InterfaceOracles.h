@@ -1,12 +1,13 @@
 /** @file InterfaceOracles.h
  * @brief Expected values of the planar-interface tests: lattice dispersion and normal root of the
  * staggered Standard scheme in a uniform medium, exact lattice reflection and transmission of a
- * planar dielectric face on a cell boundary (TE and TM), the continuum Fresnel coefficients in the
- * same bases. Run configurations are separate from these independent formulas.
+ * planar dielectric interface on a cell boundary (TE and TM), the continuum Fresnel coefficients in
+ * the same bases. PlanePresets.h documents the three recorded run configurations and their pulse,
+ * probe and gate conventions; these formulas remain independent of those configurations.
  * @details Units \f$c = \varepsilon_0 = \mu_0 = 1\f$, \f$\mu_r = 1\f$, \f$\varepsilon \ge 1\f$,
- * \f$n = \sqrt\varepsilon\f$. The face normal is x. "Medium 1" (\f$\varepsilon_1\f$) holds the
- * incident wave and "medium 2" the transmitted one, on whichever side of the face they lie: the
- * lattice is mirror symmetric in x, so r and t do not depend on the side. A mode is
+ * \f$n = \sqrt\varepsilon\f$. The interface normal is x. "Medium 1" (\f$\varepsilon_1\f$) holds the
+ * incident wave and "medium 2" the transmitted one, on whichever side of the interface they lie:
+ * the lattice is mirror symmetric in x, so r and t do not depend on the side. A mode is
  * \f$e^{\mathrm i(k_xx + k_yy + k_zz - \omega t)}\f$; the Fourier probes use the kernel
  * \f$e^{+\mathrm i\omega t}\f$, which extracts this amplitude. Symbols of the Standard scheme:
  * \f$K_u = (2/h_u)\sin(k_uh_u/2)\f$, \f$W = (2/\Delta t)\sin(\omega\Delta t/2)\f$,
@@ -14,7 +15,7 @@
  * p. 14]. TE: \f$\mathbf E\f$ along the discrete transverse direction
  * \f$\hat{\mathbf s} = \hat{\mathbf x}\times\mathbf K_t/K_t\f$ (\f$\hat{\mathbf z}\f$ for
  * \f$k_z = 0\f$); TM: \f$\mathbf H\f$ along it. r and t are ratios of \f$E_s\f$ (TE) or \f$H_s\f$
- * (TM) at the face, so the phase is referred to the face. A common sign change of the
+ * (TM) at the material interface, which is their phase origin. A common sign change of the
  * amplitude basis leaves these ratios unchanged; the x-z application uses fixed +y.
  * These host functions are written
  * independently of the solver; the tests take their expected values from here.
@@ -69,7 +70,7 @@ namespace chdr::apps::planarInterface {
      * sawtooth, \f$k_x = \pi/h_x + (2\mathrm i/h_x)\,\mathrm{acosh}\sqrt s\f$. This is the root
      * continued from \f$\mathrm{Im}\,\omega > 0\f$ [gustafsson1972StabilityTheoryII, section 5,
      * Lemma 5.1, p. 659]; the caller gives \f$k_x\f$ the sign of the travel or decay direction,
-     * away from the face for reflected and transmitted waves.
+     * away from the material interface for reflected and transmitted waves.
      */
     inline LatticeNormal latticeNormal(double omega, double ky, double kz, double eps, Vec3 h,
                                        double dt) {
@@ -83,25 +84,27 @@ namespace chdr::apps::planarInterface {
         return {Complex(2 * std::asin(std::sqrt(s)) / h[0], 0), LatticeRoot::Propagating};
     }
 
-    /// r, t at the face and the lattice normal wavenumbers of the incident and the other medium.
+    /// Interface-referred r, t and the normal lattice roots in the incident and transmitted media.
     struct LatticeCoefficients {
         Complex r, t, k1, k2;
     };
 
-    /** @brief Exact lattice reflection and transmission of a planar face on a cell boundary.
+    /** @brief Exact lattice reflection and transmission of a material interface on a cell boundary.
      * @details With zero discrete gauge residual the staggered potentials give fields that obey
      * Yee's scheme [yee1966MaxwellIsotropicMedia, Eqs. (5)-(6), p. 303] with the harmonic
      * permittivity \f$\varepsilon_x = 2\varepsilon_1\varepsilon_2/(\varepsilon_1 +
-     * \varepsilon_2)\f$ on the material face [eymard2000FiniteVolume, section 7.1, Example 7.1, p.
-     * 22]. Per mode, TE and TM decouple into three-point recurrences along x (Deduction from the
-     * discrete Faraday and Ampere laws): TE, \f$E_s\f$ on cell centres with the cell permittivity,
+     * \varepsilon_2)\f$ on the coincident cell face [eymard2000FiniteVolume, section 7.1,
+     * Example 7.1, p. 22]. Per mode, TE and TM decouple into three-point recurrences along x
+     * (Deduction from the discrete Faraday and Ampere laws): TE, \f$E_s\f$ on cell centres with the
+     * cell permittivity,
      * \f$E_{j+1} + E_{j-1} - 2E_j + h_x^2(\varepsilon_jW^2 - K_t^2)E_j = 0\f$; TM, \f$H_s\f$ on
      * x-faces, \f$(H_{m+1} - H_m)/\varepsilon_{m+1/2} - (H_m - H_{m-1})/\varepsilon_{m-1/2}
      * + h_x^2(W^2 - K_t^2/\varepsilon_{x,m})H_m = 0\f$, \f$\varepsilon_{x,m}\f$ the cell value
-     * except \f$\varepsilon_x\f$ on the material face. Beyond the face each recurrence is
-     * homogeneous, so every sample is a sum of its region's two modes, and both regional forms
-     * hold on the two cells (TE) or the one face (TM) adjoining the material face. Eliminating
-     * the overlap gives, with \f$h = h_x\f$ (Deduction; for TM the face mass term equals
+     * except \f$\varepsilon_x\f$ on the interface cell face. Away from the interface each
+     * recurrence is homogeneous, so every sample is a sum of its region's two modes, and both
+     * regional forms hold on the two cells (TE) or the one cell face (TM) adjoining the interface.
+     * Eliminating the overlap gives, with \f$h = h_x\f$ (Deduction; for TM the mass term at that
+     * cell face equals
      * \f$(1 - \cos k_1h)/\varepsilon_1 + (1 - \cos k_2h)/\varepsilon_2\f$ by the two dispersion
      * relations):
      * \f[ r_{\mathrm{TE}} = \frac{\sin((k_1 - k_2)h/2)}{\sin((k_1 + k_2)h/2)},\quad
@@ -109,7 +112,8 @@ namespace chdr::apps::planarInterface {
      *     r_{\mathrm{TM}} = \frac{\varepsilon_2\sin k_1h - \varepsilon_1\sin k_2h}
      *                            {\varepsilon_2\sin k_1h + \varepsilon_1\sin k_2h},\quad
      *     t_{\mathrm{TM}} = 1 + r_{\mathrm{TM}}. \f]
-     * TM has one stored face value, so \f$t = 1 + r\f$ exactly; TE has not. For \f$h \to 0\f$
+     * TM has one stored value at the interface cell face, so \f$t = 1 + r\f$ exactly; TE has not.
+     * For \f$h \to 0\f$
      * both become Fresnel's forms in the wavenumbers; an evanescent side has complex \f$k\f$ and
      * \f$\lvert r\rvert = 1\f$. Serves the type-A coefficient checks at the band centre.
      */
@@ -128,8 +132,9 @@ namespace chdr::apps::planarInterface {
 
     /** @brief Continuum Fresnel coefficients in the same bases, with the normal wavenumbers.
      * @details \f$k_{jx} = \sqrt{\varepsilon_j\omega^2 - k_t^2}\f$, branch \f$\mathrm{Im}\,k \ge
-     * 0\f$ (decay away from the face under total reflection; the conjugate of the \f$e^{j\omega
-     * t}\f$ branch [ellingson2020ElectromagneticsVol2, section 5.12, Eq. (5.288), p. 91]). TE:
+     * 0\f$ (decay away from the material interface under total reflection; the conjugate of the
+     * \f$e^{j\omega t}\f$ branch [ellingson2020ElectromagneticsVol2, section 5.12, Eq. (5.288), p.
+     * 91]). TE:
      * \f$\Gamma_{\mathrm{TE}} = (\eta_2\cos\psi^i - \eta_1\cos\psi^t)/(\eta_2\cos\psi^i +
      * \eta_1\cos\psi^t)\f$ [ibid., section 5.6, Eq. (5.147), p. 75] with \f$\eta_j = \eta_0/n_j\f$,
      * \f$\cos\psi = k_x/(n\omega)\f$ gives \f$r = (k_{1x} - k_{2x})/(k_{1x} + k_{2x})\f$,

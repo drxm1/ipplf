@@ -64,7 +64,7 @@ namespace chdr::apps::planarInterface {
         r.incidentFloor_m = planeParameter(input, "incident_floor", r.incidentFloor_m);
     }
 
-    /// Interpret cell_size and face_position in normalized physical length, preserving cell shape.
+    /// Read cell_size and the material-interface coordinate face_position in code length units.
     inline void readPlaneGeometry(const input::RunInput& input, PlaneRequest& r) {
         r.h_m[0] = planeParameter(input, "cell_size", 1);
         r.h_m[1] = r.h_m[0] * planeParameter(input, "cell_shape_y", 1);

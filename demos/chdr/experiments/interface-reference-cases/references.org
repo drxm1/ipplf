@@ -32,6 +32,16 @@ This is a reference specification, not a set of measured results. Each numerical
 comparison must retain its actual inputs, calculated reference values and run
 provenance as described in [[provenance][Reference data and reproducibility]].
 
+Terminology: a /material interface/ separates the two media; a /cell face/ is a
+mesh entity. An aligned sampled material jump lies on a cell face, which need not
+coincide with the requested analytic interface. Existing input and output names
+such as =face_position= retain their spelling and refer to the material-interface
+coordinate. In the derivations below, an unqualified /face/ means that material
+interface or its stated phase-reference plane. The three recorded pulse layouts,
+their parameters and gate conventions are documented together in
+[[file:../../apps/planar-interface/PlanePresets.h][PlanePresets.h]] and the
+[[file:../../apps/planar-interface/README.md][application README]].
+
 * Coordinates, amplitudes and Fourier convention
 
 The incidence plane is x-z; y is out of plane. In a local interface coordinate

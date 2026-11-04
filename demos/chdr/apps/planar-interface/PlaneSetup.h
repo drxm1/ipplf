@@ -259,7 +259,7 @@ namespace chdr::apps::planarInterface {
         p.otherProbeIndex_m = static_cast<int>(std::lround(p.otherProbe_m / p.h_m[0] - offset));
     }
 
-    /// Exclude a second-face return from both probes using numerical arrival estimates.
+    /// Exclude a return from the second material interface using numerical arrival estimates.
     inline int planeOtherLayer(const PlaneTiming& timing, const PlaneRow& p, double source,
                                double distance) {
         const double h    = p.h_m[0];
@@ -290,10 +290,12 @@ namespace chdr::apps::planarInterface {
         return planeInteger(std::ceil(cells * p.separationFactor_m));
     }
 
-    /** @brief Count centres at or below a physical face using PlanarSlab's inclusive predicate.
+    /** @brief Count centres at or below the requested material interface with an inclusive
+     * predicate.
      * @details The correction compares the same coordinate expression as MaterialOwner;
      * it avoids moving an exact centre tie because division rounded on the opposite side.
-     * The represented transition is the boundary after these cells, not the requested face.
+     * The represented transition is the cell face after these cells. It can differ from
+     * the requested material-interface coordinate.
      */
     inline int planeDielectricCells(double face, double h) {
         int cells = planeInteger(std::floor(face / h + 0.5));
@@ -304,7 +306,7 @@ namespace chdr::apps::planarInterface {
         return cells;
     }
 
-    /// A fixed face may enlarge the dielectric layer, but cannot violate its timing minimum.
+    /// A fixed material-interface position may enlarge the layer, subject to its timing minimum.
     inline int fixedPlaneLayer(int minimum, std::optional<double> face, double h) {
         if (!face)
             return minimum;
@@ -317,7 +319,7 @@ namespace chdr::apps::planarInterface {
         return cells;
     }
 
-    /// Apply a physical face to its dielectric layer and re-evaluate the dependent return paths.
+    /// Apply the requested material-interface position and re-evaluate the dependent return paths.
     inline void resolvePlaneLayers(PlaneRow& p, const PlaneTiming& timing, double source,
                                    double distance, std::optional<double> face) {
         int other = planeOtherLayer(timing, p, source, distance);

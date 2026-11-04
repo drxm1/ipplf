@@ -34,7 +34,7 @@ namespace chdr::apps::planarInterface {
      * [fallahi2020mithra20fullwavesimulation, section 3.1.3, Eq. (3.17)].
      * TE samples \f$A_y=\psi\f$. TM samples the permittivity-weighted discrete curl
      * of \f$\psi\hat{\mathbf y}\f$: \f$A_x=-D_z\psi\f$, \f$A_z=D_x\psi\f$,
-     * multiplied by incident epsilon and divided by harmonic face epsilon.
+     * multiplied by incident epsilon and divided by the harmonic cell-face epsilon.
      * Its weighted backward divergence vanishes by commuting differences
      * (deduction from [ryu2016potentialfdtd, Appendix A]; the generalized gauge is
      * [chew2014generalizedgauge, Eqs. (14), (15), (19)]).

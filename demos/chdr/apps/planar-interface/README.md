@@ -1,9 +1,10 @@
 # Planar dielectric interface in a periodic box
 
 Build `planar-interface` with `IPPL_ENABLE_CHDR=ON`. By default lengths use cell units;
-the speed of light, vacuum permittivity and vacuum permeability are one. Every
-case has an x-normal planar dielectric in a box periodic on every axis. Packet
-presets use relative permittivity 2.13; the plane measurement can choose another
+the speed of light, vacuum permittivity and vacuum permeability are one. The
+material interface is x-normal unless the `plane` case requests a nonzero tilt.
+Every case uses a box periodic on every axis. The qualitative packet cases
+use relative permittivity 2.13; the plane measurement can choose another
 permittivity of at least one. The incidence plane is x-z, with y out of plane.
 
 ```sh
@@ -48,6 +49,14 @@ TE measures the fixed Cartesian electric component E_y; TM measures H_y. Empty
 parameters, or only spectral-observation parameters, select the recorded normal-incidence
 example. Physical request parameters resolve a new row before field allocation, including the mesh, pulse, probe locations,
 separate gates and step count. All presets and requested rows use this same path.
+The recorded presets are documented together in
+[PlanePresets.h](PlanePresets.h) and in the [preset table below](#recorded-plane-presets).
+
+Here, a **material interface** separates the dielectric and vacuum. A **cell face**
+is a boundary of a mesh cell. Centre sampling can represent an aligned material
+interface at a cell face different from its requested coordinate. The existing
+input and record names containing `face`, such as `face_position`, refer to that
+material geometry or its phase reference; their spellings remain unchanged.
 
 ```yaml
 schema_version: 1
@@ -88,7 +97,7 @@ Both use one tangential period. This follows from periodic phase matching
 | `cells_per_wavelength` | Requested dielectric resolution at the central frequency, greater than two; default 20. |
 | `cell_size` | Physical h_x in normalized code-length units; positive, default one. All three spacings scale with this value. |
 | `cell_shape_y`, `cell_shape_z` | Cell spacings relative to h_x=`cell_size`; both default to one and remain fixed during angle resolution. |
-| `face_position` | Optional requested upper dielectric face x in normalized code-length units. Omission selects the layer from timing constraints. An explicit value must leave at least the required number of dielectric cells. |
+| `face_position` | Optional requested upper material-interface coordinate x in normalized code-length units. Omission selects the layer from timing constraints. An explicit value must leave at least the required number of dielectric cells. |
 | `courant` | Fraction of the Standard vacuum CFL limit, strictly between zero and one; default 0.9. |
 | `tail_sigmas` | Gaussian spectral/envelope extent, greater than three; default 8. |
 | `cutoff_fraction` | Fraction of the normal-wavenumber interval above the shared propagation cutoff excluded from the useful band; default zero at normal incidence and 0.5 otherwise. Must be in [0,1), and positive at oblique incidence. |
@@ -102,7 +111,7 @@ Both use one tangential period. This follows from periodic phase matching
 
 Coefficient extraction requires each bin to propagate in both media under both
 the continuum and lattice descriptions; unusable bins retain their raw measurements.
-The material face remains aligned with x. Its requested physical position is
+Without a tilt request, the material interface remains normal to x. Its requested physical position is
 retained independently of the represented material boundary. Nonzero interface tilt
 uses the periodic construction described below.
 The layout uses numerical group velocities and checks second-interface returns,
@@ -129,16 +138,16 @@ These physical input parameters always use normalized code length, including
 when files are emitted in SI units.
 
 Material cells whose centres are at or below `face_position` are dielectric.
-For an integer D, requested faces D*h_x and D*h_x+h_x/4 therefore select the
+For an integer D, requested interface positions D*h_x and D*h_x+h_x/4 therefore select the
 same D cells; the inclusive centre tie at D*h_x+h_x/2 selects D+1 cells.
 The TM initializer uses that same sampled map in its harmonic weights.
 `effective.plane` records `face_position`, `represented_face_position`,
 `face_position_error` (represented minus requested), `dielectric_cells` and the
 sampling convention. Probes and initial packet placement follow the represented
 transition, so their component locations stay on the mesh. Fourier coefficients
-are transferred to the **requested** face using lattice propagation phases,
+are transferred to the **requested material interface** using lattice propagation phases,
 as derived in the [reference document](../../experiments/interface-reference-cases/references.org).
-The shifted comparison uses continuum values at this requested face; an aligned
+The shifted comparison uses continuum values at this requested interface; an aligned
 lattice coefficient requires an explicit phase transfer from the represented
 boundary before it can serve as a shifted diagnostic. No sub-cell permittivity
 averaging is introduced.
@@ -147,7 +156,7 @@ Standard output contains measured central reflection/transmission, effective
 angle/resolution and energy drift. Continuum/lattice comparison formulas remain
 separate from the measurement. With `output.directory`, `spectra.csv` contains
 the selected frequencies, raw incident/total/transmitted DTFT values, complex
-face-referred ratios and per-bin validity/reasons. With three bins the original
+interface-referred ratios and per-bin validity/reasons. With three bins the original
 central/lower/upper frequencies are retained. Additional bins are evenly spaced
 in normal wavenumber, so their frequencies need not be evenly spaced; use the
 recorded values. `run.json` declares plane schema version 1 and the effective
@@ -284,15 +293,68 @@ and extent control remains necessary even when the residual is small.
 
 Plane schema 2 writes `probe-spectra.csv`, `modes.csv` and `spectra.csv` alongside
 the common material, field, energy and run records. The spectrum includes three
-signed normal roots and group velocities, fitted face amplitudes, residuals,
+signed normal roots and group velocities, fitted interface amplitudes, residuals,
 ratios and validity reasons. The raw point table contains actual component
 coordinates, their windings, local normal/tangent coordinates and analytic
 incident plus measured spectra. These permit independent re-projection. A
-staircase has no single represented face, so no such scalar is recorded.
+staircase has no single represented interface plane, so no such scalar is recorded.
 Continuum references use the requested normal/anchor and the actual frequency
 and tangent wavenumber; the aligned scalar-interface lattice oracle is not a
 reference for this staircase. Derivations and conventions are in
 [references.org](../../experiments/interface-reference-cases/references.org).
+
+## Recorded plane presets
+
+`case: plane` selects one of the following rows through `parameters.preset`.
+Empty parameters select `normal`. These are exact discrete-mode pulse measurements;
+the qualitative packet demonstrations in the next section use different starts.
+The [independent reference formulas](../../tests/apps/planar-interface/InterfaceOracles.h)
+refer to [PlanePresets.h](PlanePresets.h) for the configurations. Their derivations
+and phase conventions are collected in
+[references.org](../../experiments/interface-reference-cases/references.org).
+
+| Preset and factory | Incident wave and dielectric | Cell counts (x, y, z); spacings | Dielectric cells D | Retained modes | Incident/transmitted gate samples; solves |
+|---|---|---|---|---|---|
+| `normal`, `normalPlaneRow()` | TE from vacuum, normal incidence; epsilon 2.13 | (812, 2, 2); (1, 1, 1) | 211 | 59 | 1175 / 1178; 1180 |
+| `brewster`, `brewsterPlaneRow()` | TM from vacuum, central Brewster angle; epsilon 2.13 | (3581, 2, 18); (1, 2, 2) | 1484 | 88 | 6759 / 6755; 6761 |
+| `dielectric`, `dielectricPlaneRow()` | TM from dielectric, central angle 18 degrees; epsilon 3.4 | (1828, 2, 52); (1, 0.85, 1.25) | 949 | 78 | 3787 / 3785; 3789 |
+
+All presets use Courant fraction 0.9. `normal` has 20 cells per dielectric
+wavelength, `tail_sigmas=8` and `cutoff_fraction=0`. The other presets use
+`tail_sigmas=7`, with cutoff fractions 0.5 and 0.3 respectively. Their tangential
+periods are 36 and 65 code-length units. The central Brewster angle is
+arctan(sqrt(2.13)); the fixed tangential wavenumber gives different continuum
+angles across its frequency band
+([Ellingson, section 5.10](https://doi.org/10.21061/electromagnetics-vol-2);
+[Oskooi and Johnson, section 4.5](https://arxiv.org/abs/1301.5366)).
+
+The dielectric occupies x cells 0 through D-1. The measured material interface
+is at D*h_x; the other interface lies at the periodic x join. The initial
+potential uses Gaussian weights in normal wavenumber, retaining periodic modes
+within nine spectral standard deviations of the central root. Each mode has
+the incident medium's discrete frequency. The exact width and cutoff definitions
+are in the file-level documentation of [PlanePresets.h](PlanePresets.h).
+
+The nominal envelope half-width is `tail_sigmas/sigma_k`. The preset pulse centre
+lies that distance plus three x-cell widths from the measured interface.
+TE probes lie 3.5 x-cell widths from it; TM probes lie three x-cell widths from
+it. The TE pulse-centre offset is therefore not the TE probe offset plus the
+envelope half-width. These recorded placements are retained explicitly.
+
+TE samples E_y at x-z cell-centre projections. TM samples the two-level average
+of H_y at x-z cell-corner projections, following the staggered field construction
+([Ryu et al., Appendix A](https://doi.org/10.1109/JMMCT.2016.2605378)). Both Fourier
+channels use the time label `(k-1/2)*dt`. A gate of G samples includes completed
+states k=0 through G-1, starting at `-dt/2`; the two initialized potential histories
+straddle that first sample. Raw magnetic field files instead use the integer
+potential time. The solve count is separate from both gate lengths.
+
+The preset layers and gates are recorded integers. Their original timing checks
+used discrete group velocities for second-interface reflections, periodic wraps
+and the analytic incident's periodic image. These finite-band estimates do not
+make Gaussian tails vanish. Use enlarged layers, windows and probe controls when
+qualifying a changed configuration; see the group-velocity construction in
+[Trefethen, sections 1–2](https://doi.org/10.1137/1024038).
 
 ## Packet cases
 

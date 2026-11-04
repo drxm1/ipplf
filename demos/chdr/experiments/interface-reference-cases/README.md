@@ -131,12 +131,12 @@ available for diagnosis. Use `valid_m` when selecting data for comparisons. Do n
 turn an invalid-bin mask into a zero reflected or transmitted signal.
 
 Schema two requires `geometry: periodic_tilted_plane`, the normal/tangent basis,
-face anchor, periodic geometry, probe layout and the recorded qualification
+material-interface anchor, periodic geometry, probe layout and the recorded qualification
 quantities. `spectra.csv` stores the fitted incident, reflected and transmitted
-face amplitudes, three signed normal roots and their group velocities, fit
+interface amplitudes, three signed normal roots and their group velocities, fit
 residuals, and the derived coefficients. These columns have different meanings
 from the raw point transforms of schema one.
-The requested face position is a signed normal offset; the recorded anchor must
+The requested material-interface position is a signed normal offset; the recorded anchor must
 lie on that plane. Both x and z windings are retained when lifting probe points.
 
 The required `probe-spectra.csv` retains every point's wrapped component position,
@@ -153,7 +153,7 @@ input/output identities, reference executable hash and compiled revision, analys
 source identity, and reference-document hash. It also records discrepancies between
 published coefficients and a reconstruction from raw spectra when that audit is
 applicable. For schema two, the audit repeats the recorded spatial fits with the
-three supplied directional roots, checks all face amplitudes and normalized fit
+three supplied directional roots, checks all interface amplitudes and normalized fit
 residuals, and then checks their ratios. It does not replace the reflected root
 by the negative incident root. The raw point file is included in the provenance
 hashes. These discrepancies test extraction consistency, not physical accuracy.
@@ -182,8 +182,8 @@ does not support that branch. See the derivations for the exact meanings.
 reference, `--kz` denotes the signed tangential wavenumber in the interface's local
 normal/tangent basis; it must not be copied blindly from a laboratory wavevector.
 The aligned lattice formulas are not an exact oracle for a rotated material map.
-The Python wrapper also rejects an off-cell-boundary requested face for this
-unshifted lattice formula; use `--continuum-only` for the requested-face shifted
+The Python wrapper also rejects a requested material interface between cell faces for this
+unshifted lattice formula; use `--continuum-only` for the requested-interface shifted
 comparison. It checks the recorded Standard/staggered/O1VS configuration before
 requesting the aligned lattice reference.
 For a schema-two run, call the Python wrapper with `--continuum-only`. It supplies
@@ -232,7 +232,7 @@ references; it does not resolve a new simulation row or define a lattice angle.
   calculated `continuum_transmission_weight` times the squared magnetic/electric
   amplitude magnitude in the recorded basis; do not infer that weight by dividing
   two potentially small reference quantities.
-- `references.extraction_residuals(run, rows)` audits the raw-to-face phase transfer
+- `references.extraction_residuals(run, rows)` audits the probe-to-interface phase transfer
   using the C++ lattice roots for aligned data, or the recorded directional roots
   and point fits for tilted data. The selected measured bins must be valid.
 

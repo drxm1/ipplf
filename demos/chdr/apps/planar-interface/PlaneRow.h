@@ -15,11 +15,11 @@ namespace chdr::apps::planarInterface {
 
     /** @brief Physical and numerical choices before choosing periodic cells and probe gates.
      * @details Spacings are in code length units. Angle is the continuum incidence angle
-     * relative to the x-normal face. At fixed cell shape, integer transverse cells adjust
-     * frequency slightly from the requested dielectric cells per wavelength. Alternatively,
+     * relative to the x-normal material interface. At fixed cell shape, integer transverse cells
+     * adjust frequency slightly from the requested dielectric cells per wavelength. Alternatively,
      * a transverse period fixes that frequency and determines the angle. The two input
      * forms are exclusive [oskooi2013sources, section 4.5, Eq. (4.30)].
-     * An optional physical face position fixes the dielectric layer; the requested
+     * An optional physical interface position fixes the dielectric layer; the requested
      * coordinate is retained even when cell-centre sampling represents another boundary.
      */
     struct PlaneRequest {
@@ -38,11 +38,14 @@ namespace chdr::apps::planarInterface {
      * @details The dielectric occupies cells below dielectricCells_m, with a second
      * interface at the periodic x join. Propagation lies in x-z, with two periodic y
      * cells. Probe coordinates include the actual electric/magnetic component offset.
-     * facePosition_m is the requested upper face; dielectricCells_m times h_m[0] is
-     * the represented boundary. The requested face is the coefficient phase origin.
+     * facePosition_m is the requested upper material interface; dielectricCells_m times
+     * h_m[0] is the cell face representing the sampled material jump. The requested
+     * interface is the coefficient phase origin. The identifier facePosition_m retains
+     * the input/record name; it does not denote an arbitrary mesh cell face.
      * Gates include completed states zero through gate-1; their field label is
      * \f$(k-1/2)\Delta t\f$ [ryu2016potentialfdtd, Appendix A]. No derived member
-     * initializers are used: setup fills all dependent quantities together.
+     * initializers are used: setup fills all dependent quantities together. PlanePresets.h
+     * documents the recorded configurations, their pulse assumptions and gate lengths.
      */
     struct PlaneRow {
         Polarization polarization_m = Polarization::TE;
