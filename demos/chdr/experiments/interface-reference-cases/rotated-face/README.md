@@ -57,11 +57,15 @@ The dispersion source is Fallahi Eq. (3.17), cited in
 
 ## Input matrix and controls
 
-`inputs/` contains TE normal-incidence ladders at both tilts, coarse TM normal
-rows, and coarse TE/TM rows at 30-degree incidence. The latter qualify
+`inputs/` contains TE normal-incidence ladders at both tilts, a TM normal
+ladder at 33 degrees, a coarse TM normal row at 17 degrees, and coarse TE/TM
+rows at 30-degree incidence. The latter qualify
 non-normal illumination without requesting the expensive finest oblique mesh.
 Every baseline explicitly uses `tail_sigmas: 6`, 41 frequency bins and a
 three-sigma measurement band. Vacuum incidence is selected throughout.
+The additional 33-degree TM ladder measures its refinement trend directly.
+Convergence is evaluated separately for each polarization, using the TE/TM
+boundary conditions documented in [references.org](../references.org).
 
 `controls/` separates the following changes at normal incidence:
 
@@ -74,7 +78,8 @@ three-sigma measurement band. Vacuum incidence is selected throughout.
 - `probe-distance`: the box centre moves from 12 to 18 x-cell widths from the face.
 - `probe-extent`: the Cartesian half-width changes from two to three cells.
 - `n80-isolation`: combined layout, distance and extent changes on the finest
-  TE mesh, to compare their effect with its discretization error.
+  TE meshes and the 33-degree TM mesh, to compare their effect with the
+  corresponding discretization error.
 
 The application derives gates with separate directional group velocities.
 Those path estimates need measured controls; they are not rigorous bounds
