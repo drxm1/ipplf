@@ -10,10 +10,22 @@ add_test(NAME chdr.interface.row-input COMMAND test-plane-interface
                                                --gtest_filter=PlaneInterface.RowInput)
 add_test(NAME chdr.interface.resolved-oblique COMMAND test-plane-interface
                                                       --gtest_filter=PlaneInterface.ResolvedOblique)
+add_test(NAME chdr.interface.band-domain COMMAND test-plane-interface
+                                                 --gtest_filter=PlaneInterface.BandDomain)
+add_test(NAME chdr.interface.band-input COMMAND test-plane-interface
+                                                --gtest_filter=PlaneInterface.BandInput)
+add_test(NAME chdr.interface.band-spectrum COMMAND test-plane-interface
+                                                   --gtest_filter=PlaneInterface.BandSpectrum)
 set_tests_properties(
-  chdr.interface.normal chdr.interface.long.brewster chdr.interface.row-input
-  chdr.interface.resolved-oblique PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false"
-                                             TIMEOUT 1800 LABELS "chdr;interface")
+  chdr.interface.normal
+  chdr.interface.long.brewster
+  chdr.interface.row-input
+  chdr.interface.resolved-oblique
+  chdr.interface.band-domain
+  chdr.interface.band-input
+  chdr.interface.band-spectrum
+  PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800 LABELS
+             "chdr;interface")
 set_tests_properties(chdr.interface.long.brewster PROPERTIES LABELS "chdr;interface;long")
 # planar-interface runs its half-space case for four steps on a small box.
 add_test(

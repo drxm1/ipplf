@@ -4,6 +4,7 @@
 #pragma once
 #include <array>
 #include <optional>
+#include <vector>
 
 namespace chdr::apps::planarInterface {
     /// Measured fixed Cartesian component: electric y for TE, magnetic y for TM.
@@ -27,6 +28,8 @@ namespace chdr::apps::planarInterface {
         std::optional<double> angleDegrees_m, transversePeriod_m, cutoffFraction_m;
         double tailSigmas_m = 8, separationFactor_m = 1;
         int probeCells_m = 3, timingSamples_m = 513, gatePaddingSteps_m = 0;
+        int frequencyBins_m = 3;
+        double bandSigmas_m = 3, incidentFloor_m = 1e-8;
     };
 
     /** @brief Complete input shared by initialization, observation and run provenance.
@@ -52,5 +55,7 @@ namespace chdr::apps::planarInterface {
         double requestedCellsPerWavelength_m = 20, cellsPerWavelength_m = 0;
         int timingSamples_m = 0, gatePaddingSteps_m = 0;
         double separationFactor_m = 1;
+        double bandSigmas_m = 3, incidentFloor_m = 1e-8;
+        std::vector<double> omega_m{};
     };
 }  // namespace chdr::apps::planarInterface

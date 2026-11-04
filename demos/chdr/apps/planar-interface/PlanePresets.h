@@ -25,6 +25,7 @@ namespace chdr::apps::planarInterface {
         p.otherProbeIndex_m = static_cast<int>(std::lround(p.otherProbe_m / p.h_m[0] - offset));
         p.requestedAngleDegrees_m       = p.actualAngleDegrees_m;
         p.requestedCellsPerWavelength_m = p.cellsPerWavelength_m;
+        selectPlaneBins(p, 3, 3, 1e-8);
         return p;
     }
 

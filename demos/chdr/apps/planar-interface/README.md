@@ -45,8 +45,8 @@ fields use SI; energy-column conventions are described in the
 
 The `plane` case uses an exact periodic lattice pulse and two Fourier probes.
 TE measures the fixed Cartesian electric component E_y; TM measures H_y. Empty
-parameters select the recorded normal-incidence example. YAML parameters resolve
-a new row before field allocation, including the mesh, pulse, probe locations,
+parameters, or only spectral-observation parameters, select the recorded normal-incidence
+example. Physical request parameters resolve a new row before field allocation, including the mesh, pulse, probe locations,
 separate gates and step count. All presets and requested rows use this same path.
 
 ```yaml
@@ -61,6 +61,8 @@ parameters:
   cells_per_wavelength: 20
   cell_shape_y: 1
   cell_shape_z: 1
+  frequency_bins: 41
+  band_sigmas: 3
 output: {directory: plane-30-tm}
 observations:
   diagnostics: {every: 10}
@@ -91,8 +93,12 @@ Both use one tangential period. This follows from periodic phase matching
 | `timing_samples` | Samples over the useful normal-wavenumber band for travel-time estimates; default 513, minimum 17. |
 | `separation_factor` | Factor of at least one enlarging both computed layers; default one. |
 | `gate_padding_steps` | Additional samples after the computed gate ends; default zero. Layer sizes are recomputed to exclude returns through the extended gates. |
+| `frequency_bins` | Odd number of observed frequencies, at least three; default 3. Bin zero is always the central frequency. |
+| `band_sigmas` | Observed extent on either side of the central normal wavenumber, in units of sigma_k; default 3. It must be positive, at most `tail_sigmas`, and stay on positive principal normal wavenumbers. |
+| `incident_floor` | Minimum incident DTFT magnitude as a fraction of the maximum over the selected bins; default 1e-8, strictly between zero and one. |
 
-Only propagating incident/transmitted bands are supported by this measurement.
+Coefficient extraction requires each bin to propagate in both media under both
+the continuum and lattice descriptions; unusable bins retain their raw measurements.
 The material face remains aligned with x. Its position follows the resolved
 layer thickness; general shifted/rotated input is not yet implemented.
 The layout uses numerical group velocities and checks second-interface returns,
@@ -105,21 +111,46 @@ the group velocity is its derivative
 
 `parameters: {preset: normal}`, `{preset: brewster}` and
 `{preset: dielectric}` select the three recorded numerical layouts, including
-their explicit gate lengths. A preset cannot be combined with physical parameter
-overrides; use a requested row for those. These are ordinary configurations, not
+their explicit gate lengths. The observation controls `frequency_bins`, `band_sigmas`
+and `incident_floor` may be supplied with a preset. A preset cannot be combined with
+physical parameter overrides; use a requested row for those. These are ordinary configurations, not
 separate evolution paths.
 
 Standard output contains measured central reflection/transmission, effective
 angle/resolution and energy drift. Continuum/lattice comparison formulas remain
 separate from the measurement. With `output.directory`, `spectra.csv` contains
-the three existing frequencies and complex face-referred amplitude ratios;
-`run.json` adds the effective plane settings under `effective.plane`.
+the selected frequencies, raw incident/total/transmitted DTFT values, complex
+face-referred ratios and per-bin validity/reasons. With three bins the original
+central/lower/upper frequencies are retained. Additional bins are evenly spaced
+in normal wavenumber, so their frequencies need not be evenly spaced; use the
+recorded values. `run.json` declares plane schema version 1 and the effective
+settings under `effective.plane`, including the frequency vector, pulse, physical
+probe positions and indices, half-step sample labels, gates, window and validity floor.
 Those authoritative plane settings use normalized code units even for SI output;
 the existing output factors provide the conversion. Spectrum amplitudes are
-dimensionless; its frequency column uses inverse code time or rad/s according
+dimensionless; `omega_code` always uses normalized angular frequency, while the
+original `angular_frequency` or `angular_frequency_rad_per_s` column uses inverse code time or rad/s according
 to the selected output units. The material solver uses harmonic face
 permittivities and the generalized-gauge potential equations
 [Chew, 2014, section 2](https://arxiv.org/abs/1406.4780).
+
+The raw columns `incident_real/imag`, `total_real/imag` and `transmitted_real/imag`
+are the analytic incident, measured incident-side total and measured other-side
+spectra at their probes. They retain normalized field-times-time units under SI
+output too. The transform is the rectangular dt-weighted sum with the positive
+frequency exponent; the coefficient phase origin is the requested face, whereas
+raw values retain their probe coordinates. These conventions are recorded under
+`effective.output.spectra` and derived in the
+[reference document](../../experiments/interface-reference-cases/references.org).
+
+Every bin is checked against both continuum and lattice propagation domains,
+the timing-qualified band, finite raw data and the incident normalization floor.
+Continuum and lattice propagation need not agree on a coarse oblique mesh
+[Fallahi, Eq. (3.17)](https://arxiv.org/abs/2009.13645). An unusable bin has
+`valid=0`, a nonempty `reason`, and NaN ratio components; its raw spectra remain
+available. The incident floor is an explicit conditioning criterion for the
+spectral ratio, not a proof of the remaining error
+[Schneider, section 5.8.2](https://eecs.wsu.edu/~schneidj/ufdtd/).
 
 The supported observations are `fourier` and `diagnostics`: Fourier probes sample
 every completed state and apply their resolved gates internally; diagnostics may

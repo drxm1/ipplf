@@ -72,6 +72,7 @@ namespace chdr::apps::planarInterface {
     /// Compare a measured frequency with the independent aligned lattice reference.
     void checkLatticeBin(const PlaneRow& p, const PlaneResult& result, size_t bin,
                          double tolerance) {
+        ASSERT_TRUE(result.valid(bin)) << result.reason_m[bin];
         const auto media    = planeMedia(p);
         const auto expected = latticeCoefficients(p.polarization_m, media[0], media[1], p.h_m,
                                                   p.dt_m, 0, p.kz_m, result.omega_m[bin]);
@@ -203,5 +204,63 @@ namespace chdr::apps::planarInterface {
         request.gatePaddingSteps_m = 16;
         const auto expanded        = resolvePlaneRow(request);
         checkExpandedPlane(p, expanded);
+    }
+    /// Changing only the observation grid must not change the default pulse, box or gate.
+    TEST(PlaneInterface, BandInput) {
+        input::RunInput input;
+        input.parameters_m["frequency_bins"] = 41;
+        const auto p = planeRow(input), original = normalPlaneRow();
+        EXPECT_EQ(p.cellsX_m, original.cellsX_m);
+        EXPECT_EQ(p.pulseCentre_m, original.pulseCentre_m);
+        EXPECT_EQ(p.gateIncident_m, original.gateIncident_m);
+        EXPECT_EQ(p.omega_m.size(), 41);
+        input.parameters_m["frequency_bins"] = 4;
+        EXPECT_THROW(planeRow(input), std::invalid_argument);
+    }
+
+    /// A coarse near-grazing row can propagate discretely while lacking a continuum incident mode.
+    TEST(PlaneInterface, BandDomain) {
+        PlaneRequest request;
+        request.angleDegrees_m       = 85;
+        request.cellsPerWavelength_m = 8;
+        const auto p                 = resolvePlaneRow(request);
+        EXPECT_TRUE(planePropagationReason(p, p.omega_m[0]).empty());
+        EXPECT_TRUE(planeLatticePropagationReason(p, p.omega_m[1]).empty());
+        EXPECT_LT(p.omega_m[1], std::abs(p.kz_m));
+        EXPECT_EQ(planePropagationReason(p, p.omega_m[1]), "continuum_incident_cutoff");
+    }
+
+    /// Weak and nonpropagating bins preserve their raw data but expose no plausible coefficient.
+    void checkInvalidPlaneBins(const PlaneResult& result, size_t firstInvalid) {
+        for (size_t bin = firstInvalid; bin < result.omega_m.size(); ++bin) {
+            EXPECT_FALSE(result.valid(bin));
+            EXPECT_TRUE(finitePlaneSpectrum(result.incident_m[bin]));
+            EXPECT_TRUE(finitePlaneSpectrum(result.total_m[bin]));
+            EXPECT_TRUE(finitePlaneSpectrum(result.transmitted_m[bin]));
+            EXPECT_TRUE(std::isnan(result.r_m[bin].real()));
+            EXPECT_TRUE(std::isnan(result.t_m[bin].real()));
+        }
+        EXPECT_EQ(result.reason_m[firstInvalid], "weak_incident");
+        EXPECT_EQ(result.reason_m[firstInvalid + 1], "weak_incident");
+        EXPECT_EQ(result.reason_m[firstInvalid + 2], "continuum_incident_cutoff");
+    }
+
+    /// A populated band is checked independently, including explicit unusable sampled frequencies.
+    TEST(PlaneInterface, BandSpectrum) {
+        PlaneRequest request;
+        request.polarization_m       = Polarization::TM;
+        request.angleDegrees_m       = 30;
+        request.cellsPerWavelength_m = 8;
+        request.frequencyBins_m      = 41;
+        auto p                       = resolvePlaneRow(request);
+        p.omega_m.push_back(planeFrequency(p, p.kx0_m - 7.5 * p.sigmaK_m));
+        p.omega_m.push_back(planeFrequency(p, p.kx0_m + 7.5 * p.sigmaK_m));
+        p.omega_m.push_back(0.1 * p.omega0_m);
+        const auto result = measurePlane(p, 10);
+        if (ippl::Comm->rank() != 0)
+            return;
+        for (size_t bin = 0; bin < 41; ++bin)
+            checkLatticeBin(p, result, bin, 1e-8);
+        checkInvalidPlaneBins(result, 41);
     }
 }  // namespace chdr::apps::planarInterface

@@ -184,14 +184,23 @@ def check_plane(binary, directory):
     for left, right in zip(*rows):
         close(right['angular_frequency_rad_per_s'], float(left['angular_frequency']) / TIME,
               'angular frequency')
-        for key in ('r_real', 'r_imag', 't_real', 't_imag'):
+        for key in ('r_real', 'r_imag', 't_real', 't_imag', 'omega_code',
+                    'incident_real', 'incident_imag', 'total_real', 'total_imag',
+                    'transmitted_real', 'transmitted_imag'):
             close(right[key], left[key], key)
+        assert right['valid'] == left['valid'] == '1'
+        assert right['reason'] == left['reason'] == ''
     check_records(record, si_record, record['effective']['requested_steps'])
     for item, system in ((record, 'normalized'), (si_record, 'si')):
         assert item['input']['case'] == 'plane'
         spectra = item['effective']['output']['spectra']
         assert spectra['amplitudes_units'] == 'dimensionless'
         assert spectra['angular_frequency_units'] == ('rad/s' if system == 'si' else 'normalized')
+        assert spectra['raw_units'] == 'normalized'
+        assert spectra['raw_phase_origin'] == 'probe_coordinates'
+        assert spectra['coefficient_phase_origin'] == 'requested_face'
+        assert item['effective']['plane']['schema_version'] == 1
+        assert item['effective']['plane']['central_bin'] == 0
         assert item['effective']['completed_solves'] > 0
 
 

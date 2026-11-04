@@ -6,7 +6,7 @@
 #include <functional>
 
 #include "apps/planar-interface/InterfaceRun.h"
-#include "apps/planar-interface/PlaneSetup.h"
+#include "apps/planar-interface/PlaneSpectrum.h"
 #include "core/material/PlanarSlab.h"
 #include "opt-in/diagnostics/FieldEnergy.h"
 #include "opt-in/diagnostics/FourierProbe.h"
@@ -110,42 +110,19 @@ namespace chdr::apps::planarInterface {
             return field;
         }
 
-        /** @brief Analytic incident spectrum in precisely the measured channel and gate.
-         * The labels and differences follow [ryu2016potentialfdtd, Appendix A].
-         * Incident subtraction uses [oskooi2013sources, sections 4.2.2-4.3].
+        /** @brief Sample the analytic incident channel once for all requested Fourier bins.
+         * Modes are copied to host once. Cached real values use the measured half-step
+         * labels [ryu2016potentialfdtd, Appendix A]; no time trace is published.
          */
-        std::complex<double> incident(double x, double z, int gate, double omega) const {
+        std::vector<double> incidentSamples(double x, double z, int gate) const {
             const auto modes = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), modes_m);
-            std::complex<double> result = 0;
-            for (int k = 0; k < gate; ++k) {
-                const double time = (k - 0.5) * dt_m;
-                result += dt_m * incidentField(modes, x, z, time)
-                          * std::exp(std::complex<double>(0, omega * time));
-            }
-            return result;
+            std::vector<double> samples;
+            samples.reserve(gate);
+            for (int k = 0; k < gate; ++k)
+                samples.push_back(incidentField(modes, x, z, (k - 0.5) * dt_m));
+            return samples;
         }
     };
-
-    /** @brief Complex face amplitudes and sampled invariant diagnostics.
-     * The three frequencies are the central value and the lattice frequencies of
-     * \f$k_{x0}\mp3\sigma_k\f$. Scalar energy and the vector invariant retain
-     * their existing meanings; they are not continuum transmitted/reflected power.
-     */
-    struct PlaneResult {
-        std::array<std::complex<double>, 3> r_m, t_m;
-        std::array<double, 3> omega_m;
-        double drift_m = 0, absoluteRatio_m = 0, scalarEnergy_m = 0;
-        size_t modes_m = 0;
-    };
-
-    /// Construct the three existing comparison bins from the same resolved incident dispersion.
-    inline PlaneResult planeResult(const PlaneRow& p, const PlanePulse& pulse) {
-        PlaneResult result;
-        result.omega_m = {p.omega0_m, planeFrequency(p, p.kx0_m - 3 * p.sigmaK_m),
-                          planeFrequency(p, p.kx0_m + 3 * p.sigmaK_m)};
-        result.modes_m = pulse.modes_m.extent(0);
-        return result;
-    }
 
     /// The Fourier probe stores frequencies in cycles per completed simulation step.
     inline std::vector<double> planeProbeFrequencies(const PlaneRow& p, const PlaneResult& result) {
@@ -191,44 +168,26 @@ namespace chdr::apps::planarInterface {
         });
     }
 
-    /** @brief Refer one pair of incident-normalised spectra to the physical interface.
-     * Phase transfer is the propagation phase difference [schneider2010UnderstandingFdtd,
-     * section 5.8.2, Eqs. (5.96)-(5.99)], using the lattice normal roots
-     * [fallahi2020mithra20fullwavesimulation, Eq. (3.17)]. The TM denominator is fixed-y H.
-     */
-    inline std::array<std::complex<double>, 2> planeFaceCoefficients(
-        const PlaneRow& p, const PlanePulse& pulse, double omega, std::complex<double> reflected,
-        std::complex<double> transmitted) {
-        const double z      = (p.polarization_m == Polarization::TM ? 1 : 0.5) * p.h_m[2];
-        const auto incident = pulse.incident(p.incidentProbe_m, z, p.gateIncident_m, omega);
-        const double side   = p.incidentFromVacuum_m ? -1 : 1;
-        const double ki     = side * planeNormalK(p, omega, planeMedia(p)[0]);
-        const double kt     = side * planeNormalK(p, omega, planeMedia(p)[1]);
-        const double face   = p.dielectricCells_m * p.h_m[0];
-        return {(reflected / incident - 1.0)
-                    * std::exp(std::complex<double>(0, -2 * ki * (face - p.incidentProbe_m))),
-                transmitted / incident
-                    * std::exp(std::complex<double>(
-                        0, kt * (face - p.otherProbe_m) - ki * (face - p.incidentProbe_m)))};
-    }
-
-    /// Gather only once and perform the host coefficient extraction on the root rank.
+    /// Gather each probe once, retaining raw data and one cached incident signal on rank zero.
     inline void extractPlaneResult(const PlaneRow& p, const PlanePulse& pulse,
                                    PlaneFourierProbe& incident, PlaneFourierProbe& other,
                                    PlaneResult& result) {
-        const auto reflected = incident.gather(), transmitted = other.gather();
+        const auto total = incident.gather(), transmitted = other.gather();
         if (ippl::Comm->rank() != 0)
             return;
-        for (size_t f = 0; f < result.omega_m.size(); ++f) {
-            const auto coefficient = planeFaceCoefficients(
-                p, pulse, result.omega_m[f], reflected.value(0, 0, f), transmitted.value(0, 0, f));
-            result.r_m[f] = coefficient[0];
-            result.t_m[f] = coefficient[1];
+        const double z     = (p.polarization_m == Polarization::TM ? 1 : 0.5) * p.h_m[2];
+        const auto samples = pulse.incidentSamples(p.incidentProbe_m, z, p.gateIncident_m);
+        for (size_t bin = 0; bin < result.omega_m.size(); ++bin) {
+            result.incident_m[bin] = planeIncidentTransform(samples, p.dt_m, result.omega_m[bin]);
+            result.total_m[bin]    = total.value(0, 0, bin);
+            result.transmitted_m[bin] = transmitted.value(0, 0, bin);
         }
+        completePlaneCoefficients(p, result);
     }
 
     /// Construct the sampled material and periodic box from the same resolved row as the pulse.
     inline InterfaceRun planeRun(const PlaneRow& p, int cadence, int seam) {
+        validatePlaneFrequencies(p);
         if (cadence <= 0 || p.steps_m < std::max(p.gateIncident_m, p.gateOther_m))
             throw std::invalid_argument(
                 "Plane measurement needs positive cadence and complete gates");
@@ -252,7 +211,7 @@ namespace chdr::apps::planarInterface {
         run.load(pulse);
         if (initialCheck)
             initialCheck(run.solver(), run.material());
-        auto result            = planeResult(p, pulse);
+        auto result            = planeResult(p, pulse.modes_m.extent(0));
         const auto frequencies = planeProbeFrequencies(p, result);
         auto incident =
             planeProbe(run.solver(), p, p.incidentProbeIndex_m, p.gateIncident_m, frequencies);

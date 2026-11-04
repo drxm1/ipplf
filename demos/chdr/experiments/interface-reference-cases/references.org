@@ -607,7 +607,10 @@ Use the source revision recorded with a result when interpreting this table.
 | Normal lattice root | =latticeNormal= in the same header | Root and branch classification at the supplied frequency and transverse wavevector. |
 | Aligned discrete amplitudes | =latticeCoefficients= in the same header | TE cell-centre and TM harmonic-face matching derived above. |
 | Continuum amplitudes | =fresnelCoefficients= in the same header | TE electric and fixed-basis TM magnetic Fresnel ratios. |
-| Incident waveform and phase-referred measurement | [[file:../../apps/planar-interface/PlanePulse.h][PlanePulse.h]] | Discrete initial modes, labelled incident spectrum, subtraction and propagation correction. |
+| Incident waveform | =PlanePulse::incidentSamples= in [[file:../../apps/planar-interface/PlanePulse.h][PlanePulse.h]] | Cached discrete incident samples with the component's half-step time labels. |
+| Analytic incident transform | =planeIncidentTransform= in [[file:../../apps/planar-interface/PlaneSpectrum.h][PlaneSpectrum.h]] | The dt-weighted positive-time-kernel transform of the incident samples. |
+| Phase-referred measurement | =planeFaceCoefficients= in the same header | Incident subtraction and face transfer using the explicit raw incident, total and transmitted spectra. |
+| Bin qualification | =planePropagationReason=, =planeBinReason= and =completePlaneCoefficients= in the same header | Continuum/lattice propagation, covered band and incident-normalization checks before exposing coefficients; raw spectra are retained. |
 | Component coordinates and times | [[file:../../core/base/LevelContract.h][LevelContract.h]] | Physical spatial offsets and half-step labels. |
 | Accumulated spectra | [[file:../../opt-in/diagnostics/FourierProbe.h][FourierProbe.h]] | Actual frequency vector, gate, window, coordinates and finite time transform. |
 | Harmonic constitutive coefficient | [[file:../../core/material/O1VSCoefficients.h][O1VSCoefficients.h]] | The material-face rule assumed by the TM discrete derivation. |

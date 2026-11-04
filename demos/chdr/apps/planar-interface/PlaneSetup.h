@@ -25,6 +25,9 @@ namespace chdr::apps::planarInterface {
 
     /// Frequency of an incident lattice mode [fallahi2020mithra20fullwavesimulation, Eq. (3.17)].
     inline double planeFrequency(const PlaneRow& p, double normalK) {
+        if (!std::isfinite(normalK) || normalK < 0 || normalK * p.h_m[0] >= Kokkos::numbers::pi)
+            throw std::invalid_argument(
+                "Plane normal wavenumber must lie in the principal spatial branch");
         const double x    = planeSpatialSymbol(normalK, p.h_m[0]);
         const double z    = planeSpatialSymbol(p.kz_m, p.h_m[2]);
         const double sine = p.dt_m * std::sqrt((x * x + z * z) / planeMedia(p)[0]) / 2;
@@ -298,6 +301,40 @@ namespace chdr::apps::planarInterface {
         p.steps_m = std::max(p.gateIncident_m, p.gateOther_m) + 1;
     }
 
+    /// Reject unsupported observation grids before allocating their frequency vectors.
+    inline void validatePlaneBand(const PlaneRow& p, int bins, double bandSigmas,
+                                  double incidentFloor) {
+        if (bins < 3 || bins % 2 == 0 || !std::isfinite(bandSigmas) || bandSigmas <= 0
+            || bandSigmas > p.tailSigmas_m || !std::isfinite(incidentFloor) || incidentFloor <= 0
+            || incidentFloor >= 1)
+            throw std::invalid_argument(
+                "Plane bins must be odd and >=3, with a covered band and relative floor in (0,1)");
+        const double extent = bandSigmas * p.sigmaK_m;
+        if (p.kx0_m - extent <= 0 || (p.kx0_m + extent) * p.h_m[0] >= Kokkos::numbers::pi)
+            throw std::invalid_argument(
+                "Plane measured band must have positive principal normal wavenumbers");
+    }
+
+    /** @brief Select arbitrary band density while retaining the central bin at index zero.
+     * Remaining samples have uniformly spaced incident normal wavenumbers over the chosen
+     * Gaussian band. Frequencies follow numerical dispersion, so their spacing need not be
+     * uniform [fallahi2020mithra20fullwavesimulation, Eq. (3.17)]. Three bins reproduce the
+     * original central/lower/upper frequencies. The timing band must cover the requested bins.
+     */
+    inline void selectPlaneBins(PlaneRow& p, int bins, double bandSigmas, double incidentFloor) {
+        validatePlaneBand(p, bins, bandSigmas, incidentFloor);
+        p.bandSigmas_m    = bandSigmas;
+        p.incidentFloor_m = incidentFloor;
+        p.omega_m         = {p.omega0_m};
+        const int half    = (bins - 1) / 2;
+        for (int i = -half; i <= half; ++i) {
+            if (i == 0)
+                continue;
+            const double k = p.kx0_m + i * bandSigmas * p.sigmaK_m / half;
+            p.omega_m.push_back(planeFrequency(p, k));
+        }
+    }
+
     /// Resolve one complete x-normal row; changing a request always recomputes its dependent data.
     inline PlaneRow resolvePlaneRow(const PlaneRequest& r) {
         validatePlaneRequest(r);
@@ -313,6 +350,7 @@ namespace chdr::apps::planarInterface {
                 "cutoff_fraction must be in [0,1), and positive for oblique incidence");
         completePlaneSpectrum(p);
         resolvePlaneLayout(p, r.probeCells_m);
+        selectPlaneBins(p, r.frequencyBins_m, r.bandSigmas_m, r.incidentFloor_m);
         return p;
     }
 }  // namespace chdr::apps::planarInterface

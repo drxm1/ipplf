@@ -130,18 +130,30 @@ namespace chdr::apps::planarInterface {
             throw std::runtime_error("Failed to write plane measurement");
     }
 
-    /// Save existing complex amplitudes; only their frequency coordinate has physical units.
+    /// Publish raw values in code DTFT units; only the compatibility frequency column is scaled.
+    void writePlaneBin(std::ostream& file, const input::RunInput& request,
+                       const PlaneResult& result, size_t bin) {
+        file << result.omega_m[bin] * request.units_m.frequencyFactor() << ','
+             << result.r_m[bin].real() << ',' << result.r_m[bin].imag() << ','
+             << result.t_m[bin].real() << ',' << result.t_m[bin].imag() << ','
+             << result.omega_m[bin] << ',' << result.incident_m[bin].real() << ','
+             << result.incident_m[bin].imag() << ',' << result.total_m[bin].real() << ','
+             << result.total_m[bin].imag() << ',' << result.transmitted_m[bin].real() << ','
+             << result.transmitted_m[bin].imag() << ',' << (result.valid(bin) ? 1 : 0) << ','
+             << result.reason_m[bin] << '\n';
+    }
+
+    /// Retain the original scaled frequency and coefficient names while adding raw audit columns.
     void writePlaneResult(const input::RunInput& request, const PlaneResult& result) {
         if (request.outputDirectory_m.empty() || ippl::Comm->rank() != 0)
             return;
         std::ofstream file(request.outputDirectory_m + "/spectra.csv");
         file << std::setprecision(17)
              << (request.units_m.isSI() ? "angular_frequency_rad_per_s" : "angular_frequency")
-             << ",r_real,r_imag,t_real,t_imag\n";
-        for (std::size_t f = 0; f < result.omega_m.size(); ++f)
-            file << result.omega_m[f] * request.units_m.frequencyFactor() << ','
-                 << result.r_m[f].real() << ',' << result.r_m[f].imag() << ','
-                 << result.t_m[f].real() << ',' << result.t_m[f].imag() << '\n';
+             << ",r_real,r_imag,t_real,t_imag,omega_code,incident_real,incident_imag,"
+                "total_real,total_imag,transmitted_real,transmitted_imag,valid,reason\n";
+        for (size_t bin = 0; bin < result.omega_m.size(); ++bin)
+            writePlaneBin(file, request, result, bin);
         file.close();
         if (!file)
             throw std::runtime_error("Failed to write plane spectra");
@@ -168,19 +180,50 @@ namespace chdr::apps::planarInterface {
 
     /// Record component positions and the actual finite observation intervals.
     void recordPlaneGeometry(conduit_cpp::Node node, const PlaneRow& p) {
-        node["geometry"]          = "aligned_plane";
-        const bool tm             = p.polarization_m == Polarization::TM;
-        node["coordinate_units"]  = "normalized";
-        node["incidence_plane"]   = "xz";
-        node["component"]         = tm ? "H_y" : "E_y";
-        node["face_position"]     = p.dielectricCells_m * p.h_m[0];
-        node["incident_probe_x"]  = p.incidentProbe_m;
-        node["other_probe_x"]     = p.otherProbe_m;
-        node["probe_z"]           = (tm ? 1 : 0.5) * p.h_m[2];
-        node["gate_incident"]     = p.gateIncident_m;
-        node["gate_other"]        = p.gateOther_m;
-        node["timing_samples"]    = p.timingSamples_m;
-        node["separation_factor"] = p.separationFactor_m;
+        node["geometry"]                  = "aligned_plane";
+        const bool tm                     = p.polarization_m == Polarization::TM;
+        node["coordinate_units"]          = "normalized";
+        node["incidence_plane"]           = "xz";
+        node["component"]                 = tm ? "H_y" : "E_y";
+        node["face_position"]             = p.dielectricCells_m * p.h_m[0];
+        node["represented_face_position"] = p.dielectricCells_m * p.h_m[0];
+        node["incident_probe_x"]          = p.incidentProbe_m;
+        node["other_probe_x"]             = p.otherProbe_m;
+        node["probe_z"]                   = (tm ? 1 : 0.5) * p.h_m[2];
+        node["gate_incident"]             = p.gateIncident_m;
+        node["gate_other"]                = p.gateOther_m;
+        node["timing_samples"]            = p.timingSamples_m;
+        node["separation_factor"]         = p.separationFactor_m;
+    }
+
+    /// Spectral schema and sample labels suffice to reproduce every raw-to-face conversion.
+    void recordPlaneBand(conduit_cpp::Node node, const PlaneRow& p) {
+        node["schema_version"] = 1;
+        node["central_bin"]    = 0;
+        node["angular_frequencies"].set(p.omega_m);
+        node["frequency_grid"]       = "uniform_normal_wavenumber";
+        node["band_sigmas"]          = p.bandSigmas_m;
+        node["incident_floor"]       = p.incidentFloor_m;
+        node["cutoff_k"]             = p.cutoffK_m;
+        node["pulse_centre"]         = p.pulseCentre_m;
+        node["envelope_half_width"]  = p.envelopeHalfWidth_m;
+        node["mode_cutoff_sigmas"]   = 9;
+        node["incident_probe_index"] = p.incidentProbeIndex_m;
+        node["other_probe_index"]    = p.otherProbeIndex_m;
+        node["probe_y"]              = (p.polarization_m == Polarization::TM ? 0.5 : 1) * p.h_m[1];
+        node["gate_first"]           = 0;
+        node["field_time_offset_steps"] = -0.5;
+        node["window"]                  = "rectangular";
+    }
+
+    /// Raw and coefficient phase origins differ; record both explicitly in all output unit modes.
+    void recordPlaneSpectrumUnits(conduit_cpp::Node node, const input::RunInput& request) {
+        node["amplitudes_units"]         = "dimensionless";
+        node["angular_frequency_units"]  = request.units_m.isSI() ? "rad/s" : "normalized";
+        node["raw_units"]                = "normalized";
+        node["transform"]                = "dt sum w f exp(+i omega t)";
+        node["raw_phase_origin"]         = "probe_coordinates";
+        node["coefficient_phase_origin"] = "requested_face";
     }
 
     /// Describe the measured case while its manager still owns the solver and layout.
@@ -191,12 +234,11 @@ namespace chdr::apps::planarInterface {
             output::describeRun("planar-interface", box, solver, p.steps_m, "case=plane plane=zx");
         recordPlaneSpectrum(result.effective_m["plane"], p);
         recordPlaneGeometry(result.effective_m["plane"], p);
+        recordPlaneBand(result.effective_m["plane"], p);
         output::recordObservation(result, "fourier", {});
         output::recordObservation(result, "diagnostics",
                                   {.every_m = cadence, .includeFinal_m = true});
-        result.effective_m["output/spectra/amplitudes_units"] = "dimensionless";
-        result.effective_m["output/spectra/angular_frequency_units"] =
-            request.units_m.isSI() ? "rad/s" : "normalized";
+        recordPlaneSpectrumUnits(result.effective_m["output/spectra"], request);
         return result;
     }
 
@@ -209,6 +251,8 @@ namespace chdr::apps::planarInterface {
         const auto result = measurePlane(p, cadence, 0, {}, [&](auto& solver, const auto&) {
             description = describePlane(p, solver, request, cadence);
         });
+        description->effective_m["plane/incident_peak"] = result.incidentPeak_m;
+        description->effective_m["plane/mode_count"] = static_cast<conduit_int64>(result.modes_m);
         printPlaneResult(p, result);
         writePlaneResult(request, result);
         output::writeRunRecord(request.outputDirectory_m, request, *description,

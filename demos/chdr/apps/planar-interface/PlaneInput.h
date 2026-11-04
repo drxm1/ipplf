@@ -57,10 +57,18 @@ namespace chdr::apps::planarInterface {
             r.transversePeriod_m = planeParameter(input, "transverse_period", 0);
     }
 
+    /// Read the numerical measurement band independently of the pulse's initialization spectrum.
+    inline void readPlaneBand(const input::RunInput& input, PlaneRequest& r) {
+        r.frequencyBins_m = planeIntegerParameter(input, "frequency_bins", r.frequencyBins_m);
+        r.bandSigmas_m    = planeParameter(input, "band_sigmas", r.bandSigmas_m);
+        r.incidentFloor_m = planeParameter(input, "incident_floor", r.incidentFloor_m);
+    }
+
     /// Read dimensionless shape, resolution and pulse controls; h_x is the code length unit.
     inline PlaneRequest readPlaneRequest(const input::RunInput& input) {
         PlaneRequest r;
         readPlaneSelectors(input, r);
+        readPlaneBand(input, r);
         r.epsilon_m = planeParameter(input, "epsilon", r.epsilon_m);
         r.courant_m = planeParameter(input, "courant", r.courant_m);
         r.cellsPerWavelength_m =
@@ -77,11 +85,8 @@ namespace chdr::apps::planarInterface {
         return r;
     }
 
-    /// Explicit presets retain recorded regression inputs; their physics cannot be partly
-    /// overridden.
-    inline PlaneRow readPlanePreset(const input::RunInput& input) {
-        input::validateParameters(input, {"preset"});
-        const auto preset = planeStringParameter(input, "preset", "normal");
+    /// The three named configurations are explicit inputs to the common row, not evolution paths.
+    inline PlaneRow namedPlanePreset(const std::string& preset) {
         if (preset == "normal")
             return normalPlaneRow();
         if (preset == "brewster")
@@ -91,16 +96,37 @@ namespace chdr::apps::planarInterface {
         throw std::invalid_argument("Plane preset must be normal, brewster or dielectric");
     }
 
+    /// Preserve preset physics while allowing a denser observation band without changing gates.
+    inline PlaneRow readPlanePreset(const input::RunInput& input) {
+        input::validateParameters(input,
+                                  {"preset", "frequency_bins", "band_sigmas", "incident_floor"});
+        auto p = namedPlanePreset(planeStringParameter(input, "preset", "normal"));
+        PlaneRequest r;
+        readPlaneBand(input, r);
+        selectPlaneBins(p, r.frequencyBins_m, r.bandSigmas_m, r.incidentFloor_m);
+        return p;
+    }
+
+    /// Observation-only requests retain the default physical preset instead of resolving a new box.
+    inline bool onlyPlaneBandParameters(const input::RunInput& input) {
+        for (conduit_index_t i = 0; i < input.parameters_m.number_of_children(); ++i) {
+            const auto name = input.parameters_m.child(i).name();
+            if (name != "frequency_bins" && name != "band_sigmas" && name != "incident_floor")
+                return false;
+        }
+        return true;
+    }
+
     /// Empty input retains the recorded normal example; any physical request is resolved afresh.
     inline PlaneRow planeRow(const input::RunInput& input) {
-        if (input.parameters_m.dtype().is_empty() || input.parameters_m.number_of_children() == 0
-            || input.parameters_m.has_path("preset"))
+        if (input.parameters_m.has_path("preset") || onlyPlaneBandParameters(input))
             return readPlanePreset(input);
         input::validateParameters(
-            input, {"polarization", "incidence", "epsilon", "courant", "cells_per_wavelength",
-                    "angle_degrees", "transverse_period", "cell_shape_y", "cell_shape_z",
-                    "tail_sigmas", "cutoff_fraction", "probe_cells", "timing_samples",
-                    "gate_padding_steps", "separation_factor"});
+            input,
+            {"polarization", "incidence", "epsilon", "courant", "cells_per_wavelength",
+             "angle_degrees", "transverse_period", "cell_shape_y", "cell_shape_z", "tail_sigmas",
+             "cutoff_fraction", "probe_cells", "timing_samples", "gate_padding_steps",
+             "separation_factor", "frequency_bins", "band_sigmas", "incident_floor"});
         return resolvePlaneRow(readPlaneRequest(input));
     }
 }  // namespace chdr::apps::planarInterface
