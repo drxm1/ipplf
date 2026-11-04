@@ -1,0 +1,11 @@
+schema_version: 1
+case: plane
+units: {system: normalized}
+parameters:
+  preset: dielectric
+  frequency_bins: 41
+  band_sigmas: 3
+  incident_floor: 1.0e-8
+observations:
+  diagnostics: {every: 10}
+  fields: {every: 1500, include_final: true}
