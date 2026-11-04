@@ -33,9 +33,10 @@ namespace {
 
     /// Explicit reference inputs; no application preset or numerical setup is inferred.
     struct Request {
-        std::string polarization_m, frequencies_m;
+        std::string polarization_m, frequencies_m, angles_m;
         double epsilonIncident_m = 0, epsilonTransmitted_m = 0, dt_m = 0;
-        double kz_m = std::numeric_limits<double>::quiet_NaN();
+        double kz_m    = std::numeric_limits<double>::quiet_NaN();
+        double omega_m = std::numeric_limits<double>::quiet_NaN();
         std::array<double, 3> spacing_m{};
         bool continuumOnly_m = false;
     };
@@ -76,11 +77,8 @@ namespace {
         return result;
     }
 
-    /// Named options keep the incident/transmitted material ordering explicit.
-    void assign(Request& result, const std::string& key, const std::string& value) {
-        if (key == "--polarization")
-            result.polarization_m = value;
-        else if (key == "--epsilon-incident")
+    void assignNumber(Request& result, const std::string& key, const std::string& value) {
+        if (key == "--epsilon-incident")
             result.epsilonIncident_m = number(value);
         else if (key == "--epsilon-transmitted")
             result.epsilonTransmitted_m = number(value);
@@ -90,24 +88,47 @@ namespace {
             result.dt_m = number(value);
         else if (key == "--kz")
             result.kz_m = number(value);
-        else if (key == "--frequencies")
-            result.frequencies_m = value;
+        else if (key == "--omega")
+            result.omega_m = number(value);
         else
             throw std::invalid_argument("Unknown option: " + key);
+    }
+
+    /// Named options keep the incident/transmitted material ordering explicit.
+    void assign(Request& result, const std::string& key, const std::string& value) {
+        if (key == "--polarization")
+            result.polarization_m = value;
+        else if (key == "--frequencies")
+            result.frequencies_m = value;
+        else if (key == "--angles")
+            result.angles_m = value;
+        else
+            assignNumber(result, key, value);
+    }
+
+    void validateSampling(const Request& request) {
+        if (request.angles_m.empty()) {
+            if (request.frequencies_m.empty() || !std::isfinite(request.kz_m)
+                || !std::isnan(request.omega_m))
+                throw std::invalid_argument("Frequency mode requires --frequencies and --kz only");
+        } else if (!request.frequencies_m.empty() || !std::isnan(request.kz_m)
+                   || !(request.omega_m > 0) || !request.continuumOnly_m)
+            throw std::invalid_argument(
+                "Angle mode requires --angles, positive --omega, --continuum-only; no --kz or "
+                "--frequencies");
     }
 
     /// Reference input validation does not impose a simulation stability or accuracy claim.
     void validate(const Request& request) {
         if (request.polarization_m != "TE" && request.polarization_m != "TM")
             throw std::invalid_argument("--polarization must be TE or TM");
-        if (!(request.epsilonIncident_m > 0 && request.epsilonTransmitted_m > 0 && request.dt_m > 0)
-            || !std::isfinite(request.kz_m))
-            throw std::invalid_argument("Positive permittivities/dt and finite kz are required");
+        if (!(request.epsilonIncident_m > 0 && request.epsilonTransmitted_m > 0
+              && request.dt_m > 0))
+            throw std::invalid_argument("Positive permittivities/dt are required");
         for (double value : request.spacing_m)
             if (!(value > 0))
                 throw std::invalid_argument("All three spacings must be positive");
-        if (request.frequencies_m.empty())
-            throw std::invalid_argument("--frequencies FILE is required; use - for stdin");
+        validateSampling(request);
     }
 
     Request parse(int argc, char** argv) {
@@ -126,30 +147,27 @@ namespace {
         return result;
     }
 
-    /// The file contains one positive normalized angular frequency per nonempty line.
-    std::vector<double> readFrequencies(std::istream& input) {
+    /// The file contains one finite scalar per nonempty line; each mode checks its domain.
+    std::vector<double> readValues(std::istream& input) {
         std::vector<double> result;
         std::string line;
         while (std::getline(input, line)) {
             if (line.find_first_not_of(" \t\r") == std::string::npos)
                 continue;
-            const double omega = number(line);
-            if (!(omega > 0))
-                throw std::invalid_argument("Frequencies must be positive");
-            result.push_back(omega);
+            result.push_back(number(line));
         }
         if (input.bad() || result.empty())
-            throw std::invalid_argument("Cannot read a nonempty frequency vector");
+            throw std::invalid_argument("Cannot read a nonempty input vector");
         return result;
     }
 
-    std::vector<double> frequencies(const Request& request) {
-        if (request.frequencies_m == "-")
-            return readFrequencies(std::cin);
-        std::ifstream input(request.frequencies_m);
+    std::vector<double> values(const std::string& filename) {
+        if (filename == "-")
+            return readValues(std::cin);
+        std::ifstream input(filename);
         if (!input)
-            throw std::runtime_error("Cannot open " + request.frequencies_m);
-        return readFrequencies(input);
+            throw std::runtime_error("Cannot open " + filename);
+        return readValues(input);
     }
 
     plane::Polarization polarization(const Request& request) {
@@ -291,7 +309,7 @@ namespace {
 
     void header() {
         std::cout
-            << "omega_code,continuum_valid,continuum_reason,continuum_incident_root,"
+            << "omega_code,kz,continuum_valid,continuum_reason,continuum_incident_root,"
                "continuum_transmitted_root,continuum_k1_real,continuum_k1_imag,continuum_k2_real,"
                "continuum_k2_imag,continuum_r_real,continuum_r_imag,continuum_t_real,continuum_t_"
                "imag,"
@@ -301,12 +319,34 @@ namespace {
                "lattice_k2_imag,lattice_r_real,lattice_r_imag,lattice_t_real,lattice_t_imag\n";
     }
 
-    void write(const Request& request) {
-        const auto bins = frequencies(request);
+    /** @brief Set the tangential wavenumber for a continuum incidence angle.
+     * @details In normalized units, \f$k_z=\sqrt{\varepsilon_1}\omega\sin\theta\f$;
+     * this is the incident-wave decomposition of [ellingson2020ElectromagneticsVol2,
+     * sections 5.6-5.7]. The angle is relative to the interface normal, not the mesh.
+     */
+    double sample(Request& request, double value) {
+        if (request.angles_m.empty()) {
+            if (!(value > 0))
+                throw std::invalid_argument("Frequencies must be positive");
+            return value;
+        }
+        if (!(value >= 0 && value < 90))
+            throw std::invalid_argument("Angles must lie in [0, 90) degrees");
+        request.kz_m = std::sqrt(request.epsilonIncident_m) * request.omega_m
+                       * std::sin(value * std::numbers::pi / 180);
+        if (!std::isfinite(request.kz_m))
+            throw std::invalid_argument("Angle/frequency combination overflows the wavenumber");
+        return request.omega_m;
+    }
+
+    void write(Request request) {
+        const auto bins =
+            values(request.angles_m.empty() ? request.frequencies_m : request.angles_m);
         std::cout << std::setprecision(17);
         header();
-        for (double omega : bins) {
-            std::cout << omega;
+        for (double value : bins) {
+            const double omega = sample(request, value);
+            std::cout << omega << ',' << request.kz_m;
             answerColumns(continuum(request, omega), true);
             answerColumns(lattice(request, omega), false);
             std::cout << '\n';
@@ -332,7 +372,11 @@ int main(int argc, char** argv) {
                 << "interface-reference --polarization TE|TM --epsilon-incident E1 "
                    "--epsilon-transmitted E2 --spacing hx,hy,hz --dt DT --kz KZ "
                    "--frequencies FILE [--continuum-only]\nFILE: one normalized angular frequency "
-                   "per line; - reads stdin. --identity reports build provenance.\n";
+                   "per line; - reads stdin. For a continuum angle curve replace "
+                   "--kz/--frequencies "
+                   "with --angles FILE --omega OMEGA --continuum-only; FILE has one angle in "
+                   "[0,90) "
+                   "degrees per line. --identity reports build provenance.\n";
         else
             write(parse(argc, argv));
         return 0;

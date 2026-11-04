@@ -11,14 +11,17 @@ import importlib.util
 import io
 import json
 import math
+import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 
-from read_run import RunDataError, load_run
-from references import extraction_residuals
-from scan import output_input
+from read_run import RunDataError, load_run, sha256_file
+from references import angle_curve, extraction_residuals
+from scan import ScanSettings, _run_attempt, output_input
 
 REFERENCE = None
 
@@ -67,6 +70,24 @@ def write_synthetic(path, record, sample):
 
 
 class ReferenceTests(unittest.TestCase):
+    def test_angle_curve_uses_cpp_setup_and_preserves_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            record = synthetic_record()
+            record["effective"]["plane"].update(polarization="TM", component="H_y")
+            write_synthetic(path, record, synthetic_sample())
+            angles = (0, math.degrees(math.atan(2)), 80)
+            result = angle_curve(load_run(path), REFERENCE, angles, path / "curve")
+            self.assertEqual(result.record_m["angles_degrees"], angles)
+            self.assertTrue((result.directory_m / "angles_degrees.txt").is_file())
+            self.assertEqual(len(result.rows_m), 3)
+            self.assertAlmostEqual(result.rows_m[0]["continuum_r_real"], 1/3, places=14)
+            self.assertAlmostEqual(result.rows_m[1]["continuum_r_real"], 0, places=14)
+            for row, angle in zip(result.rows_m, angles):
+                self.assertEqual(row["lattice_reason"], "not_requested")
+                self.assertAlmostEqual(row["continuum_angle_degrees"], angle, places=12)
+                self.assertAlmostEqual(row["continuum_R"] + row["continuum_T"], 1, places=14)
+
     def test_normal_component_sign_and_power(self):
         for polarization, reflection, transmission in [("TE", -1/3, 2/3), ("TM", 1/3, 4/3)]:
             row = calculate(polarization)
@@ -137,6 +158,8 @@ class ReaderTests(unittest.TestCase):
         import yaml
         forms = ["schema_version: 1\ncase: plane\nparameters: {courant: 9e-1}\n",
                  "{schema_version: 1, case: plane, parameters: {courant: 9e-1}}\n",
+                 "{case: plane, parameters: {courant: 9e-1}, }\n",
+                 "{case: plane, parameters: {courant: 9e-1} # trailing comment\n, # comma\n}\n",
                  "case: plane\nparameters: {courant: 9e-1}\noutput:\n  directory: old\n"]
         for original in forms:
             resolved = output_input(original, Path('/tmp/example output'))
@@ -144,6 +167,37 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(yaml.safe_load(resolved)["output"]["directory"], '/tmp/example output')
         with self.assertRaises(ValueError):
             output_input("case: plane\ncase: plane\n", Path('/tmp/example'))
+
+
+def live_process(pid):
+    """A killed orphan can remain a zombie until its system reaper runs."""
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().split(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+
+
+@unittest.skipUnless(sys.platform.startswith("linux"), "Process-state check uses Linux procfs")
+class TimeoutTests(unittest.TestCase):
+    def test_timeout_stops_descendant_after_launcher_exits(self):
+        child = "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print(os.getpid(),flush=True); time.sleep(60)"
+        parent = f"import subprocess,sys; print('launcher',file=sys.stderr,flush=True); subprocess.Popen([sys.executable,'-c',{child!r}]).wait()"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            settings = ScanSettings(Path(sys.executable), path, timeout_m=.4)
+            record = {"command": [sys.executable, "-c", parent], "working_directory": directory}
+            result = _run_attempt(path, record, settings, sha256_file(settings.binary_m))
+            pid = int((path / "stdout.txt").read_text().strip())
+            try:
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["error_type"], "TimeoutExpired")
+                self.assertEqual(result["timeout_cleanup"], "group_signalled_launcher_reaped")
+                self.assertIn("launcher", (path / "stderr.txt").read_text())
+                self.assertFalse(live_process(pid), "Timed-out launch left a running descendant")
+                self.assertLess(result["elapsed_seconds"], 8)
+            finally:
+                if live_process(pid):
+                    os.kill(pid, signal.SIGKILL)
 
 
 if __name__ == "__main__":

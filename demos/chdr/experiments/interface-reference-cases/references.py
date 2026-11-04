@@ -44,15 +44,15 @@ def _lattice_applicability(run: PlaneRun, continuum_only: bool) -> None:
         raise RunDataError("A shifted requested face needs continuum-only or a separately phase-shifted lattice reference")
 
 
-def _arguments(run: PlaneRun, binary: Path, frequencies: Path, continuum_only: bool) -> list[str]:
+def _arguments(run: PlaneRun, binary: Path, sampling: dict, continuum_only: bool) -> list[str]:
     plane = run.plane
     incident, transmitted = ((1.0, plane["epsilon"]) if plane["incidence"] == "vacuum"
                              else (plane["epsilon"], 1.0))
     values = {"polarization": plane["polarization"], "epsilon-incident": repr(incident),
               "epsilon-transmitted": repr(transmitted),
               "spacing": ",".join(format(value, ".17g") for value in run.spacing),
-              "dt": format(run.dt, ".17g"), "kz": format(plane["kz"], ".17g"),
-              "frequencies": str(frequencies)}
+              "dt": format(run.dt, ".17g")}
+    values.update(sampling)
     command = [str(binary)]
     for key, value in values.items():
         command.extend(["--" + key, value])
@@ -166,7 +166,7 @@ def _record(run: PlaneRun, binary: Path, command: list[str]) -> dict:
             "physics_validation": "not_performed"}
 
 
-def _calculate(run: PlaneRun, binary: Path, directory: Path, command: list[str], record: dict) -> tuple:
+def _calculate(expected: tuple, binary: Path, directory: Path, command: list[str], record: dict) -> tuple:
     record["reference_build"] = _binary_identity(binary)
     with (directory / "reference.csv").open("x") as output, (directory / "stderr.txt").open("x") as errors:
         result = subprocess.run(command, stdout=output, stderr=errors, check=False)
@@ -175,7 +175,33 @@ def _calculate(run: PlaneRun, binary: Path, directory: Path, command: list[str],
         raise RunDataError(f"Reference calculator failed with exit code {result.returncode}")
     if sha256_file(binary) != record["binary_sha256"]:
         raise RunDataError("Reference executable changed during evaluation; use an immutable copy")
-    return _read_table(directory / "reference.csv", run.frequencies)
+    return _read_table(directory / "reference.csv", expected)
+
+
+def _evaluate(run: PlaneRun, binary: Path, directory: Path, command: list[str], record: dict,
+              expected: tuple, audit: bool) -> ReferenceTable:
+    try:
+        rows = _calculate(expected, binary, directory, command, record)
+        _check_angles(rows, record.get("angles_degrees"))
+        record["extraction_residuals"] = extraction_residuals(run, rows) if audit else []
+        record["status"] = "calculated"
+        return ReferenceTable(directory, record, rows)
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        record.update(status="failed", error=str(error))
+        raise
+    finally:
+        (directory / "reference.json").write_text(json.dumps(record, indent=2, allow_nan=False) + "\n")
+
+
+def _check_angles(rows: tuple, angles: tuple | None) -> None:
+    if angles is None:
+        return
+    for row, angle in zip(rows, angles):
+        if row.get("kz") is None or row["lattice_valid"] or row["lattice_reason"] != "not_requested":
+            raise RunDataError("Angle curve requires a recorded wavenumber and continuum-only references")
+        if row["continuum_valid"] and not math.isclose(row["continuum_angle_degrees"], angle,
+                                                       rel_tol=1e-12, abs_tol=1e-12):
+            raise RunDataError("Reference angle order differs from the request")
 
 
 def evaluate(run: PlaneRun, binary: Path | str, output_directory: Path | str,
@@ -186,18 +212,28 @@ def evaluate(run: PlaneRun, binary: Path | str, output_directory: Path | str,
     directory.mkdir(parents=True, exist_ok=False)
     frequencies = directory / "frequencies.txt"
     frequencies.write_text("".join(f"{value:.17g}\n" for value in run.frequencies))
-    command = _arguments(run, binary, frequencies, continuum_only)
+    sampling = {"kz": format(run.plane["kz"], ".17g"), "frequencies": str(frequencies)}
+    command = _arguments(run, binary, sampling, continuum_only)
     record = _record(run, binary, command)
-    try:
-        rows = _calculate(run, binary, directory, command, record)
-        record["extraction_residuals"] = [] if continuum_only else extraction_residuals(run, rows)
-        record["status"] = "calculated"
-        return ReferenceTable(directory, record, rows)
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        record.update(status="failed", error=str(error))
-        raise
-    finally:
-        (directory / "reference.json").write_text(json.dumps(record, indent=2, allow_nan=False) + "\n")
+    return _evaluate(run, binary, directory, command, record, run.frequencies, not continuum_only)
+
+
+def angle_curve(run: PlaneRun, binary: Path | str, angles_degrees,
+                output_directory: Path | str) -> ReferenceTable:
+    """Continuum curve at the recorded central frequency; C++ resolves each tangential wavevector."""
+    angles = tuple(float(value) for value in angles_degrees)
+    if not angles or any(not math.isfinite(value) or not 0 <= value < 90 for value in angles):
+        raise ValueError("A nonempty angle vector in [0, 90) degrees is required")
+    binary, directory = Path(binary).resolve(strict=True), Path(output_directory).resolve()
+    directory.mkdir(parents=True, exist_ok=False)
+    path = directory / "angles_degrees.txt"
+    path.write_text("".join(f"{value:.17g}\n" for value in angles))
+    omega = run.plane["omega0"]
+    command = _arguments(run, binary, {"angles": str(path), "omega": format(omega, ".17g")}, True)
+    record = _record(run, binary, command)
+    record.update(sampling="continuum_angle_curve", angles_degrees=angles, omega_code=omega,
+                  angle_definition="continuum phase angle relative to interface normal")
+    return _evaluate(run, binary, directory, command, record, (omega,) * len(angles), False)
 
 
 def main() -> int:

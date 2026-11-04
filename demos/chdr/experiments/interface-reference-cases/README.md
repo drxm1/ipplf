@@ -20,7 +20,7 @@ cmake --build /path/to/build --target planar-interface interface-reference
 ```
 
 The Python readers need Python 3.10 or newer and its standard library.
-`scan.py` additionally needs PyYAML. An MPI launcher is needed only when requesting
+`scan.py` additionally needs PyYAML and a POSIX system. An MPI launcher is needed only when requesting
 more than one rank. The focused CTest check is `chdr.interface.reference-tools`.
 
 ## Run explicit inputs
@@ -65,7 +65,15 @@ current process's local CPU affinity. Each job receives `OMP_NUM_THREADS` and
 `OMP_PROC_BIND=false`. Multi-rank runs use `--mpi` (default `mpiexec`) and `-n`;
 extra arguments can be supplied as repeated `--mpi-arg=VALUE` options. Use
 `--timeout SECONDS` for a per-attempt time limit. Each subprocess is invoked with an
-argument list, without a command interpreter.
+argument list, without a command interpreter. Each attempt has its own process
+session. On timeout the runner sends `SIGTERM` to the local process group, allows
+two seconds for shutdown, then sends `SIGKILL` if needed. Cleanup waits are bounded,
+and the launcher is reaped. The failure record reports whether the process group
+still exists after cleanup; killed orphan zombies may remain until the system
+reaper collects them. The retained stdout/stderr include output written before
+timeout. Process-group signals cover local descendants that remain in that group;
+remote MPI workers or workers that start a separate session require their
+launcher's job cleanup.
 
 Each row receives a fresh directory:
 
@@ -132,7 +140,7 @@ interface-reference --polarization TM \
 ```
 
 `--frequencies -` reads stdin. `--identity` reports the reference schema and compiled
-source identity. Each output row contains `omega_code`, continuum complex roots
+source identity. Each output row contains `omega_code`, `kz`, continuum complex roots
 and coefficients, continuum `R` and `T`, the continuum incidence angle, and aligned
 lattice roots/coefficients. Continuum and lattice validity/reasons are separate.
 A bin can have propagating lattice roots without a propagating continuum incident
@@ -151,6 +159,21 @@ requesting the aligned lattice reference.
 The current Python run reader accepts only its documented aligned schemas; a new
 rotated record needs an explicit schema/reader extension.
 
+For a dense continuum curve, write one incidence angle in degrees per line and use:
+
+```sh
+interface-reference --polarization TM \
+  --epsilon-incident 1 --epsilon-transmitted 2.13 \
+  --spacing 1,1,1 --dt 0.5196152422706632 \
+  --angles angles_degrees.txt --omega 0.3 --continuum-only > angle-reference.csv
+```
+
+Angles lie in `[0, 90)` and are relative to the material normal. The C++ program
+calculates the tangential wavenumber from each angle and the supplied normalized
+frequency, as derived in [references.org](references.org). This mode requires
+`--continuum-only` and excludes `--kz` and `--frequencies`. It samples continuum
+references; it does not resolve a new simulation row or define a lattice angle.
+
 ## Python interfaces for case analyses
 
 - `read_run.load_run(path)` returns `PlaneRun`. Its `plane`, `spacing`, `dt` and
@@ -160,6 +183,12 @@ rotated record needs an explicit schema/reader extension.
   `reason_m`, and optional raw `incident_m`, `total_m`, `transmitted_m` transforms.
 - `references.evaluate(run, binary, new_directory, continuum_only=False)` returns
   a `ReferenceTable` with `rows_m` and its provenance in `record_m`.
+- `references.angle_curve(run, binary, angles_degrees, new_directory)` returns a
+  continuum `ReferenceTable` at the run's recorded central frequency, polarization
+  and media. It archives `angles_degrees.txt`, the C++ invocation, table and source
+  identities. Python supplies the angle vector; C++ computes the wavevectors and
+  reference coefficients. For example, `[index / 2 for index in range(161)]` gives
+  the 0–80 degree range at half-degree intervals.
 - `references.coefficient(row, "continuum" or "lattice", "r" or "t" or "k1" or
   "k2")` returns the corresponding complex reference or `None` when unavailable.
   Power columns are `continuum_R` and `continuum_T`; the angle column is

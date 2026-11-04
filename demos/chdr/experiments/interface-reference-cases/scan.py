@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import time
 import uuid
@@ -89,8 +90,13 @@ def _replace_directory(text: str, output: dict, directory: Path) -> str:
 def _append_output(text: str, root, directory: Path) -> str:
     value = json.dumps({"directory": str(directory)})
     if root.flow_style:
+        import yaml
         index = root.end_mark.index - 1
-        return text[:index] + ", output: " + value + text[index:]
+        end = root.value[-1][1].end_mark.index
+        trailing_comma = any(isinstance(token, yaml.tokens.FlowEntryToken)
+                             and end <= token.start_mark.index < index for token in yaml.scan(text))
+        separator = " " if trailing_comma else ", "
+        return text[:index] + separator + "output: " + value + text[index:]
     index = root.end_mark.index
     newline = "" if index == 0 or text[index - 1] == "\n" else "\n"
     return text[:index] + newline + "output: " + value + "\n" + text[index:]
@@ -101,6 +107,8 @@ def _available_cores() -> int:
 
 
 def _validate(settings: ScanSettings) -> None:
+    if not hasattr(os, "killpg"):
+        raise ValueError("The scan runner requires POSIX process-group cleanup")
     counts = (settings.ranks_m, settings.threads_m, settings.jobs_m)
     if any(value < 1 for value in counts):
         raise ValueError("ranks, threads and jobs must be positive")
@@ -151,6 +159,49 @@ def _prepare(source: Path, directory: Path, record: dict, settings: ScanSettings
     record["status"] = "prepared"
 
 
+def _signal_group(process: subprocess.Popen, action: int) -> None:
+    try:
+        os.killpg(process.pid, action)
+    except ProcessLookupError:
+        pass
+
+
+def _wait_group(process: subprocess.Popen, seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        process.poll()
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(.02)
+    return False
+
+
+def _stop_group(process: subprocess.Popen) -> bool:
+    """Bound cleanup of the local group, including ranks whose launcher already exited."""
+    _signal_group(process, signal.SIGTERM)
+    if not _wait_group(process, 2):
+        _signal_group(process, signal.SIGKILL)
+    process.wait(timeout=2)
+    return _wait_group(process, 2)
+
+
+def _wait_command(record: dict, settings: ScanSettings, output, errors, environment: dict) -> int:
+    process = subprocess.Popen(record["command"], stdout=output, stderr=errors, env=environment,
+                               cwd=record["working_directory"], start_new_session=True)
+    try:
+        return process.wait(timeout=settings.timeout_m)
+    except subprocess.TimeoutExpired:
+        disappeared = _stop_group(process)
+        record.update(returncode=process.returncode, timeout_cleanup="group_signalled_launcher_reaped",
+                      process_group_still_present=not disappeared)
+        raise
+    except BaseException:
+        _stop_group(process)
+        raise
+
+
 def _execute(directory: Path, record: dict, settings: ScanSettings, binary_hash: str) -> None:
     if sha256_file(settings.binary_m) != binary_hash:
         raise ValueError("Executable changed before this row; use an immutable binary copy")
@@ -159,12 +210,9 @@ def _execute(directory: Path, record: dict, settings: ScanSettings, binary_hash:
                   ranks=settings.ranks_m, threads=settings.threads_m, timeout_seconds=settings.timeout_m)
     _atomic_json(directory / "attempt.json", record)
     with (directory / "stdout.txt").open("x") as output, (directory / "stderr.txt").open("x") as errors:
-        result = subprocess.run(record["command"], stdout=output, stderr=errors, env=environment,
-                                cwd=record["working_directory"],
-                                timeout=settings.timeout_m, check=False)
-    record["returncode"] = result.returncode
-    if result.returncode:
-        raise ValueError(f"Simulation exited with code {result.returncode}")
+        record["returncode"] = _wait_command(record, settings, output, errors, environment)
+    if record["returncode"]:
+        raise ValueError(f"Simulation exited with code {record['returncode']}")
     if sha256_file(settings.binary_m) != binary_hash:
         raise ValueError("Executable changed during this row; result identity is ambiguous")
 
