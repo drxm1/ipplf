@@ -243,9 +243,10 @@ def _evaluate(run: PlaneRun, binary: Path, directory: Path, command: list[str], 
 
 def _check_tilted_angle(run: PlaneRun, rows: tuple) -> None:
     central = rows[run.central_bin_m]
-    if central["continuum_valid"] and not math.isclose(central["continuum_angle_degrees"],
-                                                       abs(run.plane["actual_angle_degrees"]),
-                                                       rel_tol=2e-12, abs_tol=2e-12):
+    if not central["continuum_valid"]:
+        return
+    signed = math.copysign(central["continuum_angle_degrees"], run.plane["kappa"])
+    if not math.isclose(signed, run.plane["actual_angle_degrees"], rel_tol=2e-12, abs_tol=2e-12):
         raise RunDataError("Tilted recorded angle disagrees with the C++ continuum reference")
 
 

@@ -147,6 +147,18 @@ def shifted_tilted_probes(record, rows, offset):
     return rows
 
 
+def negative_incidence_rows(record):
+    plane = record["effective"]["plane"]
+    plane.update(kappa=-.1, tangent_mode=-1, actual_angle_degrees=-plane["actual_angle_degrees"])
+    rows = tilted_probe_rows(record)
+    for row in rows:
+        factor = cmath.exp(-.2j * row["v"])
+        for name in ("incident", "total"):
+            value = complex(row[name + "_real"], row[name + "_imag"]) * factor
+            row[name + "_real"], row[name + "_imag"] = value.real, value.imag
+    return rows
+
+
 class ReferenceTests(unittest.TestCase):
     def test_angle_curve_uses_cpp_setup_and_preserves_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -201,13 +213,7 @@ class ReaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path, record = Path(directory), tilted_record()
             plane = record["effective"]["plane"]
-            plane.update(kappa=-.1, tangent_mode=-1, actual_angle_degrees=-plane["actual_angle_degrees"])
-            rows = tilted_probe_rows(record)
-            for row in rows:
-                factor = cmath.exp(-.2j * row["v"])
-                for name in ("incident", "total"):
-                    value = complex(row[name + "_real"], row[name + "_imag"]) * factor
-                    row[name + "_real"], row[name + "_imag"] = value.real, value.imag
+            rows = negative_incidence_rows(record)
             write_synthetic(path, record, tilted_sample())
             write_probe_rows(path, rows)
             result = evaluate(load_run(path), REFERENCE, path / "reference", continuum_only=True)
@@ -215,6 +221,10 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(float(command[command.index("--kz") + 1]), -.1)
             self.assertAlmostEqual(result.rows_m[0]["continuum_angle_degrees"], abs(plane["actual_angle_degrees"]))
             self.assertLess(result.record_m["extraction_residuals"][0]["reflection_residual"], 2e-14)
+            plane.update(kappa=.1, tangent_mode=1)
+            write_synthetic(path, record, tilted_sample())
+            with self.assertRaisesRegex(RunDataError, "recorded angle"):
+                evaluate(load_run(path), REFERENCE, path / "wrong-sign", continuum_only=True)
 
     def test_signed_tilt_offset_and_both_box_windings(self):
         with tempfile.TemporaryDirectory() as directory:
