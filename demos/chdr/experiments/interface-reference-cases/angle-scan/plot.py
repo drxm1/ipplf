@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Compare central plane coefficients and continuum flux estimates over incidence angle.
 
-The C++ utility supplies every continuum reference. A curve connecting central
-reference values is labelled as sampled; it is not a separately evaluated dense
-Fresnel curve. See ../references.org for fixed-H TM signs and Brewster conventions.
+The C++ utility supplies every continuum reference, including the dense angle
+curves. See ../references.org for fixed-H TM signs and Brewster conventions.
 """
 import math
 from pathlib import Path
@@ -11,8 +10,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from plot_common import (argument_parser, baselines, central_rows, execute_case,
-                         matched_controls, np, plt, save_figure, update_status, write_csv)
+                         matched_controls, np, phase_limits, plt, save_figure, update_status, write_csv)
 from read_run import RunDataError
+from references import angle_curve, coefficient
 
 
 def require_same_scan(data):
@@ -36,39 +36,78 @@ def groups(rows):
     return result
 
 
-def amplitude_figure(rows, output):
+def dense_curves(data, args):
+    """Preserve one explicit continuum calculation per polarization and its anchor run."""
+    anchors = {}
+    for item in data:
+        anchors.setdefault(item.run_m.plane["polarization"], item)
+    stop = max(80, max(item.run_m.plane["actual_angle_degrees"] for item in data))
+    angles = sorted(set(np.linspace(0, stop, 321)) |
+                    {item.run_m.plane["actual_angle_degrees"] for item in data})
+    curves, provenance = {}, []
+    for polarization, item in anchors.items():
+        table = angle_curve(item.run_m, args.reference_binary, angles, args.output / ("continuum-" + polarization))
+        curves[polarization] = table
+        provenance.append({"polarization": polarization, "anchor_run": item.identifier_m,
+                           "omega_code": item.run_m.plane["omega0"], "directory": str(table.directory_m),
+                           "reference_record": str(table.directory_m / "reference.json")})
+    update_status(args.output, reference_curve="dense C++ continuum angle calculation", reference_curves=provenance)
+    return curves
+
+
+def curve_values(table, quantity, phase_floor=None):
+    """Use the recorded reference validity and omit undefined phase near zeros."""
+    angles, values = [], []
+    for row in table.rows_m:
+        value = coefficient(row, "continuum", quantity)
+        angles.append(row["continuum_angle_degrees"])
+        if not row["continuum_valid"] or value is None or (phase_floor is not None and abs(value) <= phase_floor):
+            values.append(np.nan)
+        else:
+            values.append(abs(value) if phase_floor is None else math.atan2(value.imag, value.real))
+    if phase_floor is not None:
+        for index in range(len(values) - 1, 0, -1):
+            if abs(values[index] - values[index - 1]) > math.pi / 2:
+                values[index] = np.nan
+    return angles, values
+
+
+def amplitude_figure(rows, curves, output):
     figure, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
     for polarization, selected in groups(rows):
         angle = [row["actual_angle_degrees"] for row in selected]
         for ax, quantity in zip(axes, ("r", "t")):
             values = [math.hypot(row[quantity + "_real"], row[quantity + "_imag"]) for row in selected]
-            expected = [math.hypot(row[quantity + "_continuum_real"], row[quantity + "_continuum_imag"])
-                        for row in selected]
+            reference_angle, expected = curve_values(curves[polarization], quantity)
             line, = ax.plot(angle, values, "o", label=polarization + " measured")
-            ax.plot(angle, expected, "x--", color=line.get_color(), label=polarization + " Fresnel samples")
+            ax.plot(reference_angle, expected, "--", color=line.get_color(), label=polarization + " Fresnel")
             ax.set(xlabel="actual central incidence angle [degrees]", ylabel=f"|{quantity}|")
             ax.legend(fontsize=8)
     figure.suptitle("Vacuum–dielectric plane interface: central amplitudes")
     save_figure(figure, output, "angle-amplitudes")
 
 
-def power_figure(rows, output):
+def power_figure(rows, curves, output):
     figure, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
     for polarization, selected in groups(rows):
         angle = [row["actual_angle_degrees"] for row in selected]
         for quantity, marker in (("R", "o"), ("T", "s")):
-            axes[0].plot(angle, [row[quantity] for row in selected], marker + "-",
-                         label=polarization + " " + quantity)
+            line, = axes[0].plot(angle, [row[quantity] for row in selected], marker,
+                                label=polarization + " " + quantity + " measured")
+            reference = curves[polarization].rows_m
+            axes[0].plot([row["continuum_angle_degrees"] for row in reference],
+                         [row["continuum_" + quantity] for row in reference], "--",
+                         color=line.get_color(), label=polarization + " " + quantity + " Fresnel")
         axes[1].plot(angle, [row["R_plus_T_minus_one"] for row in selected], "o-", label=polarization)
     axes[0].set(xlabel="actual central incidence angle [degrees]", ylabel="continuum flux estimate")
     axes[1].set(xlabel="actual central incidence angle [degrees]", ylabel="R + T − 1")
     axes[1].axhline(0, color="black", linestyle=":", linewidth=0.8)
     for ax in axes:
-        ax.legend()
+        ax.legend(fontsize=8)
     save_figure(figure, output, "angle-power")
 
 
-def phase_figure(rows, output):
+def phase_figure(rows, curves, output, phase_floor):
     figure, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
     for polarization, selected in groups(rows):
         angle = [row["actual_angle_degrees"] for row in selected]
@@ -77,9 +116,11 @@ def phase_figure(rows, output):
             error = [row[quantity + "_phase_error"] for row in selected]
             phase = [ref + err if ref is not None and err is not None else np.nan
                      for ref, err in zip(reference, error)]
-            line, = ax.plot(angle, phase, "o-", label=polarization + " measured")
-            ax.plot(angle, reference, "x--", color=line.get_color(), label=polarization + " Fresnel samples")
+            reference_angle, expected = curve_values(curves[polarization], quantity, phase_floor)
+            line, = ax.plot(angle, phase, "o", label=polarization + " measured")
+            ax.plot(reference_angle, expected, "--", color=line.get_color(), label=polarization + " Fresnel")
             ax.set(xlabel="actual central incidence angle [degrees]", ylabel=f"phase({quantity}) [rad]")
+            phase_limits(ax, phase, expected)
             ax.legend()
     figure.suptitle("Phase relative to the continuum branch; undefined near reference zeros")
     save_figure(figure, output, "angle-phase")
@@ -90,14 +131,15 @@ def analyse(args, data):
     selected = baselines(data, lambda item: (item.run_m.plane["polarization"],
                                             item.run_m.plane["actual_angle_degrees"]))
     rows = central_rows(selected)
+    curves = dense_curves(selected, args)
     write_csv(args.output / "central.csv", central_rows(data))
     write_csv(args.output / "angle-baselines.csv", rows)
-    amplitude_figure(rows, args.output)
-    power_figure(rows, args.output)
-    phase_figure(rows, args.output)
+    amplitude_figure(rows, curves, args.output)
+    power_figure(rows, curves, args.output)
+    phase_figure(rows, curves, args.output, args.phase_floor)
     controls = matched_controls(data, args.output)
     update_status(args.output, baseline_runs=[item.identifier_m for item in selected],
-                  isolation_comparisons=controls, reference_curve="central samples connected",
+                  isolation_comparisons=controls,
                   actual_resolution_range=[min(row["cells_per_wavelength"] for row in rows),
                                            max(row["cells_per_wavelength"] for row in rows)])
 

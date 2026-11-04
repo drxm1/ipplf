@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from plot_common import (argument_parser, baselines, central_rows, execute_case,
-                         matched_controls, matching_cell_policy, observed_order, plt, save_figure, update_status, write_csv)
+                         matched_controls, matching_cell_policy, observed_order, plt,
+                         resolution_ticks, save_figure, update_status, write_csv)
 from read_run import RunDataError
 
 
@@ -79,6 +80,7 @@ def convergence_figure(rows, output):
                           [row[quantity + "_" + kind + "_error"] for row in ladder],
                           "o-", label=f"shift/h = {shift:g}")
                 ax.set(xlabel="actual dielectric cells per wavelength", ylabel=f"{quantity}: {kind} error")
+                resolution_ticks(ax, [row["cells_per_wavelength"] for row in rows])
                 ax.legend(fontsize=8)
     figure.suptitle("Shifted face: continuum comparison at the requested phase origin")
     save_figure(figure, output, "shifted-convergence")

@@ -235,17 +235,24 @@ def _band_coefficients(ax, rows, omega, quantity: str, phase: bool) -> None:
     ax.plot(omega, expected, "--", label="continuum reference")
     ax.set(xlabel="angular frequency [code units]", ylabel=ylabel)
     if phase:
-        _phase_limits(ax, measured, expected)
+        phase_limits(ax, measured, expected)
     ax.legend(fontsize=8)
 
 
-def _phase_limits(ax, *values) -> None:
+def phase_limits(ax, *values) -> None:
     """Keep roundoff-scale phase scatter visible in context, without changing saved values."""
     finite = np.concatenate([np.asarray(value, dtype=float) for value in values])
     finite = finite[np.isfinite(finite)]
     if len(finite) and np.ptp(finite) < 0.1:
         centre = (finite.min() + finite.max()) / 2
         ax.set_ylim(centre - 0.05, centre + 0.05)
+
+
+def resolution_ticks(ax, values) -> None:
+    """Label the actual sampled resolutions directly on a logarithmic axis."""
+    samples = sorted(set(values))
+    ax.set_xticks(samples, labels=[f"{value:.5g}" for value in samples])
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
 
 
 def band_figure(data: Comparison) -> None:

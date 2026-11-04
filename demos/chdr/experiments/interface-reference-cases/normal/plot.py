@@ -12,7 +12,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from plot_common import (argument_parser, baselines, central_rows, execute_case,
                          matched_controls, matching_cell_policy, observed_order, plt, pulse_profiles,
-                         save_figure, update_status, write_csv)
+                         resolution_ticks, save_figure, update_status, write_csv)
 from read_run import RunDataError
 
 
@@ -51,8 +51,10 @@ def error_figure(rows, output):
         for kind, marker in (("complex", "o"), ("magnitude", "s")):
             ax.loglog([row["cells_per_wavelength"] for row in rows],
                       [row[quantity + "_" + kind + "_error"] for row in rows],
-                      marker + "-", label=kind + " error")
+                      marker + ("--" if kind == "magnitude" else "-"),
+                      markerfacecolor="none" if kind == "magnitude" else None, label=kind + " error")
         ax.set(xlabel="actual dielectric cells per wavelength", ylabel=f"absolute {quantity} error")
+        resolution_ticks(ax, [row["cells_per_wavelength"] for row in rows])
         ax.legend()
     figure.suptitle("Normal TE: continuum error at the recorded central frequency")
     save_figure(figure, output, "normal-convergence")
