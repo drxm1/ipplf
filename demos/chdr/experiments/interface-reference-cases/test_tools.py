@@ -6,6 +6,7 @@ references.org (Ellingson §§5.6–5.7, 5.10). Synthetic records test transport
 units, masks and raw data; they are not solver validation results.
 """
 import argparse
+import cmath
 import csv
 import importlib.util
 import io
@@ -21,7 +22,7 @@ import time
 import unittest
 
 from read_run import RunDataError, load_run, sha256_file
-from references import angle_curve, extraction_residuals
+from references import angle_curve, evaluate, extraction_residuals
 from scan import ScanSettings, _run_attempt, output_input
 
 REFERENCE = None
@@ -68,6 +69,82 @@ def write_synthetic(path, record, sample):
         writer = csv.DictWriter(stream, list(sample))
         writer.writeheader()
         writer.writerow(sample)
+
+
+def tilted_record():
+    record = synthetic_record()
+    plane = record["effective"]["plane"]
+    c, s = math.cos(math.radians(17)), math.sin(math.radians(17))
+    plane.update(schema_version=2, geometry="periodic_tilted_plane", normal=[c, 0, s], tangent=[-s, 0, c],
+                 anchor=[0, 0, 0], requested_cell_shape=[1, 1, 1], interface_tilt_degrees=17, kappa=.1,
+                 requested_face_position=0, normal_period=32*c, tangent_period=32/s, primitive_tangent_period=1/s,
+                 normal_dielectric_width=16*c, normal_incident_width=16*c, primitive_cells_x=1, primitive_cells_z=1,
+                 period_cells_multiplier=32, tangent_mode=1, retained_mode_count=9, mode_cutoff_sigmas=9,
+                 floquet_margin=.1, retained_floquet_margin=.1, fit_residual_limit=.01, band_sigmas=3,
+                 incident_floor=1e-8, probe_cells=2, probe_half_width_cells=1,
+                 probe_point_count_incident=3, probe_point_count_transmitted=3,
+                 projection="unweighted_complex_plane_wave_fit", projection_basis="exp(i*(normal_k*u+kappa*v))",
+                 projection_normalization="mean_over_points", actual_angle_degrees=math.degrees(math.asin(.2)),
+                 angular_frequencies=[.5])
+    for key in ("kx0", "kz", "face_position", "incident_probe_x", "other_probe_x", "probe_z"):
+        del plane[key]
+    record["effective"]["box"].update(cells=[32, 2, 32], spacing=[1, 1, c/s])
+    record["effective"]["output"]["spectra"].update(face_amplitudes_units="normalized",
+        raw_phase_origin="lifted_probe_coordinates", coefficient_phase_origin="requested_face_anchor")
+    return record
+
+
+def tilted_values():
+    incoming = complex(2, .3)
+    return incoming, incoming * complex(.2, .05), incoming * complex(1.2, -.1)
+
+
+def tilted_sample():
+    sample = dict(angular_frequency_rad_per_s=5, omega_code=.5, r_real=.2, r_imag=.05,
+                  t_real=1.2, t_imag=-.1, valid=1, reason="", fit_residual_incident=0, fit_residual_r=0, fit_residual_t=0)
+    for name, value, root, speed in zip(("incident", "reflected", "transmitted"), tilted_values(),
+                                      (-.4, .55, -.7), (-.8, .9, -.6)):
+        sample.update({name + "_face_real": value.real, name + "_face_imag": value.imag,
+                       name + "_normal_k": root, name + "_normal_group_velocity": speed})
+    return sample
+
+
+def tilted_probe_rows(record):
+    rows = []
+    c, _, s = record["effective"]["plane"]["normal"]
+    incoming, reflected, transmitted = tilted_values()
+    for side, sign in (("incident", 1), ("transmitted", -1)):
+        for point in range(3):
+            u, v = sign * (1 + point / 2), 8 + point / 4
+            incident = incoming * cmath.exp(1j * (-.4*u + .1*v)) if side == "incident" else 0j
+            scattered = (reflected * cmath.exp(1j * (.55*u + .1*v)) if side == "incident"
+                         else transmitted * cmath.exp(1j * (-.7*u + .1*v)))
+            total = incident + scattered
+            rows.append(dict(bin=0, omega_code=.5, side=side, point=point, x=c*u-s*v+32, y=.5, z=s*u+c*v,
+                             lift_x=-1, lift_z=0, u=u, v=v, incident_real=incident.real, incident_imag=incident.imag,
+                             total_real=total.real, total_imag=total.imag))
+    return rows
+
+
+def write_probe_rows(path, rows):
+    with (path / "probe-spectra.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def shifted_tilted_probes(record, rows, offset):
+    plane = record["effective"]["plane"]
+    anchor = [offset*n + 1.5*plane["tangent_period"]*t for n, t in zip(plane["normal"], plane["tangent"])]
+    plane.update(anchor=anchor, requested_face_position=offset)
+    box = record["effective"]["box"]
+    for row in rows:
+        for axis, name in ((0, "x"), (2, "z")):
+            position = anchor[axis] + row["u"]*plane["normal"][axis] + row["v"]*plane["tangent"][axis]
+            length = box["cells"][axis]*box["spacing"][axis]
+            winding = math.floor(position/length)
+            row[name], row["lift_" + name] = position - winding*length, winding
+    return rows
 
 
 class ReferenceTests(unittest.TestCase):
@@ -120,6 +197,73 @@ class ReferenceTests(unittest.TestCase):
 
 
 class ReaderTests(unittest.TestCase):
+    def test_tilted_signed_incidence_retains_negative_kappa(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path, record = Path(directory), tilted_record()
+            plane = record["effective"]["plane"]
+            plane.update(kappa=-.1, tangent_mode=-1, actual_angle_degrees=-plane["actual_angle_degrees"])
+            rows = tilted_probe_rows(record)
+            for row in rows:
+                factor = cmath.exp(-.2j * row["v"])
+                for name in ("incident", "total"):
+                    value = complex(row[name + "_real"], row[name + "_imag"]) * factor
+                    row[name + "_real"], row[name + "_imag"] = value.real, value.imag
+            write_synthetic(path, record, tilted_sample())
+            write_probe_rows(path, rows)
+            result = evaluate(load_run(path), REFERENCE, path / "reference", continuum_only=True)
+            command = result.record_m["command"]
+            self.assertEqual(float(command[command.index("--kz") + 1]), -.1)
+            self.assertAlmostEqual(result.rows_m[0]["continuum_angle_degrees"], abs(plane["actual_angle_degrees"]))
+            self.assertLess(result.record_m["extraction_residuals"][0]["reflection_residual"], 2e-14)
+
+    def test_signed_tilt_offset_and_both_box_windings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path, record = Path(directory), tilted_record()
+            rows = shifted_tilted_probes(record, tilted_probe_rows(record), -.3)
+            write_synthetic(path, record, tilted_sample())
+            write_probe_rows(path, rows)
+            run = load_run(path)
+            self.assertTrue(all(probe.winding_m[0] and probe.winding_m[1] for probe in run.probes_m))
+            residual = extraction_residuals(run, ())[0]
+            self.assertLess(residual["reflection_residual"], 2e-14)
+            record["effective"]["plane"]["requested_face_position"] = .3
+            write_synthetic(path, record, tilted_sample())
+            with self.assertRaises(RunDataError):
+                load_run(path)
+
+    def test_tilted_asymmetric_projection_and_continuum_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path, record, sample = Path(directory), tilted_record(), tilted_sample()
+            write_synthetic(path, record, sample)
+            write_probe_rows(path, tilted_probe_rows(record))
+            run = load_run(path)
+            with self.assertRaises(RunDataError):
+                evaluate(run, REFERENCE, path / "forbidden")
+            result = evaluate(run, REFERENCE, path / "reference", continuum_only=True)
+            residuals = result.record_m["extraction_residuals"][0]
+            self.assertLess(max(value for key, value in residuals.items() if key != "omega_code"), 2e-14)
+            self.assertEqual(result.rows_m[0]["lattice_reason"], "not_requested")
+            self.assertIn("probe-spectra.csv", result.record_m["measurement_sha256"])
+            self.assertAlmostEqual(result.rows_m[0]["continuum_angle_degrees"], run.plane["actual_angle_degrees"])
+            sample["reflected_normal_k"] = .4
+            write_synthetic(path, record, sample)
+            self.assertGreater(extraction_residuals(load_run(path), ())[0]["reflection_residual"], .01)
+
+    def test_tilted_coordinate_and_qualification_rejections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path, record = Path(directory), tilted_record()
+            write_synthetic(path, record, tilted_sample())
+            rows = tilted_probe_rows(record)
+            rows[0]["lift_x"] = 0
+            write_probe_rows(path, rows)
+            with self.assertRaises(RunDataError):
+                load_run(path)
+            write_probe_rows(path, tilted_probe_rows(record))
+            record["effective"]["plane"]["retained_floquet_margin"] = -.1
+            write_synthetic(path, record, tilted_sample())
+            with self.assertRaises(RunDataError):
+                load_run(path)
+
     def test_si_raw_units_and_phase_audit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)

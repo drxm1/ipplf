@@ -33,6 +33,8 @@ def coefficient(row: dict, reference: str, quantity: str) -> complex | None:
 
 
 def _lattice_applicability(run: PlaneRun, continuum_only: bool) -> None:
+    if run.schema_m == 2 and not continuum_only:
+        raise RunDataError("A tilted staircase has no aligned lattice oracle; request continuum-only")
     if continuum_only:
         return
     solver = run.record_m["effective"]["solver"]
@@ -141,6 +143,8 @@ def extraction_residuals(run: PlaneRun, rows: tuple[dict, ...]) -> list[dict]:
     """Return raw-to-published discrepancies; this is not a physical accuracy test."""
     if run.schema_m == 0:
         return []
+    if run.schema_m == 2:
+        return _tilted_extraction_residuals(run)
     result = []
     for sample, reference in zip(run.samples_m, rows):
         if not sample.valid_m:
@@ -152,17 +156,59 @@ def extraction_residuals(run: PlaneRun, rows: tuple[dict, ...]) -> list[dict]:
     return result
 
 
+def _fit_probe_values(probes: list, values: list, normal_k: float, kappa: float) -> tuple:
+    """Repeat the declared one-column fit at the stored lifted phase coordinates."""
+    basis = [cmath.exp(1j * (normal_k * probe.normal_position_m + kappa * probe.tangent_position_m))
+             for probe in probes]
+    amplitude = sum(value * phase.conjugate() for value, phase in zip(values, basis)) / len(values)
+    residual = math.sqrt(sum(abs(value - amplitude * phase)**2 for value, phase in zip(values, basis)) / len(values))
+    return amplitude, residual
+
+
+def _tilted_bin_audit(run: PlaneRun, index: int, first: list, second: list) -> dict:
+    sample = run.samples_m[index]
+    ki, kr, kt = sample.normal_wavenumbers_m
+    incoming = _fit_probe_values(first, [probe.incident_m for probe in first], ki, run.plane["kappa"])
+    reflected = _fit_probe_values(first, [probe.total_m - probe.incident_m for probe in first], kr, run.plane["kappa"])
+    transmitted = _fit_probe_values(second, [probe.total_m for probe in second], kt, run.plane["kappa"])
+    if incoming[0] == 0:
+        raise RunDataError("A valid tilted bin has zero reconstructed incident amplitude")
+    result = {"omega_code": sample.omega_m, "reflection_residual": abs(reflected[0] / incoming[0] - sample.reflection_m),
+              "transmission_residual": abs(transmitted[0] / incoming[0] - sample.transmission_m)}
+    for name, fitted, stored, residual in zip(("incident", "reflected", "transmitted"),
+                                             (incoming, reflected, transmitted), sample.face_amplitudes_m,
+                                             sample.fit_residuals_m):
+        result[name + "_face_residual"] = abs(fitted[0] - stored)
+        result[name + "_fit_residual_difference"] = abs(fitted[1] / abs(incoming[0]) - residual)
+    return result
+
+
+def _tilted_extraction_residuals(run: PlaneRun) -> list[dict]:
+    """Audit supplied directional roots and raw point fits; this is no staircase oracle."""
+    groups = {}
+    for probe in run.probes_m:
+        groups.setdefault((probe.bin_m, probe.side_m), []).append(probe)
+    return [_tilted_bin_audit(run, index, groups[index, "incident"], groups[index, "transmitted"])
+            for index, sample in enumerate(run.samples_m) if sample.valid_m]
+
+
+def _measurement_hashes(run: PlaneRun) -> dict:
+    names = ("run.json", "spectra.csv") + (("probe-spectra.csv",) if run.schema_m == 2 else ())
+    return {name: sha256_file(run.directory_m / name) for name in names}
+
+
 def _record(run: PlaneRun, binary: Path, command: list[str]) -> dict:
     return {"reference_record_version": 1, "status": "started", "command": command,
             "started_utc": datetime.now(timezone.utc).isoformat(), "binary": str(binary),
             "binary_sha256": sha256_file(binary), "analysis_source": source_identity(),
             "measurement_directory": str(run.directory_m),
             "measurement_build": run.record_m.get("build", {}),
-            "measurement_sha256": {name: sha256_file(run.directory_m / name)
-                                   for name in ("run.json", "spectra.csv")},
+            "measurement_sha256": _measurement_hashes(run),
             "reference_document_sha256": sha256_file(Path(__file__).with_name("references.org")),
             "frequency_units": "normalized", "polarization": run.plane["polarization"],
-            "component": run.plane["component"], "phase_origin": "requested_face",
+            "component": run.plane["component"], "geometry": run.plane["geometry"],
+            "phase_origin": "requested_face_anchor" if run.schema_m == 2 else "requested_face",
+            "extraction_audit_basis": "recorded_directional_roots" if run.schema_m == 2 else "aligned_lattice_roots",
             "physics_validation": "not_performed"}
 
 
@@ -183,6 +229,8 @@ def _evaluate(run: PlaneRun, binary: Path, directory: Path, command: list[str], 
     try:
         rows = _calculate(expected, binary, directory, command, record)
         _check_angles(rows, record.get("angles_degrees"))
+        if "angles_degrees" not in record and run.schema_m == 2:
+            _check_tilted_angle(run, rows)
         record["extraction_residuals"] = extraction_residuals(run, rows) if audit else []
         record["status"] = "calculated"
         return ReferenceTable(directory, record, rows)
@@ -191,6 +239,14 @@ def _evaluate(run: PlaneRun, binary: Path, directory: Path, command: list[str], 
         raise
     finally:
         (directory / "reference.json").write_text(json.dumps(record, indent=2, allow_nan=False) + "\n")
+
+
+def _check_tilted_angle(run: PlaneRun, rows: tuple) -> None:
+    central = rows[run.central_bin_m]
+    if central["continuum_valid"] and not math.isclose(central["continuum_angle_degrees"],
+                                                       abs(run.plane["actual_angle_degrees"]),
+                                                       rel_tol=2e-12, abs_tol=2e-12):
+        raise RunDataError("Tilted recorded angle disagrees with the C++ continuum reference")
 
 
 def _check_angles(rows: tuple, angles: tuple | None) -> None:
@@ -212,10 +268,12 @@ def evaluate(run: PlaneRun, binary: Path | str, output_directory: Path | str,
     directory.mkdir(parents=True, exist_ok=False)
     frequencies = directory / "frequencies.txt"
     frequencies.write_text("".join(f"{value:.17g}\n" for value in run.frequencies))
-    sampling = {"kz": format(run.plane["kz"], ".17g"), "frequencies": str(frequencies)}
+    tangential_key = "kappa" if run.schema_m == 2 else "kz"
+    sampling = {"kz": format(run.plane[tangential_key], ".17g"), "frequencies": str(frequencies)}
     command = _arguments(run, binary, sampling, continuum_only)
     record = _record(run, binary, command)
-    return _evaluate(run, binary, directory, command, record, run.frequencies, not continuum_only)
+    record["tangential_wavenumber_source"] = "effective/plane/" + tangential_key
+    return _evaluate(run, binary, directory, command, record, run.frequencies, not continuum_only or run.schema_m == 2)
 
 
 def angle_curve(run: PlaneRun, binary: Path | str, angles_degrees,

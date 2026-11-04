@@ -330,10 +330,12 @@ def _completed(directory: Path, record: dict) -> None:
     run = load_run(directory / "output")
     record.update(status="completed", output_validation="record_and_spectrum_schema",
                   output_directory=str(run.directory_m), build=run.record_m.get("build", {}),
+                  geometry=run.plane["geometry"], plane_schema=run.schema_m,
                   valid_bins=sum(sample.valid_m for sample in run.samples_m),
                   bins=len(run.samples_m))
+    names = ("run.json", "spectra.csv") + (("probe-spectra.csv",) if run.schema_m == 2 else ())
     record["output_sha256"] = {name: sha256_file(run.directory_m / name)
-                               for name in ("run.json", "spectra.csv")}
+                               for name in names}
 
 
 def _run_attempt(directory: Path, record: dict, settings: ScanSettings, binary_hash: str,

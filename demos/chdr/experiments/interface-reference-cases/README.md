@@ -116,11 +116,12 @@ python3 demos/chdr/experiments/interface-reference-cases/references.py RUN_OUTPU
   --binary /path/to/interface-reference --output NEW_REFERENCE_DIRECTORY
 ```
 
-The reader supports the first aligned-row record (plane schema absent, treated as
-version zero) and plane schema one. It requires explicit normalized effective
-metadata and `geometry: aligned_plane`. Unsupported geometry/schema combinations
-are rejected rather than interpreted from directory names. Version one validates
-the declared transform, raw units and separate probe/coefficient phase origins.
+The reader supports aligned-row records with plane schema zero or one and tilted
+records with plane schema two. An absent version denotes the first aligned record.
+Each version requires explicit normalized effective metadata and its declared
+geometry. Unsupported geometry/schema combinations are rejected rather than
+interpreted from directory names. Version one validates the declared transform,
+raw units and separate probe/coefficient phase origins.
 SI frequency columns are converted with the recorded output factor and checked
 against `omega_code`. Raw transforms remain in normalized solver units.
 
@@ -129,12 +130,33 @@ represented as `None` by the Python reader; invalid raw non-finite values remain
 available for diagnosis. Use `valid_m` when selecting data for comparisons. Do not
 turn an invalid-bin mask into a zero reflected or transmitted signal.
 
+Schema two requires `geometry: periodic_tilted_plane`, the normal/tangent basis,
+face anchor, periodic geometry, probe layout and the recorded qualification
+quantities. `spectra.csv` stores the fitted incident, reflected and transmitted
+face amplitudes, three signed normal roots and their group velocities, fit
+residuals, and the derived coefficients. These columns have different meanings
+from the raw point transforms of schema one.
+The requested face position is a signed normal offset; the recorded anchor must
+lie on that plane. Both x and z windings are retained when lifting probe points.
+
+The required `probe-spectra.csv` retains every point's wrapped component position,
+integer x/z box windings, lifted normal/tangent coordinates, and raw incident and
+total transforms. The reader checks coordinate consistency, point counts and
+coverage of both probe sides at every frequency. A declared-valid bin must satisfy
+the recorded fit-residual limit and positive Floquet exclusion margins. These
+checks verify the record's consistency; they do not establish boundary isolation
+or bound the remaining evanescent contribution.
+
 The reference directory is new and contains `frequencies.txt`, `reference.csv`,
 `stderr.txt` and `reference.json`. The JSON record preserves the exact command,
 input/output identities, reference executable hash and compiled revision, analysis
 source identity, and reference-document hash. It also records discrepancies between
 published coefficients and a reconstruction from raw spectra when that audit is
-applicable. Those discrepancies test extraction consistency, not physical accuracy.
+applicable. For schema two, the audit repeats the recorded spatial fits with the
+three supplied directional roots, checks all face amplitudes and normalized fit
+residuals, and then checks their ratios. It does not replace the reflected root
+by the negative incident root. The raw point file is included in the provenance
+hashes. These discrepancies test extraction consistency, not physical accuracy.
 
 ## Direct reference-program interface
 
@@ -164,8 +186,11 @@ The Python wrapper also rejects an off-cell-boundary requested face for this
 unshifted lattice formula; use `--continuum-only` for the requested-face shifted
 comparison. It checks the recorded Standard/staggered/O1VS configuration before
 requesting the aligned lattice reference.
-The current Python run reader accepts only its documented aligned schemas; a new
-rotated record needs an explicit schema/reader extension.
+For a schema-two run, call the Python wrapper with `--continuum-only`. It supplies
+the recorded `kappa` to the C++ local-tangent input, checks the central reference
+angle against the actual recorded angle, and rejects an aligned-lattice request.
+The directional roots used in the raw-fit audit are recorded propagation roots;
+they are not an exact scattering oracle for the staircased interface.
 
 For a dense continuum curve, write one incidence angle in degrees per line and use:
 
@@ -189,6 +214,9 @@ references; it does not resolve a new simulation row or define a lattice angle.
   bin order and `central_bin_m` identifies the central bin.
 - Each `SpectrumSample` has `omega_m`, `reflection_m`, `transmission_m`, `valid_m`,
   `reason_m`, and optional raw `incident_m`, `total_m`, `transmitted_m` transforms.
+  Schema two instead provides `face_amplitudes_m`, `normal_wavenumbers_m`,
+  `normal_group_velocities_m` and `fit_residuals_m`, each ordered incident,
+  reflected, transmitted. Its raw points are retained in `PlaneRun.probes_m`.
 - `references.evaluate(run, binary, new_directory, continuum_only=False)` returns
   a `ReferenceTable` with `rows_m` and its provenance in `record_m`.
 - `references.angle_curve(run, binary, angles_degrees, new_directory)` returns a
@@ -205,8 +233,8 @@ references; it does not resolve a new simulation row or define a lattice angle.
   amplitude magnitude in the recorded basis; do not infer that weight by dividing
   two potentially small reference quantities.
 - `references.extraction_residuals(run, rows)` audits the raw-to-face phase transfer
-  using the C++ lattice roots. The spectra must be from the aligned schema and the
-  selected measured bins must have propagating roots.
+  using the C++ lattice roots for aligned data, or the recorded directional roots
+  and point fits for tilted data. The selected measured bins must be valid.
 
 Keep the run input, resolved record, spectra, reference invocation and output,
 comparison data and relevant control runs together when retaining a result. Store
