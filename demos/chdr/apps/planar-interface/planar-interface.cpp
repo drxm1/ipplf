@@ -12,6 +12,7 @@
 #include "apps/planar-interface/PacketCase.h"
 #include "apps/planar-interface/PlaneInput.h"
 #include "apps/planar-interface/PlanePulse.h"
+#include "apps/planar-interface/TiltedOutput.h"
 #include "core/input/Application.h"
 #include "core/input/RunInput.h"
 #include "core/output/RunRecord.h"
@@ -323,10 +324,74 @@ namespace chdr::apps::planarInterface {
                                ippl::Comm->getCommunicator());
     }
 
+    /// Describe the completed tilted run without borrowing aligned scalar-face assumptions.
+    output::RunRecordDescription describeTilted(const TiltedRow& r, InterfaceSolver& solver,
+                                                const input::RunInput& request,
+                                                const output::FieldRunSettings& settings) {
+        auto result = output::describeRun("planar-interface", tiltedRunBox(r), solver,
+                                          r.plane_m.steps_m, planeMetadata(r.plane_m));
+        recordTiltedPhysics(result.effective_m["plane"], r);
+        recordTiltedGeometry(result.effective_m["plane"], r);
+        recordTiltedPulse(result.effective_m["plane"], r);
+        recordTiltedProbes(result.effective_m["plane"], r);
+        recordTiltedQualification(result.effective_m["plane"], r);
+        output::recordObservation(result, "fourier", {});
+        output::recordFieldRunOutput(result, request, settings);
+        recordPlaneFields(result.effective_m["output/fields"], solver, request);
+        recordTiltedSpectrumUnits(result.effective_m["output/spectra"], request);
+        return result;
+    }
+
+    /// Keep field-output ownership inside the same manager lifetime as the measured evolution.
+    TiltedResult measureRecordedTilted(const input::RunInput& request, const TiltedRow& r,
+                                       const output::FieldRunSettings& settings,
+                                       output::RunRecordDescription& description) {
+        auto run = tiltedRun(r);
+        std::optional<output::FieldRunOutput> writer;
+        if (!request.outputDirectory_m.empty())
+            writer.emplace(request.outputDirectory_m, tiltedRunBox(r), run.solver(), run.material(),
+                           planeMetadata(r.plane_m), request.units_m);
+        const auto result = measureTiltedRun(run, r, settings.diagnostics_m.every_m,
+                                             [&](long long step, auto& state, const auto& owner) {
+                                                 if (writer)
+                                                     writer->observe(step, state, owner,
+                                                                     r.plane_m.steps_m, settings);
+                                             });
+        if (writer)
+            writer->finish();
+        description = describeTilted(r, run.solver(), request, settings);
+        return result;
+    }
+
+    /// Report cost before allocation and measured central data after the single evolution.
+    void runTiltedPlane(const input::RunInput& request) {
+        auto r              = tiltedRow(request);
+        const int cadence   = checkPlaneInput(request, r.plane_m);
+        const auto settings = planeOutputSettings(request, cadence);
+        if (ippl::Comm->rank() == 0)
+            std::clog << "Tilted plane: " << r.plane_m.cellsX_m << "x2x" << r.plane_m.cellsZ_m
+                      << " cells, " << r.plane_m.steps_m << " steps, " << r.modes_m.size()
+                      << " modes\n";
+        output::RunRecordDescription description;
+        const auto result = measureRecordedTilted(request, r, settings, description);
+        description.effective_m["plane/incident_peak"] = result.incidentPeak_m;
+        if (ippl::Comm->rank() == 0)
+            std::cout << std::setprecision(17) << "tilt=" << r.tiltDegrees_m
+                      << " incidence=" << r.plane_m.actualAngleDegrees_m
+                      << " r=" << result.bins_m[0].r_m << " t=" << result.bins_m[0].t_m
+                      << " energy drift=" << result.drift_m << '\n';
+        writeTiltedResult(request, r, result);
+        output::writeRunRecord(request.outputDirectory_m, request, description,
+                               ippl::Comm->getCommunicator());
+    }
+
     /// Validate case-specific keys before constructing any distributed field state.
     void runConfigured(const input::RunInput& request) {
-        if (request.caseName_m == "plane")
+        if (request.caseName_m == "plane") {
+            if (planeParameter(request, "interface_tilt_degrees", 0) != 0)
+                return runTiltedPlane(request);
             return runPlane(request);
+        }
         input::validateParameters(request, {"smoke"});
         input::validateObservationNames(request, {"fields", "diagnostics"});
         if (request.outputDirectory_m.empty())

@@ -131,11 +131,12 @@ namespace chdr::apps::planarInterface {
             return readPlanePreset(input);
         input::validateParameters(
             input,
-            {"polarization",         "incidence",      "epsilon",           "courant",
-             "cells_per_wavelength", "angle_degrees",  "transverse_period", "cell_size",
-             "cell_shape_y",         "cell_shape_z",   "face_position",     "tail_sigmas",
-             "cutoff_fraction",      "probe_cells",    "timing_samples",    "gate_padding_steps",
-             "separation_factor",    "frequency_bins", "band_sigmas",       "incident_floor"});
+            {"polarization",          "incidence",      "epsilon",           "courant",
+             "cells_per_wavelength",  "angle_degrees",  "transverse_period", "cell_size",
+             "cell_shape_y",          "cell_shape_z",   "face_position",     "tail_sigmas",
+             "cutoff_fraction",       "probe_cells",    "timing_samples",    "gate_padding_steps",
+             "separation_factor",     "frequency_bins", "band_sigmas",       "incident_floor",
+             "interface_tilt_degrees"});
         return resolvePlaneRow(readPlaneRequest(input));
     }
 }  // namespace chdr::apps::planarInterface

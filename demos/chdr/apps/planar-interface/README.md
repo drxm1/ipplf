@@ -103,7 +103,8 @@ Both use one tangential period. This follows from periodic phase matching
 Coefficient extraction requires each bin to propagate in both media under both
 the continuum and lattice descriptions; unusable bins retain their raw measurements.
 The material face remains aligned with x. Its requested physical position is
-retained independently of the represented material boundary; rotation is not yet implemented.
+retained independently of the represented material boundary. Nonzero interface tilt
+uses the periodic construction described below.
 The layout uses numerical group velocities and checks second-interface returns,
 both periodic wraps and the analytic incident's periodic image. It is a sampled
 arrival estimate, not a rigorous error bound. Qualify a new configuration with
@@ -199,6 +200,99 @@ offsets and time labels. Use those labels when comparing a field profile with
 another frame or an analytic reference. The labels are defined by the solver's
 [LevelContract](../../core/base/LevelContract.h); raw magnetic reconstruction uses
 the discrete curl of [Ryu et al., author manuscript, Appendix A, Eq. (24)](https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf).
+
+## Periodic tilted-plane measurement
+
+Set `interface_tilt_degrees` to a nonzero angle strictly between -90 and 90.
+It rotates the interface normal from +x towards +z; `angle_degrees` remains the
+incidence angle **relative to that normal**. `face_position` is then a signed
+normal coordinate: the requested plane satisfies n.x = `face_position`, with
+default zero. The two controls therefore rotate either x=0 or x=delta about the
+x-z origin. The first implementation supports vacuum incidence, TE and TM.
+
+The material and pulse are exactly periodic in the Cartesian box. For positive
+coprime `primitive_cells_x=p` and `primitive_cells_z=q`, the cell counts are
+Nx=M*p and Nz=M*q. The z spacing is adjusted to
+`h_z=cos(alpha)*p*h_x/(abs(sin(alpha))*q)`; x and y spacings remain requested.
+The tilt is retained exactly. Without an explicit pair, the resolver searches
+p,q up to six and takes the closest qualified cell shape. **Pin the same pair
+through a refinement or control family:** automatic choices can change when a
+finer grid admits a closer shape. Pairs 2/3 at 17 degrees and 4/3 at 33 degrees
+are useful starting inputs. Use the recorded actual shape for aligned controls.
+This construction follows the periodic phase condition of
+[Oskooi and Johnson, section 4.5, Eq. (4.30)](https://arxiv.org/abs/1301.5366).
+
+```yaml
+schema_version: 1
+case: plane
+parameters:
+  polarization: TE
+  interface_tilt_degrees: 17
+  angle_degrees: 0
+  face_position: 0
+  primitive_cells_x: 2
+  primitive_cells_z: 3
+  cells_per_wavelength: 20
+  cell_size: 1
+  cell_shape_y: 2
+  cell_shape_z: 2
+  tail_sigmas: 6
+  probe_cells: 12
+  probe_half_width_cells: 2
+  frequency_bins: 41
+output: {directory: tilted-17-te}
+observations:
+  diagnostics: {every: 20}
+  fields: {every: 200, include_final: true}
+```
+
+This example explicitly chooses a shorter six-sigma packet for a bounded run;
+the default remains eight. The retained mode cutoff equals `tail_sigmas`, and
+the omitted principal-mode field-weight fraction is recorded. Neither packet
+has compact support. Compare a longer packet and larger isolated box before
+claiming a boundary-error tolerance.
+
+At nonzero incidence, the integer tangent mode adjusts the actual frequency.
+For a matched box/probe control, record the baseline `period_cells_multiplier=M`
+and `tangent_mode=j`, then specify a larger compatible pair, for example 2M and
+2j, together with the same primitive cell counts. This retains actual frequency,
+tangent wavenumber, spacings and time step. Increase `separation_factor`, probe
+distance or gate padding as required; a pinned period that cannot isolate those
+gates is rejected. Changing only the box without pinning M/j may change the
+actual frequency. Modal density and overall pulse amplitude can change when the
+period grows; comparisons use incident-normalized coefficients.
+
+All retained carriers and measured frequencies must lie in the qualified central
+dispersion branch and exclude additional propagating material-period orders.
+The reflected normal root is solved separately: it generally is not the negative
+incident root. Four directional group speeds enter the return-path estimates,
+derived from [Fallahi, Eq. (3.17)](https://arxiv.org/abs/2009.13645) using
+[Trefethen, section 1](https://doi.org/10.1137/1024038). These conservative branch
+conditions reject some coarse or high-angle requests; they do not establish an
+evanescent-field error bound.
+
+`probe_cells` sets the normal probe distance in x-cell widths (default 12).
+`probe_half_width_cells` sets the x/z box half-width (default 2), with one y
+sample. Boxes must lie wholly in their media and must not cross a Cartesian
+box edge. Coordinates are lifted to the chosen requested-plane patch with
+recorded integer x/z windings. The application fits the known outgoing mode
+after subtracting the analytic incident spectrum at each incident-side point.
+It records incoming, reflected and transmitted RMS fit residuals normalized by
+the fitted incoming amplitude. `fit_residual_limit` defaults to 1e-3; bins above
+it retain their raw data but have invalid, NaN coefficients. A probe-distance
+and extent control remains necessary even when the residual is small.
+
+Plane schema 2 writes `probe-spectra.csv`, `modes.csv` and `spectra.csv` alongside
+the common material, field, energy and run records. The spectrum includes three
+signed normal roots and group velocities, fitted face amplitudes, residuals,
+ratios and validity reasons. The raw point table contains actual component
+coordinates, their windings, local normal/tangent coordinates and analytic
+incident plus measured spectra. These permit independent re-projection. A
+staircase has no single represented face, so no such scalar is recorded.
+Continuum references use the requested normal/anchor and the actual frequency
+and tangent wavenumber; the aligned scalar-interface lattice oracle is not a
+reference for this staircase. Derivations and conventions are in
+[references.org](../../experiments/interface-reference-cases/references.org).
 
 ## Packet cases
 

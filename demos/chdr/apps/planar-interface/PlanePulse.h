@@ -36,7 +36,8 @@ namespace chdr::apps::planarInterface {
      * of \f$\psi\hat{\mathbf y}\f$: \f$A_x=-D_z\psi\f$, \f$A_z=D_x\psi\f$,
      * multiplied by incident epsilon and divided by harmonic face epsilon.
      * Its weighted backward divergence vanishes by commuting differences
-     * [ryu2016potentialfdtd, Appendix A; chew2014generalizedgauge, Eq. (18)].
+     * (deduction from [ryu2016potentialfdtd, Appendix A]; the generalized gauge is
+     * [chew2014generalizedgauge, Eqs. (14), (15), (19)]).
      * The sign gives a positive fixed-Cartesian \f$H_y\f$ incident amplitude.
      * Mode data are mirrored once from host to the default execution space.
      */
@@ -148,8 +149,9 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Preserve invariant normalization while keeping energy observation separate from spectra.
+    template <class Result>
     inline void observePlaneEnergy(InterfaceSolver& state, const material::MaterialOwner& owner,
-                                   long long k, PlaneResult& result, double& baseline) {
+                                   long long k, Result& result, double& baseline) {
         const auto energy     = diagnostics::potentialEnergy(state, owner);
         result.scalarEnergy_m = energy.scalar_m.total();
         if (k == 0)

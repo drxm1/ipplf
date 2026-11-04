@@ -20,6 +20,10 @@ add_test(NAME chdr.interface.shifted-face COMMAND test-plane-interface
                                                   --gtest_filter=PlaneInterface.ShiftedFace)
 add_test(NAME chdr.interface.scaled-cell COMMAND test-plane-interface
                                                  --gtest_filter=PlaneInterface.ScaledCell)
+add_test(NAME chdr.interface.tilted-layout COMMAND test-plane-interface
+                                                   --gtest_filter=PlaneInterface.TiltedLayout)
+add_test(NAME chdr.interface.tilted-homogeneous
+         COMMAND test-plane-interface --gtest_filter=PlaneInterface.TiltedHomogeneous)
 set_tests_properties(
   chdr.interface.normal
   chdr.interface.long.brewster
@@ -30,6 +34,8 @@ set_tests_properties(
   chdr.interface.band-spectrum
   chdr.interface.shifted-face
   chdr.interface.scaled-cell
+  chdr.interface.tilted-layout
+  chdr.interface.tilted-homogeneous
   PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;OMP_PROC_BIND=false" TIMEOUT 1800 LABELS
              "chdr;interface")
 set_tests_properties(chdr.interface.long.brewster PROPERTIES LABELS "chdr;interface;long")

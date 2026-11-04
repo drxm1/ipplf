@@ -34,6 +34,8 @@
 #include "InterfaceOracles.h"
 #include "apps/planar-interface/PlaneInput.h"
 #include "apps/planar-interface/PlanePulse.h"
+#include "apps/planar-interface/TiltedMeasurement.h"
+#include "tests/core/solver/support/CoreTestSupport.h"
 
 namespace chdr::apps::planarInterface {
     /** @brief Independently check the invariant's normalization with raw electromagnetic fields.
@@ -398,5 +400,144 @@ namespace chdr::apps::planarInterface {
         for (size_t bin = 0; bin < 41; ++bin)
             checkLatticeBin(p, result, bin, 1e-8);
         checkInvalidPlaneBins(result, 41);
+    }
+
+    /// Every retained carrier is exactly Cartesian-periodic and has the requested tangent mode.
+    void checkTiltedCarriers(const TiltedRow& r) {
+        const auto& p = r.plane_m;
+        EXPECT_GT(r.floquetMargin_m, 0);
+        EXPECT_GT(r.retainedMargin_m, 0);
+        for (const auto& mode : r.modes_m) {
+            const double x = mode[0] * p.cellsX_m * p.h_m[0] / (2 * std::numbers::pi);
+            const double z = mode[1] * p.cellsZ_m * p.h_m[2] / (2 * std::numbers::pi);
+            EXPECT_NEAR(x, std::round(x), 1e-12);
+            EXPECT_NEAR(z, std::round(z), 1e-12);
+            EXPECT_NEAR(-r.sine_m * mode[0] + r.cosine_m * mode[1], r.kappa_m, 1e-14);
+            EXPECT_NEAR(tiltedRoots(r, mode[2], 1)[0].normalK_m, mode[4], 1e-12);
+        }
+    }
+
+    /// A compatible enlarged period preserves physical spectral controls exactly.
+    void checkPinnedTiltedControl(TiltedRequest input, const TiltedRow& baseline) {
+        input.primitiveX_m               = baseline.primitiveX_m;
+        input.primitiveZ_m               = baseline.primitiveZ_m;
+        input.periodMultiplier_m         = 2 * baseline.multiplier_m;
+        input.tangentMode_m              = 2 * baseline.tangentMode_m;
+        input.plane_m.separationFactor_m = 1.2;
+        input.plane_m.probeCells_m += 4;
+        const auto control = resolveTiltedRow(input);
+        EXPECT_DOUBLE_EQ(control.kappa_m, baseline.kappa_m);
+        EXPECT_DOUBLE_EQ(control.plane_m.omega0_m, baseline.plane_m.omega0_m);
+        EXPECT_EQ(control.plane_m.omega_m, baseline.plane_m.omega_m);
+        EXPECT_GT(control.dielectricWidth_m, baseline.dielectricWidth_m);
+        EXPECT_GT(control.incidentWidth_m, baseline.incidentWidth_m);
+        checkTiltedCarriers(control);
+    }
+
+    /// Two non-diagonal normals and an oblique incidence retain distinct directional roots.
+    TEST(PlaneInterface, TiltedLayout) {
+        TiltedRequest input;
+        input.plane_m.h_m             = {1, 2, 2};
+        input.plane_m.probeCells_m    = 12;
+        input.plane_m.timingSamples_m = 65;
+        for (double alpha : {17.0, 33.0}) {
+            input.tiltDegrees_m = alpha;
+            const auto r        = resolveTiltedRow(input);
+            checkTiltedCarriers(r);
+            std::cout << "tilt=" << alpha << " cells=" << r.plane_m.cellsX_m << 'x'
+                      << r.plane_m.cellsZ_m << " steps=" << r.plane_m.steps_m << '\n';
+        }
+        input.plane_m.angleDegrees_m = 30;
+        const auto r                 = resolveTiltedRow(input);
+        checkTiltedCarriers(r);
+        const auto roots = tiltedRoots(r, r.plane_m.omega0_m, 1);
+        EXPECT_GT(std::abs(roots[0].normalK_m + roots[1].normalK_m), 1e-5);
+        EXPECT_LT(roots[0].groupVelocity_m, 0);
+        EXPECT_GT(roots[1].groupVelocity_m, 0);
+        checkPinnedTiltedControl(input, r);
+    }
+
+    /// Both loaded histories satisfy the existing material-weighted divergence operator.
+    void checkTiltedConstraint(InterfaceSolver& state, const material::MaterialOwner& owner) {
+        for (const auto* field : {&state.A_n, &state.A_nm1}) {
+            const solver::O1VSOperator op(*field, owner, 1);
+            const double local = solver::coreTest::localMaximum(
+                *field, KOKKOS_LAMBDA(int i, int j, int k) { return Kokkos::abs(op.g(i, j, k)); });
+            EXPECT_LT(solver::coreTest::globalMaximum(*field, local), 1e-10);
+        }
+    }
+
+    /// Compare every measured point with the exact finite-gate incident lattice mode sum.
+    void checkTiltedHomogeneous(const TiltedRow& r, const TiltedResult& result) {
+        if (ippl::Comm->rank() != 0)
+            return;
+        double error = 0, scale = 0;
+        for (bool incident : {true, false}) {
+            const auto& probe = incident ? result.incidentProbe_m : result.transmittedProbe_m;
+            const int gate    = incident ? r.plane_m.gateIncident_m : r.plane_m.gateOther_m;
+            for (size_t bin = 0; bin < r.plane_m.omega_m.size(); ++bin)
+                for (size_t point = 0; point < probe.coordinates_m.size(); ++point) {
+                    const auto expected = tiltedIncidentTransform(r, probe.coordinates_m[point],
+                                                                  r.plane_m.omega_m[bin], gate);
+                    error = std::max(error, std::abs(probe.value(point, 0, bin) - expected));
+                    scale = std::max(scale, std::abs(expected));
+                }
+        }
+        std::cout << "homogeneous relative field-spectrum error=" << error / scale << '\n';
+        EXPECT_LT(error / scale, 1e-10);
+        EXPECT_LT(result.drift_m, 1e-11);
+    }
+
+    /// Sampled material and both weighted-curl histories retain periodic geometry.
+    void checkTiltedMaterialStart(TiltedRequest input) {
+        input.plane_m.epsilon_m      = 2.13;
+        input.plane_m.polarization_m = Polarization::TM;
+        input.plane_m.facePosition_m = input.tiltDegrees_m > 0 ? 0.37 : -0.37;
+        const auto r                 = resolveTiltedRow(input);
+        const TiltedMaterialMap map(r);
+        for (int i : {0, r.plane_m.cellsX_m / 2, r.plane_m.cellsX_m - 1})
+            for (int k : {0, r.plane_m.cellsZ_m / 2, r.plane_m.cellsZ_m - 1}) {
+                EXPECT_EQ(map.contains(i, k), map.contains(i + r.plane_m.cellsX_m, k));
+                EXPECT_EQ(map.contains(i, k), map.contains(i, k + r.plane_m.cellsZ_m));
+            }
+        auto run = tiltedRun(r);
+        run.load(TiltedPulse(r));
+        checkTiltedConstraint(run.solver(), run.material());
+    }
+
+    /// The negative-incidence row also crosses both Cartesian winding directions.
+    TiltedRow homogeneousTiltedRow(TiltedRequest& input) {
+        input.plane_m.angleDegrees_m = input.tiltDegrees_m > 0 ? 0 : -20;
+        auto r                       = resolveTiltedRow(input);
+        if (input.tiltDegrees_m < 0) {
+            input.plane_m.facePosition_m = -2 * r.normalPeriod_m - 0.37;
+            r                            = resolveTiltedRow(input);
+            EXPECT_NE(tiltedLift(r, 0), 0);
+            EXPECT_NE(tiltedLift(r, 2), 0);
+        }
+        const auto anchor = tiltedAnchor(r);
+        EXPECT_NEAR(r.cosine_m * anchor[0] + r.sine_m * anchor[2], r.facePosition_m, 1e-10);
+        return r;
+    }
+
+    /// Exercise both polarization histories, signed angles/offsets and true component/time labels.
+    TEST(PlaneInterface, TiltedHomogeneous) {
+        TiltedRequest input;
+        input.plane_m.h_m             = {1, 2, 2};
+        input.plane_m.epsilon_m       = 1;
+        input.plane_m.tailSigmas_m    = 4;
+        input.plane_m.probeCells_m    = 12;
+        input.plane_m.timingSamples_m = 33;
+        input.probeHalfWidth_m        = 1;
+        for (double alpha : {17.0, -33.0}) {
+            input.tiltDegrees_m          = alpha;
+            input.plane_m.facePosition_m = alpha > 0 ? 0.37 : -0.37;
+            input.plane_m.polarization_m = alpha > 0 ? Polarization::TE : Polarization::TM;
+            const auto r                 = homogeneousTiltedRow(input);
+            auto run                     = tiltedRun(r);
+            const auto result            = measureTiltedRun(run, r, 10, {}, checkTiltedConstraint);
+            checkTiltedHomogeneous(r, result);
+            checkTiltedMaterialStart(input);
+        }
     }
 }  // namespace chdr::apps::planarInterface
