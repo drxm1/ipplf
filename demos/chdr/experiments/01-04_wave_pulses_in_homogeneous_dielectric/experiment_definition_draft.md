@@ -14,7 +14,7 @@ Scope: Source-free radiation with zero scalar potential in a homogeneous dielect
 Study: Convergence study against the continuum solution w.r.t. refinement. What exact measurables/metrics to compare is to be determined (TODO).
 
 ### The analytic case of E01 and sampling/initialization
-The exact analytic reference case and how we initialize/sample the field storage for E01 is described in `./analytic_refs/E01.typ`.
+The exact analytic reference case and how we initialize/sample the field storage for E01 is described in `./E01.typ`.
 
 
 ## Experiment 02 (E02)

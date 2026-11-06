@@ -9,9 +9,9 @@ As the continuum analytic reference for E01 we choose a transverse potential pul
 We assume a nonmagnetic, lossless, nondispersive medium with $epsilon_r = 2.13$.
 The material is homogeneous and spans the whole mesh domain. There is no free charge or current.
 
-Let
+We first define a family of exact continuum solutions. Let
 $
-  vb(A)(z,t) = vb(hat(x)) a(s(z,t)), quad s(z,t) := z - z_0 - v t, quad phi = 0, quad v = c_"vac"\/sqrt(epsilon_r).
+  vb(A)(z,t) = vb(hat(x)) a(s(z,t)), quad s(z,t) := z - z_0 - v t, quad phi = 0, quad v = c_"vac"\/sqrt(epsilon_r);
 $ <E01-analytic-potentials>
 
 The continuum fields $vb(E)$ and $vb(B)$ can be reconstructed via Chew §1, Eqs. (5)-(6):
@@ -28,7 +28,7 @@ $ <E01-analytic-EB>
 
 
 
-=== Checking that the potential solves the homogeneous equations
+=== Proof: The potential family solves the homogeneous equations
 Since $A_x$ is independent of x, $div vb(A) = 0$, so the homogeneous Lorenz gauge $div vb(A) = -epsilon_r partial_t phi$ TODO:chew[Eq. (11)] is satisfied.
 
 We now verify the continuum wave equations for the scalar and vector potentials
@@ -40,10 +40,62 @@ $
   nabla^2 vb(A) - epsilon_r partial_t^2 vb(A) &= vb(0).
 $
 Since $A_x (z,t) = a(s(z,t))$ is independent of $x$ and $y$, we obtain $nabla^2 A_x = partial_z^2 A_x$.
-If $a in cal(C)^2 ("Dom"(a))$, $partial_z^2 A_x - epsilon_r partial_t^2 A_x = a''(s) - a''(s) = 0$.
+If $a in cal(C)^2 ("Dom"(a))$, $partial_z^2 A_x - epsilon_r partial_t^2 A_x = a''(s) - a''(s) = 0$. Therefore this family of potentials provides source free Maxwell solutions.
 
-Therefore this potential provides a source free Maxwell solution.
+=== Specification of the profile
+We choose a smooth pulse that is exactly zero outside of a finite interval. Let
+$
+  p(s) = cases(
+    A_0 exp(1 - 1/(1 - (s\/w)^2)) "if" abs(s) < w,
+    0 "if" abs(s) >= w
+  )\
+  "with" 0 < 2w < L_z
+$
+Alternatively we could have chosed a Gaussian potential profile $p(s) = A_0 e^(-s^2\/(2 sigma^2))$, but it has the disadvantage that its tail does not vanish. $L_z$ is the domain length.
 
+Differentiation gives
+$
+  p'(s) = cases(
+    - (2s p(s))/(w^2 (1-(s\/w)^2)^2) & "if" abs(s) < w,
+    0 & "if" abs(s) >= w
+  ).
+$
+
+We define the periodic profile
+$
+  a(s) = sum_(m in ZZ) p(s-m L_z), quad a(s+L_z) = a(s).
+$
+Since all derivatives of $p$ vanish at $s = plus.minus w$, the joins are smooth.
+Since $2w < L_z$, at most one term in the sum is nonzero.
+Therefore we can evaluate the profile $a(s(z,t))$ directly by measuring the displacement from the nearest periodic copy:
+$
+  r := s - L_z floor(s/L_z + 1/2), quad -L_z/2 <= r < L_z/2,
+$
+$
+  a(s) = p(r), quad a'(s) = p'(r).
+$
+We return 0 in code for $a, a'$ when $abs(r) >= w$. The jump in $r$ at the periodic join causes no $a$-discontinuity, because since $2w < L_z$, $p$ is zero in a neighbourhood there. Pseudocode:
+
+  #import "@preview/lovelace:0.3.1": pseudocode-list
+  #block(breakable: false)[
+    #pseudocode-list(
+      line-numbering: none,
+      line-gap: 0.6em,
+      indentation: 1em,
+      stroke: 0.4pt + blue,
+    )[
+      + *input:* $z, t, z_0, v, L_z, w, A_0$, with $0 < 2w < L_z$
+      + *output:* $(a(s(z,t)), a'(s(z,t)))$
+      + $s <- z-z_0-v t$
+      + $r <- s-L_z floor(s/L_z+1/2)$
+      + *if* $abs(r) >= w$:
+        + *return* $(0,0)$
+      + $q <- 1-(r\/w)^2$
+      + $"potential" <- A_0 exp(1-1/q)$
+      + $"derivative" <- -(2r "potential")/(w^2 q^2)$
+      + *return* $("potential", "derivative")$
+    ]
+  ]
 
 == Experiment E01 initialization/sampling method
 We choose initialization option A described in `../experiment_definition_draft.md`,
@@ -81,39 +133,3 @@ $
   vb(E)^(-1/2) = - (vb(A)^0 - vb(A)^(-1))/h_t eq.triple^"approx"_"stagg" - partial_t vb(A)
 $
 
-== TODO's
-Here I describe TODO's that I wish to specify more clearly in/about the above.
-=== TODO 1
-We must choose a sufficiently smooth pulse and a consistent periodic extension for EO1.
-The travelling-profile construction is explained in Schneider, §6.2.
-TODO: Does this change our equations @E01-analytic-potentials, @E01-analytic-EB?
-
-#text(fill: blue)[
-The form of @E01-analytic-potentials and @E01-analytic-EB does not change.
-Periodicity restricts the choice of $a$: for a domain of length $L_z$, we need
-$a(s + L_z) = a(s)$, with matching derivatives at the periodic join.
-The travelling-profile construction is explained in
-#link("https://eecs.wsu.edu/~schneidj/ufdtd/chap6.pdf")[Schneider, §6.2].
-The periodic construction below follows by superposition of translated
-solutions of the homogeneous linear wave equation.
-
-For example, starting from a localized potential profile $p$, define
-$
-  a(s) = sum_(m in ZZ) p(s - m L_z).
-$
-This is periodic by reindexing the sum. We require enough decay and smoothness
-to differentiate the sum twice. A smooth compactly supported profile satisfies
-this requirement because only finitely many copies contribute locally; a
-Gaussian and its derivatives also converge in this construction.
-Use this same periodic $a$ in the potential histories and its derivative in
-the analytic fields.
-
-The resulting periodic continuum solution is exact for all times, including
-after the pulse crosses a periodic boundary. For a smooth compactly supported
-profile whose support is shorter than $L_z$, it agrees with an isolated pulse
-where only that copy contributes. A periodized Gaussian includes nonzero tails
-from the other copies, so it is not exactly equal to an isolated Gaussian.
-Stopping before the main pulse reaches a boundary does not remove those tails.
-
-The particular profile, its width and the domain length remain to be chosen.
-]
