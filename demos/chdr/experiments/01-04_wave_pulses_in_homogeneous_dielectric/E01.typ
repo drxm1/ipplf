@@ -155,6 +155,25 @@ We return 0 in code for $a, a'$ when $abs(r) >= w$. The jump in $r$ at the perio
     ]
   ]
 
+#block(breakable: false)[
+== Experiment E01 solver configuration
+
+#table(
+  columns: (1fr, 2fr),
+  inset: 6pt,
+  align: left + top,
+  stroke: 0.5pt,
+  table.header([*Setting*], [*Value*]),
+  [Material formulation], [O1VS],
+  [Gauge parameter], [$alpha=1$],
+  [Spatial discretization], [Standard stencil, staggered placement],
+  [Field reconstruction], [R2],
+  [Material and physical sources], [$epsilon_r=2.13$, $mu_r=1$; $rho=0$, $vb(J)=vb(0)$],
+  [Boundaries], [Periodic in all directions],
+  [Time step], [Explicit $h_t=h_z\/2$, selected before loading the histories],
+)
+]
+
 == Experiment E01 computational domain and refinement
 
 E01 uses a 3D domain with periodic boundaries in all three directions.
@@ -310,6 +329,15 @@ $
   = A_(x,"exact")(z_k, n h_t)
   = a(z_k - z_0 - v n h_t), quad n in {0,-1}.
 $
+
+For $n in {0,-1}$,
+the two face samples $(A_x^n)_(i+1/2,j,k)$ and $(A_x^n)_(i-1/2,j,k)$ are equal because $A_x$ is independent of $x$,
+so their backward difference is zero.
+Since $A_y=A_z=phi=0$ in the loaded histories,
+the remaining divergence terms and the scalar time difference also vanish,
+which satisfies the discrete homogeneous Lorenz gauge in exact arithmetic
+(#link("https://arxiv.org/pdf/1406.4780v1")[Chew, Eq. (11)],
+with the staggered divergence of #link("https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf")[Ryu et al., Appendix A, Eq. (23)]).
 
 In the code, the components are still stored at integer indices $(i,j,k)$, and `writeSamples` in `core/solver/BoxSetup.h` adds the physical offset before the analytic is evaluated.
 
