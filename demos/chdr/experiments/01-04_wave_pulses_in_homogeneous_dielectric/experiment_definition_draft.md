@@ -11,7 +11,9 @@ The wave is propagated until it is close to the z-boundary of the mesh/domain.
 
 Cases: We cover only a single transverse polarization.
 Scope: Source-free radiation with zero scalar potential in a homogeneous dielectric.
-Study: Convergence study against the continuum solution w.r.t. refinement. What exact measurables/metrics to compare is to be determined (TODO).
+Study: Convergence study against the continuum solution w.r.t. refinement. What exact measurables/metrics to compare is now described in `./E01.typ`.
+
+All experiment details are described in `./E01.typ`.
 
 ### The analytic case of E01 and sampling/initialization
 The exact analytic reference case and how we initialize/sample the field storage for E01 is described in `./E01.typ`.
