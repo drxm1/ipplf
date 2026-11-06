@@ -46,6 +46,8 @@ namespace chdr::solver {
      * device-callable functor. Its coordinate-to-sample operation is kept together so
      * the arithmetic grouping is visible. Owned cells are written and fenced; no halo
      * communication is performed by this helper.
+     *
+     * TODO: Document this function better and review it line by line.
      */
     template <class AnalyticSampler>
     void writeSamples(AJFourFieldsType& field, AnalyticSampler sample, std::array<double, 4> times,
