@@ -3,6 +3,10 @@
 
 = Experiment E01 detailled specs
 
+All quantities below use the normalized solver units defined in the manual's
+Units chapter (`docs/manual/Units.typ`): $c_"vac" = epsilon_0 = mu_0 = 1$.
+We are not mapping to SI units for this experiment.
+
 == Experiment E01 analytic continuum reference
 As the continuum analytic reference for E01 we choose a transverse potential pulse.\
 
@@ -49,8 +53,11 @@ $
   )\
   "with" 0 < 2w < L_z
 $
+For E01, we set $A_0=1$ and $w=1$.
+
 Alternatively we could have chosed a Gaussian potential profile $p(s) = A_0 e^(-s^2\/(2 sigma^2))$, but it has the disadvantage that its tail does not vanish. $L_z$ is the domain length.
 
+#block(breakable: false)[
 Differentiation gives
 $
   p'(s) = cases(
@@ -58,6 +65,7 @@ $
     0 & "if" abs(s) >= w
   ).
 $
+]
 
 #import "@preview/cetz:0.3.4": canvas, draw
 
@@ -101,7 +109,7 @@ $
   set text(size: 9pt)
   canvas(length: 10mm, {
     profile-axes(position, ticks, ordinate)
-    draw.line(..points, stroke: 1pt + blue)
+    draw.line(..points, stroke: 1pt)
   })
 }
 
@@ -147,6 +155,90 @@ We return 0 in code for $a, a'$ when $abs(r) >= w$. The jump in $r$ at the perio
     ]
   ]
 
+== Experiment E01 computational domain and refinement
+
+E01 uses a 3D domain with periodic boundaries in all three directions.
+
+The transverse domain is $[0,L_x] times [0,L_y]$. At every refinement level,
+$
+  L_x = L_y = w = 1, quad N_x = N_y = 16, quad h_x = h_y = 1/16.
+$
+
+#block(breakable: false)[
+Along the propagation direction, we choose
+$
+  z in [0,L_z], quad L_z = 44w, quad z_0 = 2w.
+$
+]
+The pulse travels a distance $D = 40w$, corresponding to twenty full pulse
+widths. The target duration is
+$
+  T = D/v = 40w/v approx 58.38 w/c_"vac".
+$
+From @E01-analytic-potentials and the support of $p$, the continuum pulse
+occupies $[w,3w]$ at $t=0$ and $[41w,43w]$ at $t=T$.
+
+Let $N_"pulse" := 2w\/h_z$ denote the number of cells across the full pulse width.
+Then $N_z = L_z\/h_z = 22 N_"pulse"$.
+
+E01 studies longitudinal space/time convergence of @E01-analytic-potentials
+using the 3D O1VS implementation. We keep the transverse mesh fixed while
+refining $h_z$ and $h_t$. This does not establish convergence for fields with
+transverse variation, but our reference field here is independent of those directions.
+
+We use the following four longitudinal resolutions:
+
+#align(center)[
+  #table(
+    columns: 3,
+    align: center,
+    inset: 6pt,
+    stroke: 0.5pt,
+    table.header([$N_"pulse"$], [$h_z/w$], [$N_z$]),
+    [32],  [$1/16$],  [704],
+    [64],  [$1/32$],  [1408],
+    [128], [$1/64$],  [2816],
+    [256], [$1/128$], [5632],
+  )
+]
+
+We keep the physical domain, profile parameters and target travel distance fixed across these levels.
+Four levels provide three successive error comparisons, such that we can examine whether the observed convergence order stabilizes.
+If the finest levels leave the trend unclear, we may add $N_"pulse"=512$ ($N_z=11264$),
+subject to the runtime budget.
+We aim for approximately 1–2 hours for the complete convergence study on the 9950X3D,
+with flexibility if needed.
+
+Spatial profile plots display $z$ horizontally and the field or potential
+value vertically.
+
+=== Time steps and comparison times
+
+We set $h_t=h_z\/2$ on every refinement level.
+The four time steps are therefore $1/32$, $1/64$, $1/128$ and $1/256$.
+This choice satisfies the vacuum Standard stability bound used by `O1VSUpdate::maxStableTimeStep` (which is stricter than the bound in the homogeneous dielectric here),
+$
+  h_t < 1/sqrt(h_x^(-2) + h_y^(-2) + h_z^(-2)),
+$
+on all four meshes
+(#link("https://arxiv.org/pdf/2009.13645v1")[Fallahi, Eq. (3.20)], with $c_"vac"=1$).
+
+For the final convergence comparison,
+we select the available sample closest to the target time $T$ separately for $vb(A)$ and for the R2 fields $vb(E), vb(B)$.
+Since their time labels are $n h_t$ and $(n-1/2)h_t$, respectively,
+the selected observation indices are
+$
+  n_A = floor(T/h_t + 1/2), quad n_"EB" = floor(T/h_t + 1).
+$
+Their actual comparison times at which the errors are measured are
+$
+  t_A = n_A h_t, quad t_"EB" = (n_"EB"-1/2)h_t.
+$
+We evaluate the respective errors at these indices and advance through $max(n_A,n_"EB")$ steps.
+The nearest field sample may lie after $T$.
+Each selected time differs from $T$ by at most $h_t\/2$.
+We record the actual times with the errors and evaluate each analytic reference at its matching time.
+
 == Experiment E01 initialization/sampling method
 We choose initialization option A described in `../experiment_definition_draft.md`,
 that is we sample the continuum potential history directly:
@@ -162,7 +254,7 @@ Let $(x_i, y_j, z_k)$ denote a cell centre, and we write the spacial indices exp
 
 In the convention used by the `O1-VS` update, $A_x$ is for example located at $(x_i + h_x\/2, y_j, z_k)$.  Similarly the locations of $A_y$ and $A_z$ are shifted in $y$ and $z$. These offsets, in code, are returned by `LevelContract::positionOffset`. Their staggered grid "basis" (TODO: What does this mean?) is Ryu et al., Appendix A, Eqs. (19)-(24) TODO:ryu2016potentialfdtd.
 
-For E01, sampling the only nonzero component therefore means the following, which is the meaning of the above $eq.triple_"stagg"$-notation (we do not use that notation anymore from here on).
+For E01, sampling the only nonzero component therefore means the following, which is the meaning we introduce for the above $eq.triple_"stagg"$-notation.
 $
   (A_x^n)_(i+1/2,j,k)
   = A_(x,"exact")(z_k, n h_t)
@@ -273,5 +365,5 @@ $
   ).
 $
 
-*Purpose:* check the four potential advanced by O1-VS directly. This is gauge-dependent.
+*Purpose:* check the vector potential advanced by O1-VS directly. This is gauge-dependent.
 It might help interpret the field errors of $vb(E)$ and $vb(B)$.
