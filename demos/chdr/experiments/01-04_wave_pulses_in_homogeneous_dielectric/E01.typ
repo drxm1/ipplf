@@ -239,6 +239,56 @@ The nearest field sample may lie after $T$.
 Each selected time differs from $T$ by at most $h_t\/2$.
 We record the actual times with the errors and evaluate each analytic reference at its matching time.
 
+=== Saved output and sampling schedule
+
+On every refinement level,
+we save the initial observation and use the four target times
+$
+  tau in {T/4, T/2, 3T/4, T}.
+$
+For each positive target,
+replace $T$ by $tau$ in the nearest-time selection above.
+The initial observation uses the initialized state $n=0$,
+so $vb(A)$ is sampled at time zero and the R2 fields $vb(E), vb(B)$ at $-h_t/2$.
+
+  #table(
+    columns: (1fr, 4fr),
+    inset: 6pt,
+    align: left + top,
+    stroke: 0.5pt,
+    [*Error histories*],
+    [
+      Save E01.meas01–04 at these observations,
+      together with the mesh identifier, target time, selected step index and actual comparison time for each quantity.
+      These are the four global scalar errors plotted against time.
+    ],
+    [*Longitudinal profiles*],
+    [
+      At the same observations,
+      save the numerical and analytic profiles of $A_x$, $E_x$ and R2-averaged $B_y$ along a fixed line parallel to $z$.
+      Use the same transverse line on every refinement level and record its coordinates.
+      Save each component's actual sample positions and time,
+      including the longitudinal half-cell offset of $B_y$.
+      Each analytic profile is evaluated at the corresponding numerical positions and time.
+    ],
+    [*Full-domain field snapshots*],
+    [
+      Also save the numerical vector fields $vb(E)$ and $vb(B)$ over the full 3D domain at roughly quarter-run intervals,
+      including the initial and final run states.
+      Use a configurable step interval,
+      with the default
+      $
+        N_"save" = floor(T/(4 h_t) + 1/2).
+      $
+      This gives intervals of 467, 934, 1868 and 3736 steps on the four meshes,
+      so the interval in physical time stays fixed under refinement.
+      Write a frame at steps $0, N_"save", 2 N_"save", dots$ within the run,
+      and also at the final step if it is not already selected.
+      Record the component positions, actual field times and magnetic reconstruction convention with the snapshots.
+      Raw magnetic output and R2-averaged magnetic output must be identified explicitly.
+    ],
+  )
+
 == Experiment E01 initialization/sampling method
 We choose initialization option A described in `../experiment_definition_draft.md`,
 that is we sample the continuum potential history directly:
