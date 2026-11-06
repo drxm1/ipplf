@@ -16,6 +16,8 @@ Study: Convergence study against the continuum solution w.r.t. refinement. What 
 ### The analytic case of E01 and sampling/initialization
 The exact analytic reference case and how we initialize/sample the field storage for E01 is described in `./E01.typ`.
 
+### Measured quantities
+Also described in `./E01.typ`.
 
 ## Experiment 02 (E02)
 Exactly the same setup as E01, except that the z-boundary now has Mur BCs enabled.
