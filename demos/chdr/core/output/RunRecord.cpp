@@ -34,7 +34,7 @@ namespace chdr::output {
     namespace run_record_detail {
         using Node = conduit_cpp::Node;
 
-        void geometryRecord(Node node, const simulation::RunBox& box) {
+        void geometryRecord(Node node, const simulation::ChdrCartesianGridSettings& box) {
             node["cells"].set(std::vector<int>(box.cells_m.begin(), box.cells_m.end()));
             node["spacing"].set(std::vector<double>(box.spacing_m.begin(), box.spacing_m.end()));
             node["periodic"].set(std::vector<int>(box.periodic_m.begin(), box.periodic_m.end()));

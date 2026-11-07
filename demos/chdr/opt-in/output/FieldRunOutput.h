@@ -61,7 +61,8 @@ namespace chdr::output {
     class FieldRunOutput {
     public:
         template <class Solver>
-        FieldRunOutput(const std::string& directory, const simulation::RunBox& box, Solver& state,
+        FieldRunOutput(const std::string& directory,
+                       const simulation::ChdrCartesianGridSettings& box, Solver& state,
                        const material::MaterialOwner& owner, const std::string& metadata,
                        input::UnitSystem units = {})
             : writer_m(directory, {box.cells_m, {0, 0, 0}, box.spacing_m},

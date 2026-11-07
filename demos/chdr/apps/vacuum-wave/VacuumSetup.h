@@ -43,6 +43,6 @@ namespace chdr::apps::vacuumWave {
         }
     };
 
-    simulation::RunBox vacuumBox(int cellsZ = 64);
-    simulation::SolverSettings vacuumSettings(const simulation::RunBox& box);
+    simulation::ChdrCartesianGridSettings vacuumBox(int cellsZ = 64);
+    simulation::ChdrSolverSettings vacuumSettings(const simulation::ChdrCartesianGridSettings& box);
 }  // namespace chdr::apps::vacuumWave

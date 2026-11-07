@@ -65,8 +65,9 @@ namespace {
     /// Box open in x and z, periodic in y, split along z: layout, safety factor 0.7 and the
     /// observer call sequence of checkObservations().
     TEST(Simulation, OpenBoxObserver) {
-        const simulation::RunBox box{{8, 2, 8}, {1, 1, 1}, 0, {false, true, false}, 2};
-        const simulation::SolverSettings settings{
+        const simulation::ChdrCartesianGridSettings box{
+            {8, 2, 8}, {1, 1, 1}, 0, {false, true, false}, 2};
+        const simulation::ChdrSolverSettings settings{
             .safetyFactor_m   = 0.7,
             .reconstruction_m = EBReconstructionConvention::R1,
             .spatial_m        = SpatialDiscretization::Collocated,
@@ -87,8 +88,8 @@ namespace {
     /// Without a formulation the solver has no material owner and completes 1 solve for run(1);
     /// a permittivity of 2.13 on this vacuum path throws std::invalid_argument.
     TEST(Simulation, VacuumSelection) {
-        const simulation::RunBox box{{8, 2, 8}, {1, 1, 1}};
-        const simulation::SolverSettings settings{.formulation_m = std::nullopt};
+        const simulation::ChdrCartesianGridSettings box{{8, 2, 8}, {1, 1, 1}};
+        const simulation::ChdrSolverSettings settings{.formulation_m = std::nullopt};
         Simulation run(box, UniformMaterial{}, settings);
         EXPECT_FALSE(run.solver().hasMaterial());
         run.load(ZeroPotential{});
@@ -107,7 +108,7 @@ namespace {
         if (ippl::Comm->size() != 2)
             GTEST_SKIP() << "The asymmetric seam check requires two ranks";
         for (int seam : {1, 3}) {
-            const simulation::RunBox box{{4, 2, 2}, {1, 1, 1}, seam};
+            const simulation::ChdrCartesianGridSettings box{{4, 2, 2}, {1, 1, 1}, seam};
             EXPECT_THROW((Simulation{box, UniformMaterial{}}), std::runtime_error);
         }
     }
@@ -115,8 +116,8 @@ namespace {
     /// The solver uses the explicit step 0.5, and the manager's E field is the solver's E field;
     /// a step equal to the stability bound or equal to -1 throws std::invalid_argument.
     TEST(Simulation, ExplicitStep) {
-        const simulation::RunBox box{{8, 2, 8}, {1, 1, 1}};
-        simulation::SolverSettings settings{.formulation_m = std::nullopt, .timeStep_m = 0.5};
+        const simulation::ChdrCartesianGridSettings box{{8, 2, 8}, {1, 1, 1}};
+        simulation::ChdrSolverSettings settings{.formulation_m = std::nullopt, .timeStep_m = 0.5};
         Simulation run(box, UniformMaterial{}, settings);
         EXPECT_DOUBLE_EQ(run.solver().getDt(), 0.5);
         EXPECT_EQ(&run.fields().getE(), &run.solver().electricField());

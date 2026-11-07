@@ -10,7 +10,7 @@ namespace chdr::apps::vacuumWave {
      * The box is [0,1/8] x [0,1/8] x [0,1]; other resolutions are rejected.
      * The simulation manager allocates its fields with the common one-cell halos.
      */
-    simulation::RunBox vacuumBox(int cellsZ) {
+    simulation::ChdrCartesianGridSettings vacuumBox(int cellsZ) {
         if (cellsZ != 64 && cellsZ != 128)
             throw std::invalid_argument("Supported z cell counts are 64 and 128");
         const double spacing = 1.0 / cellsZ;
@@ -28,8 +28,9 @@ namespace chdr::apps::vacuumWave {
      * Standard bound [fallahi2020mithra20fullwavesimulation, Eqs. (3.19)-(3.20)].
      * Keeping the exact step preserves the benchmark's quarter-period checkpoints.
      */
-    simulation::SolverSettings vacuumSettings(const simulation::RunBox& box) {
-        simulation::SolverSettings settings;
+    simulation::ChdrSolverSettings vacuumSettings(
+        const simulation::ChdrCartesianGridSettings& box) {
+        simulation::ChdrSolverSettings settings;
         settings.reconstruction_m = EBReconstructionConvention::R1;
         settings.spatial_m        = SpatialDiscretization::Collocated;
         settings.formulation_m    = std::nullopt;

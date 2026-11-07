@@ -133,7 +133,8 @@ namespace chdr::apps::planarInterface {
     output::RunRecordDescription describePlane(const NormalPlane& p, InterfaceSolver& solver,
                                                const input::ChdrYamlRunInput& request,
                                                int cadence) {
-        const simulation::RunBox box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m};
+        const simulation::ChdrCartesianGridSettings box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m},
+                                                        p.h_m};
         auto result = output::describeRun("planar-interface", box, solver, p.steps_m,
                                           "case=plane polarization=TE epsilon=2.13");
         output::recordObservation(result, "fourier", {});

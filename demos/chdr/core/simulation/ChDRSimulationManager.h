@@ -38,7 +38,8 @@ namespace chdr::simulation {
          * and solve count. The explicit safety factor then sets the step used by load().
          */
         template <class Map>
-        ChDRSimulationManager(RunBox box, Map map, SolverSettings settings = {})
+        ChDRSimulationManager(ChdrCartesianGridSettings box, Map map,
+                              ChdrSolverSettings settings = {})
             : fields_m(solver::makeBoxFieldContainer(box.cells_m, box.lengths(), box.splitAxis_m,
                                                      box.periodic_m)) {
             applyPartitionSeam(box);
@@ -119,7 +120,7 @@ namespace chdr::simulation {
          * The bound and Standard/NonStandard endpoint policy belong to ChdrSolver; no new
          * stability formula is introduced here. Selection precedes history initialization.
          */
-        void configureTimeStep(const SolverSettings& settings) {
+        void configureTimeStep(const ChdrSolverSettings& settings) {
             if (!settings.timeStep_m) {
                 solver_m->setSafetyFactor(settings.safetyFactor_m);
                 return;
@@ -136,7 +137,7 @@ namespace chdr::simulation {
          * already validated by makeBoxFieldContainer. All field allocations subsequently use
          * this same partition, including the material distribution.
          */
-        void applyPartitionSeam(const RunBox& box) {
+        void applyPartitionSeam(const ChdrCartesianGridSettings& box) {
             if (!box.seam_m)
                 return;
             int size = 1;
@@ -153,7 +154,7 @@ namespace chdr::simulation {
 
         /// Construct the selected material update or the explicitly requested unit-permittivity
         /// path.
-        std::unique_ptr<Solver> makeSolver(const SolverSettings& settings) {
+        std::unique_ptr<Solver> makeSolver(const ChdrSolverSettings& settings) {
             if (settings.formulation_m)
                 return std::make_unique<Solver>(
                     fields_m.getJ(), fields_m.getE(), fields_m.getB(), settings.reconstruction_m,

@@ -15,8 +15,8 @@ namespace chdr::apps::planarInterface {
     /// Numerical settings and initial data of one existing periodic packet case.
     struct PacketCase {
         std::string name_m;
-        simulation::RunBox box_m;
-        simulation::SolverSettings solver_m;
+        simulation::ChdrCartesianGridSettings box_m;
+        simulation::ChdrSolverSettings solver_m;
         material::PlanarSlab slab_m;
         PacketStart start_m;
         int steps_m;

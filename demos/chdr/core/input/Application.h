@@ -24,7 +24,7 @@ namespace chdr::input {
     ChdrYamlRunInput applicationInput(const std::vector<std::string>& args);
 
     /** @brief Run an experiment with YAML input selected by --input FILE.
-     * @param execute Function taking const RunInput& and returning void. It validates the
+     * @param execute Function taking const ChdrYamlRunInput& and returning void. It validates the
      * experiment settings, constructs the simulation and performs its measurements/output.
      * @details Initialize IPPL before reading input and finalize it after execute returns.
      * Simulation and output objects must be destroyed before execute returns.

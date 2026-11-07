@@ -7,7 +7,7 @@ processed before the YAML selector.
 
 `Application.h` declares `runApplication(argc, argv, execute)`;
 `Application.cpp` handles input selection, IPPL initialization/finalization and fatal
-error reporting. The supplied function has signature `void(const RunInput&)`.
+error reporting. The supplied function has signature `void(const ChdrYamlRunInput&)`.
 `ChDRSimulationManager` owns and advances the simulation. The
 application supplies its material, initial data, measurements and interpretation
 of their results. Measurements use the manager's existing callback; a shared
@@ -144,7 +144,7 @@ Source identity is refreshed at each build; a failed Git query is labelled
 `unrecorded`. It is not a hash of every source or output file. `status: completed` means the
 application returned successfully; it is not a physics-accuracy claim.
 
-To connect a case, supply an execution function taking `const RunInput&` to
+To connect a case, supply an execution function taking `const ChdrYamlRunInput&` to
 `runApplication`. Validate the supported names in that function,
 resolve the duration after selecting the actual time step, and
 attach its existing measurements to the manager callback. Call each measurement

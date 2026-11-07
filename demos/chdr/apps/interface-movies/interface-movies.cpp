@@ -58,7 +58,8 @@ namespace chdr::apps::interfaceMovies {
     }
 
     /// Keep the existing CSV metadata while the common run record stores structured settings.
-    std::string movieMetadata(const MovieCase& selected, const simulation::SolverSettings& settings,
+    std::string movieMetadata(const MovieCase& selected,
+                              const simulation::ChdrSolverSettings& settings,
                               const output::FieldRunSettings& observations) {
         std::ostringstream text;
         text << std::setprecision(17) << "case=" << selected.name_m << movieBoxMetadata(selected)
@@ -94,7 +95,7 @@ namespace chdr::apps::interfaceMovies {
     /// Execute one existing case through the shared lifecycle and write its completed run record.
     template <class Solver, class Region>
     void runMovieCase(const input::ChdrYamlRunInput& request, MovieCase selected, Region region) {
-        const simulation::SolverSettings settings;
+        const simulation::ChdrSolverSettings settings;
         simulation::ChDRSimulationManager<Solver> run(
             selected.box_m, material::TwoMaterialMap{region, selected.epsilon_m, 1.0}, settings);
         selected.steps_m = input::resolvedSteps(request, run.solver().getDt(), selected.steps_m);

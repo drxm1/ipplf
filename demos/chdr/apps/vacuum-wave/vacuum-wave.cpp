@@ -208,7 +208,7 @@ namespace {
     }
 
     /// Record the actual schedules and distinguish normalized mode coefficients from fields.
-    void recordRun(VacuumSimulation& run, const chdr::simulation::RunBox& box,
+    void recordRun(VacuumSimulation& run, const chdr::simulation::ChdrCartesianGridSettings& box,
                    const chdr::input::ChdrYamlRunInput& input, int steps,
                    chdr::simulation::ObservationSchedule schedule) {
         auto description = chdr::output::describeRun(
