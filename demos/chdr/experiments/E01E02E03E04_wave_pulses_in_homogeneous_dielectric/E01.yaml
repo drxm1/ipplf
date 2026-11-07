@@ -1,0 +1,7 @@
+schema_version: 1
+case: E01
+units: {system: normalized}
+parameters:
+  cells_per_pulse: 32
+output:
+  directory: build/results/e01-coarse
