@@ -9,7 +9,7 @@ From the project root, build and run:
 
 ```sh
 bash scripts/build-ippl.sh --worktree main build --target experiments-wave-pulses-in-homogeneous-dielectric
-OMP_NUM_THREADS=4 OMP_PROC_BIND=false \
+OMP_NUM_THREADS=16 OMP_PLACES=cores OMP_PROC_BIND=spread \
   build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric --input ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01.yaml
 ```
 
