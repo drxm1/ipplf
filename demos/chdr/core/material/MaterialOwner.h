@@ -23,10 +23,11 @@ namespace chdr::material {
     using Policy               = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
 
     /// Require const invocation with the material sampling arguments and an exact double result.
+    using EpsilonrType = double;
     template <class T>
     concept PermittivitySampler =
         requires(const T& sample, const CellIndex& cellIdx, bool& marked) {
-            { sample(cellIdx, Position{}, marked) } -> std::same_as<double>;
+            { sample(cellIdx, Position{}, marked) } -> std::same_as<EpsilonrType>;
         };
 
     /** @brief Global statistics of the owned relative-permittivity samples in epsilon_m, excluding
