@@ -46,16 +46,16 @@ namespace chdr::material::test {
      * oracle. The statistics scan visits global owned cells exactly once, excluding
      * ghosts. Both maps supplied here contain only finite values.
      */
-    template <class Map>
-    void checkMap(Map map, unsigned axis) {
+    template <PermittivitySampler Sampler>
+    void checkMap(const Sampler map, unsigned axis) {
         auto grid = makeGrid(axis, false);
         const MaterialOwner owner(grid.getMesh(), grid.getFL(), map);
-        const auto sample = [&](CellIndex global, bool& marked) {
+        const auto sample = [&](const CellIndex global, bool& marked) {
             Position centre;
             for (unsigned d = 0; d < 3; ++d)
                 centre[d] = grid.getMesh().getOrigin()[d]
                             + (global[d] + 0.5) * grid.getMesh().getMeshSpacing()[d];
-            return map(global, centre, marked);
+            return map(global, Position{centre}, marked);
         };
         EXPECT_EQ(mismatches(owner.epsilon(), grid.getFL(),
                              [&](CellIndex global) {

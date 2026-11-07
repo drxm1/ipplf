@@ -32,21 +32,22 @@ namespace chdr::simulation {
         using Observer = std::function<void(long long, Solver&, const material::MaterialOwner&)>;
 
         /** @brief Allocate the problem and select its timestep before loading initial histories.
+         * @tparam Sampler Material sampler satisfying material::PermittivitySampler.
          * @details Validate local extents collectively after repartitioning and before allocation.
          * Material and field storage share one mesh and layout. The solver constructor
          * binds these fields and selects its update; initialize() clears the potential histories
          * and solve count. The explicit safety factor then sets the step used by load().
          */
-        template <class Map>
-        ChDRSimulationManager(ChdrCartesianGridSettings box, Map map,
+        template <material::PermittivitySampler Sampler>
+        ChDRSimulationManager(ChdrCartesianGridSettings box, Sampler samplePermittivity,
                               ChdrSolverSettings settings = {})
             : fields_m(solver::makeBoxFieldContainer(box.cells_m, box.lengths(), box.splitAxis_m,
                                                      box.periodic_m)) {
             applyPartitionSeam(box);
             checkLocalDomain(fields_m.getFL());
             initializeFieldStorage(fields_m);
-            owner_m  = std::make_unique<material::MaterialOwner>(fields_m.getMesh(),
-                                                                 fields_m.getFL(), map);
+            owner_m = std::make_unique<material::MaterialOwner>(
+                fields_m.getMesh(), fields_m.getFL(), samplePermittivity);
             solver_m = makeSolver(settings);
             solver_m->initialize();
             configureTimeStep(settings);
