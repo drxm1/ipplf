@@ -1,9 +1,9 @@
 # Homogeneous dielectric pulse experiments
 
-The current executable implements E01's longitudinal refinement levels and its four
-global error measurements. The reference and experiment protocol are in
-[E01.typ](E01.typ). Longitudinal profiles and full-domain field snapshots remain
-to be implemented.
+The current executable implements E01's longitudinal refinement levels,
+four global error measurements and matching longitudinal profiles.
+The reference and experiment protocol are in [E01.typ](E01.typ).
+Full-domain field snapshots remain to be implemented.
 
 From the project root, build and run:
 
@@ -16,9 +16,9 @@ OMP_NUM_THREADS=16 OMP_PLACES=cores OMP_PROC_BIND=spread \
 The supplied input selects the full E01 target on the coarsest `16 x 16 x 704`
 periodic mesh, advancing 1869 steps with timestep `1/32`.
 `output.directory` must be new or empty; paths are relative to the process's
-working directory. The run writes `errors.csv` and, after successful completion,
-the common `run.json` provenance record. Omitting `output` writes the CSV to
-standard output instead.
+working directory. The run writes `errors.csv`, `profiles.csv` and,
+after successful completion, the common `run.json` provenance record.
+Omitting `output` writes only the error CSV to standard output.
 
 ## Refinement selection
 
@@ -88,3 +88,21 @@ comparison time is half a step earlier. Initialization-only runs have no extra
 endpoint rows. A complete run has twenty measurement rows.
 
 The first results are single-grid comparisons, not a convergence study.
+
+## Longitudinal profiles
+
+`profiles.csv` contains numerical and analytic `Ax`, `Ex` and R2 `By`
+at their respective error observations, including initialization and any
+`partial_final` endpoint. Each row records the component, checkpoint,
+target time, completed-step index, actual time, global z-cell index `k`,
+native coordinates `x,y,z` and the two values.
+
+All refinements sample the fixed transverse cell indices `(i,j) = (7,7)`.
+For these components, this gives the same physical line `x = 1/2, y = 15/32`.
+Use the recorded `z` coordinates for plotting: `By` is half a longitudinal
+cell beyond `Ax` and `Ex`, following the staggered placement in E01.typ.
+Its last owned sample is at `z = 44` and is retained; ghost cells are excluded.
+Only the selected line is transferred to rank zero for writing.
+
+A complete run contains five observations per component, giving `15 * Nz`
+profile rows (10,560 on the coarsest mesh), in addition to the CSV header.

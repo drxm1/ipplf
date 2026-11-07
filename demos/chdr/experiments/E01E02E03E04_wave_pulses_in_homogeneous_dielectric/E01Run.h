@@ -1,5 +1,5 @@
 /** @file E01Run.h
- * @brief E01 observation times, evolution and global-error output.
+ * @brief E01 observation times, evolution, global errors and longitudinal profiles.
  */
 #pragma once
 
@@ -20,6 +20,7 @@
 #include "core/output/RunRecord.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Measurements.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Profiles.h"
 
 namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
     using E01Solver     = solver::ChdrSolver<solver::StandardSolverPeriodic>;
@@ -157,17 +158,18 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         /// Measure E01.meas04 at the integer time of the current vector-potential slot.
         inline void observePotential(E01Solver& state, const E01Reference& reference,
                                      const char* checkpoint, double target, long long step,
-                                     ErrorCsv& csv) {
+                                     ErrorCsv& csv, E01ProfileCsv& profiles) {
             const double time = state.labelTime(Quantity::VectorPotential, step);
             const auto error  = measureE01FieldError(state.A_n, reference, state.levelContract(),
                                                      Quantity::VectorPotential, time);
             csv.row("A_L2", checkpoint, target, step, time, error.relativeL2_m);
+            profiles.write(state.A_n, Quantity::VectorPotential, checkpoint, target, step, time);
         }
 
         /// Measure E01.meas01-03 using each reconstructed field's actual R2 time label.
         inline void observeFields(E01Solver& state, const E01Reference& reference,
                                   const char* checkpoint, double target, long long step,
-                                  ErrorCsv& csv) {
+                                  ErrorCsv& csv, E01ProfileCsv& profiles) {
             const double electricTime = state.labelTime(Quantity::Electric, step);
             const double magneticTime = state.labelTime(Quantity::Magnetic, step);
             const auto electric =
@@ -179,6 +181,10 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             csv.row("E_L2", checkpoint, target, step, electricTime, electric.relativeL2_m);
             csv.row("E_Linf", checkpoint, target, step, electricTime, electric.relativeLinf_m);
             csv.row("B_L2", checkpoint, target, step, magneticTime, magnetic.relativeL2_m);
+            profiles.write(state.electricField(), Quantity::Electric, checkpoint, target, step,
+                           electricTime);
+            profiles.write(state.magneticField(), Quantity::Magnetic, checkpoint, target, step,
+                           magneticTime);
         }
 
         /// Track which quantity groups already have a scheduled row at the current state.
@@ -188,17 +194,18 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
 
         /// All ranks enter the same measurement branches, including their global reductions.
         inline ObservedGroups observeScheduled(E01Solver& state, const E01Reference& reference,
-                                               const RunPlan& plan, long long step, ErrorCsv& csv) {
+                                               const RunPlan& plan, long long step, ErrorCsv& csv,
+                                               E01ProfileCsv& profiles) {
             ObservedGroups observed;
             for (const auto& checkpoint : plan.checkpoints_m) {
                 if (step == checkpoint.potentialStep_m) {
                     observePotential(state, reference, checkpoint.name_m, checkpoint.targetTime_m,
-                                     step, csv);
+                                     step, csv, profiles);
                     observed.potential_m = true;
                 }
                 if (step == checkpoint.fieldStep_m) {
                     observeFields(state, reference, checkpoint.name_m, checkpoint.targetTime_m,
-                                  step, csv);
+                                  step, csv, profiles);
                     observed.fields_m = true;
                 }
             }
@@ -211,20 +218,20 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
          * for comparisons. Scheduled quantity rows at that state are not duplicated.
          */
         inline void observe(E01Solver& state, const E01Reference& reference, const RunPlan& plan,
-                            long long step, ErrorCsv& csv) {
+                            long long step, ErrorCsv& csv, E01ProfileCsv& profiles) {
             if (step == 0) {
-                observePotential(state, reference, "initial", 0, step, csv);
-                observeFields(state, reference, "initial", 0, step, csv);
+                observePotential(state, reference, "initial", 0, step, csv, profiles);
+                observeFields(state, reference, "initial", 0, step, csv, profiles);
                 return;
             }
-            const auto observed = observeScheduled(state, reference, plan, step, csv);
+            const auto observed = observeScheduled(state, reference, plan, step, csv, profiles);
             if (step != plan.steps_m || plan.steps_m == plan.fullSteps_m)
                 return;
             const double target = state.labelTime(Quantity::VectorPotential, step);
             if (!observed.potential_m)
-                observePotential(state, reference, "partial_final", target, step, csv);
+                observePotential(state, reference, "partial_final", target, step, csv, profiles);
             if (!observed.fields_m)
-                observeFields(state, reference, "partial_final", target, step, csv);
+                observeFields(state, reference, "partial_final", target, step, csv, profiles);
         }
 
         /// Record the analytic input values without inferring them from numerical field samples.
@@ -259,7 +266,18 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             node["magnetic_convention"] = "R2 averaged magnetic field";
         }
 
-        /// Publish the common provenance record only after the selected run and CSV finish.
+        /// Identify the fixed native line and its connection to the error observations.
+        inline void recordProfiles(output::RunRecordDescription& description) {
+            auto profiles                   = description.effective_m["profiles"];
+            profiles["file"]                = "profiles.csv";
+            profiles["global_cell_i"]       = e01ProfileDetail::LineCellX;
+            profiles["global_cell_j"]       = e01ProfileDetail::LineCellY;
+            profiles["components"]          = "Ax,Ex,By";
+            profiles["magnetic_convention"] = "R2 averaged magnetic field";
+            profiles["schedule"] = "same observations as the corresponding global errors";
+        }
+
+        /// Publish the common provenance record only after the selected run and CSVs finish.
         inline void recordRun(E01Simulation& run, const input::ChdrYamlRunInput& request,
                               const simulation::ChdrCartesianGridSettings& grid,
                               const E01Reference& reference, const RunPlan& plan) {
@@ -267,17 +285,19 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                 return;
             auto description = output::describeRun(
                 "experiments-wave-pulses-in-homogeneous-dielectric", grid, run.solver(),
-                plan.steps_m, "E01 longitudinal refinement; global errors only");
+                plan.steps_m,
+                "E01 longitudinal refinement; global errors and longitudinal profiles");
             description.effective_m["material/relative_permittivity"] =
                 run.material().homogeneousValue();
             recordReference(description, reference);
             recordSchedule(description, plan);
+            recordProfiles(description);
             output::writeRunRecord(request.outputDirectory_m, request, description,
                                    run.solver().A_n.getLayout().comm);
         }
     }  // namespace e01_run_detail
 
-    /** @brief Advance the loaded E01 pulse and measure the four agreed global errors.
+    /** @brief Advance the E01 pulse and save its four global errors and longitudinal profiles.
      * @details The manager observes state zero and every completed solve. Expensive reductions
      * occur only at the independently selected potential/field checkpoints and, for a short
      * run, its additional endpoint. The output and schedule implement E01.typ, meas01-04.
@@ -289,10 +309,13 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         const auto plan = e01_run_detail::runPlan(request, reference, run.solver().getDt());
         e01_run_detail::ErrorCsv csv(request.outputDirectory_m, grid, run.solver().getDt(),
                                      run.solver().A_n.getLayout().comm);
+        E01ProfileCsv profiles(request.outputDirectory_m, reference, run.solver().levelContract(),
+                               run.solver().A_n.getLayout().comm);
         run.advance(plan.steps_m, [&](long long step, E01Solver& state, const auto&) {
-            e01_run_detail::observe(state, reference, plan, step, csv);
+            e01_run_detail::observe(state, reference, plan, step, csv, profiles);
         });
         csv.finish();
+        profiles.finish();
         e01_run_detail::recordRun(run, request, grid, reference, plan);
     }
 }  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric
