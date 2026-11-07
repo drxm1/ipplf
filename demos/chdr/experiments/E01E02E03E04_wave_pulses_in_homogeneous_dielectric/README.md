@@ -5,16 +5,23 @@ four global error measurements, matching longitudinal profiles and full-domain
 snapshots of E, R2-averaged B and raw B.
 The reference and experiment protocol are in [E01.typ](E01.typ).
 
-From the project root, build and run:
+From the project root, build and run the coarsest level:
 
 ```sh
 bash scripts/build-ippl.sh --worktree main build --target experiments-wave-pulses-in-homogeneous-dielectric
-OMP_NUM_THREADS=16 OMP_PLACES=cores OMP_PROC_BIND=spread \
-  build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric --input ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01.yaml
+mkdir -p build/results
+(
+  cd build/results
+  OMP_NUM_THREADS=4 OMP_PLACES=threads OMP_PROC_BIND=spread \
+    mpiexec -n 8 --map-by slot:PE=4:HWTCPUS --bind-to hwthread --report-bindings \
+    ../ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric \
+    --input ../../ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/inputs/E01-n32.yaml
+)
 ```
 
-The supplied input selects the full E01 target on the coarsest `16 x 16 x 704`
+`inputs/E01-n32.yaml` selects the full E01 target on the coarsest `16 x 16 x 704`
 periodic mesh, advancing 1869 steps with timestep `1/32`.
+The command above writes to `build/results/n32/`.
 `output.directory` must be new or empty; paths are relative to the process's
 working directory. The run writes `errors.csv`, `profiles.csv`, field frames under
 `fields/` and,
@@ -23,13 +30,10 @@ Omitting `output` writes only the error CSV to standard output.
 
 ## Refinement selection
 
-Set `parameters.cells_per_pulse` to the number of z-cells across the full pulse
-width, as defined in E01.typ. This parameter is required. Each invocation runs one level:
-
-```yaml
-parameters: {cells_per_pulse: 64}
-output: {directory: build/results/e01-n64}
-```
+Use the corresponding `inputs/E01-n<N>.yaml` for each refinement level.
+These are the same files listed by `E01-study.yaml`; each can also run independently.
+Their required `parameters.cells_per_pulse` value specifies the number of z-cells
+across the full pulse width, as defined in E01.typ.
 
 | Cells per pulse | Z-cells | Z-spacing | Timestep | Full-run steps |
 |---|---:|---|---|---:|
@@ -46,7 +50,7 @@ actual mesh, timestep and selected observation indices.
 
 ## Short runs
 
-To inspect initialization or make a short run, copy the input, set `run.steps`
+To inspect initialization or make a short run, copy a level input, set `run.steps`
 and change `output.directory`, for example:
 
 ```yaml
@@ -101,9 +105,39 @@ simulation settings in memory.
 To launch the study from the project root after building:
 
 ```sh
-OMP_NUM_THREADS=16 OMP_PLACES=cores OMP_PROC_BIND=spread \
+OMP_NUM_THREADS=4 OMP_PLACES=threads OMP_PROC_BIND=spread \
+  mpiexec -n 8 --map-by slot:PE=4:HWTCPUS --bind-to hwthread --report-bindings \
   build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric --input ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01-study.yaml
 ```
+
+The launch examples use eight MPI ranks with four OpenMP threads per rank,
+using the PC's 32 hardware threads across sixteen physical cores.
+Open MPI's `PE=4:HWTCPUS` mapping and hardware-thread binding assign a separate
+set of four hardware threads to each rank; see the
+[Open MPI 5.0.10 binding documentation](https://docs.open-mpi.org/en/v5.0.10/man-openmpi/man1/mpirun.1.html#mapping-ranking-and-binding-oh-my).
+`OMP_PLACES=threads` places each OpenMP thread on a hardware-thread place;
+see [GNU libgomp's placement documentation](https://gcc.gnu.org/onlinedocs/libgomp/OMP_005fPLACES.html).
+The MPI rank count comes from the launcher;
+the individual YAML files need no changes.
+
+E01's `splitAxis_m = 2` partitions the domain only along z.
+With eight ranks, all prescribed meshes divide evenly into eight slabs,
+with seven internal boundaries at z = 5.5, 11, 16.5, 22, 27.5, 33 and 38.5.
+The pulse centre travels from z = 2 to z = 42, crossing all seven.
+
+After each level completes, its `run.json` records the actual MPI rank count
+in `execution.ranks` and every rank's owned grid bounds in `execution.rank_bounds`.
+`execution.rank_bounds_order` describes the flattened ordering.
+The record also includes the rank-zero Kokkos thread concurrency in
+`build.host_concurrency`, plus `OMP_NUM_THREADS` and `OMP_PROC_BIND` in
+`execution.environment`. The detailed CPU-affinity report from
+`--report-bindings` is printed to the terminal; it is not stored in `run.json`.
+
+A single-rank run remains useful as a convergence and decomposition reference.
+For a direct rank-count comparison, run the same level input in a separate
+working directory using one rank and sixteen threads, then compare its errors
+and profiles with the eight-rank result. That comparison keeps the mesh and
+physical setup fixed. It is separate from the four-level refinement sequence.
 
 The study input's `parameters.input_files` paths are relative to the invocation
 directory. Each run file owns its case, parameters, units and observation settings.
@@ -130,7 +164,6 @@ n256/
 
 `study.json` records which runs have completed. Each run releases its simulation
 storage before the next begins. All MPI ranks execute the same sequence.
-The existing `E01.yaml` still selects a single run.
 
 The Python analysis is a normal source file copied into the result folder.
 It needs Python 3 and Matplotlib. With `parameters.run_analysis: true`,
