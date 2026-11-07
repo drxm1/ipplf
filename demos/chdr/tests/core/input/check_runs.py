@@ -78,6 +78,25 @@ def vtk(path, binary):
     return tree.find('ImageData').attrib, metadata, arrays
 
 
+def check_field_metadata(metadata, scaled_metadata, movie):
+    """Check native placements independently and require explicit per-array SI factors."""
+    offsets = {'E_raw': [0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5],
+               'B_raw': [0, 0.5, 0.5, 0.5, 0, 0.5, 0.5, 0.5, 0]}
+    for name, factor in (('E_raw', ELECTRIC), ('B_raw', MAGNETIC)):
+        expected = offsets[name] if movie else [0.0] * 9
+        key = f'{name}_component_offsets'
+        assert metadata[key] == scaled_metadata[key] == expected
+        close(metadata[f'{name}_scale_from_solver'][0], 1, name)
+        close(scaled_metadata[f'{name}_scale_from_solver'][0], factor, name)
+    for key, factor in (('length_scale_from_solver', LENGTH), ('time_scale_from_solver', TIME)):
+        close(metadata[key][0], 1, key)
+        close(scaled_metadata[key][0], factor, key)
+    for key, value in (('reconstruction_convention', int(movie)),
+                       ('spatial_discretization', int(movie)),
+                       ('phi_is_zero_declared', int(not movie))):
+        assert metadata[key] == scaled_metadata[key] == [value]
+
+
 def check_frames(normal, physical, record, movie):
     series = [json.loads((path / 'wave.pvti.series').read_text())['files']
               for path in (normal, physical)]
@@ -99,12 +118,12 @@ def check_frames(normal, physical, record, movie):
                 close(b, a * LENGTH, key)
         step = metadata['step'][0]
         assert metadata['dt'] == [dt], 'run record must preserve the round-trip VTK timestep'
-        for key, expected in {'dt': dt, 'TimeValue': step*dt, 'potential_time': step*dt,
-                              'E_time': (step-0.5)*dt, 'B_time': step*dt}.items():
+        for key, expected in {'dt': dt, 'TimeValue': step*dt, 'series_time': step*dt,
+                              'E_raw_time': (step-0.5)*dt, 'B_raw_time': step*dt}.items():
             close(metadata[key][0], expected, key)
             close(scaled_metadata[key][0], expected * TIME, key)
         assert metadata['normalization'] == [1] and scaled_metadata['normalization'] == [0]
-        assert metadata.get('component_offsets') == scaled_metadata.get('component_offsets')
+        check_field_metadata(metadata, scaled_metadata, movie)
         for key, factor in (('E_raw', ELECTRIC), ('B_raw', MAGNETIC)):
             assert len(arrays[key]) == len(scaled_arrays[key]) == 3 * math.prod(cells)
             for a, b in zip(arrays[key], scaled_arrays[key]):

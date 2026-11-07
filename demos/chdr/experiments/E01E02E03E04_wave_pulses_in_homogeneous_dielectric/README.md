@@ -1,9 +1,9 @@
 # Homogeneous dielectric pulse experiments
 
 The current executable implements E01's longitudinal refinement levels,
-four global error measurements and matching longitudinal profiles.
+four global error measurements, matching longitudinal profiles and full-domain
+snapshots of E, R2-averaged B and raw B.
 The reference and experiment protocol are in [E01.typ](E01.typ).
-Full-domain field snapshots remain to be implemented.
 
 From the project root, build and run:
 
@@ -16,7 +16,8 @@ OMP_NUM_THREADS=16 OMP_PLACES=cores OMP_PROC_BIND=spread \
 The supplied input selects the full E01 target on the coarsest `16 x 16 x 704`
 periodic mesh, advancing 1869 steps with timestep `1/32`.
 `output.directory` must be new or empty; paths are relative to the process's
-working directory. The run writes `errors.csv`, `profiles.csv` and,
+working directory. The run writes `errors.csv`, `profiles.csv`, field frames under
+`fields/` and,
 after successful completion, the common `run.json` provenance record.
 Omitting `output` writes only the error CSV to standard output.
 
@@ -55,7 +56,7 @@ output: {directory: build/results/e01-short}
 
 `run.steps: 0` records initialization only. Limits from zero through the selected
 level's full-run step count are supported. `run.duration`, SI units, other
-application parameters and observation overrides are rejected.
+application parameters and observation names other than `fields` are rejected.
 
 ## Error observations
 
@@ -106,3 +107,43 @@ Only the selected line is transferred to rank zero for writing.
 
 A complete run contains five observations per component, giving `15 * Nz`
 profile rows (10,560 on the coarsest mesh), in addition to the CSV header.
+
+## Full-domain snapshots
+
+Open `fields/fields.pvti.series` in ParaView to load the full field series.
+Each selected solver state contains three vector arrays: `E`, `B_R2` and
+`B_raw`. The first two are the fields used in the error measurements;
+raw B is reconstructed into separate storage only when saving a frame.
+All ranks write their owned cells through the shared `core/output/FieldOutput.h`.
+
+The default interval is the nearest integer step to the first quarter target,
+as specified in E01.typ: 467, 934, 1868 and 3736 steps on the four main meshes.
+Snapshots include initialization and the final completed state,
+without duplicating a frame when the final state is already on the cadence.
+Thus the full coarsest run saves steps 0, 467, 934, 1401, 1868 and 1869.
+A short run retains the same interval and includes its own final state.
+
+Use the common observation options to override this schedule, for example:
+
+```yaml
+observations:
+  fields:
+    every: 100
+    include_final: true
+```
+
+`first`, `last` and `enabled` are supported as described in
+[the common input documentation](../../core/input/README.md#observation-schedules).
+`enabled: false` disables snapshots while keeping errors and profiles.
+By default, snapshots are enabled when `output.directory` is supplied;
+explicitly enabling them requires that directory.
+These options do not change the error or longitudinal-profile observations.
+The resolved field schedule is recorded in `run.json`.
+
+Each array has its own `<name>_time` and `<name>_component_offsets` metadata,
+derived from the solver's `LevelContract`. The offsets form three tuples,
+one per Cartesian component, in units of mesh spacing from the cell centre.
+`<name>_scale_from_solver` records the value conversion factor (one for E01).
+The series uses the potential time; E and R2 B carry their half-step time,
+while raw B carries the integer time. Preserve these individual time labels
+when using the snapshots for comparisons; see the reconstruction convention in E01.typ.

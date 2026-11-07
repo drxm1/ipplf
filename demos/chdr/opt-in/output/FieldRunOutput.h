@@ -35,18 +35,6 @@ namespace chdr::output {
                 input::observationEnabled(request, "diagnostics")};
     }
 
-    /// Record Cartesian component offsets in the writer's E-then-B component order.
-    inline std::array<double, 18> fieldOffsets(const LevelContract& contract) {
-        std::array<double, 18> result{};
-        for (unsigned c = 0; c < 6; ++c) {
-            const auto offset =
-                contract.positionOffset(c < 3 ? Quantity::Electric : Quantity::RawMagnetic, c % 3);
-            for (unsigned d = 0; d < 3; ++d)
-                result[3 * c + d] = offset[d];
-        }
-        return result;
-    }
-
     /** @brief Write one material map, field frames and two energy diagnostics for a run.
      * @details The experiment schedules fields and diagnostics independently through
      * writeFields() and writeDiagnostics().
@@ -66,11 +54,11 @@ namespace chdr::output {
                        const material::MaterialOwner& owner, const std::string& metadata,
                        input::UnitSystem units = {})
             : writer_m(directory, {box.cells_m, {0, 0, 0}, box.spacing_m},
-                       state.A_n.getLayout().comm, true, fieldOutputScales(units))
+                       state.A_n.getLayout().comm, "wave", true, fieldOutputScales(units))
             , units_m(std::move(units))
             , communicator_m(state.A_n.getLayout().comm) {
             raw_m.initialize(state.A_n.get_mesh(), state.A_n.getLayout());
-            writer_m.writeMaterial(state.A_n, owner.epsilon(), fieldOffsets(state.levelContract()));
+            writer_m.writeMaterial(state.A_n, owner.epsilon());
             openEnergy(directory, metadata, state.A_n.getLayout().comm);
         }
 
@@ -90,11 +78,14 @@ namespace chdr::output {
         void writeFields(long long step, Solver& state) {
             checkStep(step);
             state.computeRawMagneticField(raw_m);
-            writer_m.writeFrame(
-                state.electricField(), raw_m,
-                {static_cast<int>(step), state.labelTime(Quantity::VectorPotential, step),
-                 state.labelTime(Quantity::Electric, step),
-                 state.labelTime(Quantity::RawMagnetic, step), state.getDt()});
+            const std::array snapshots{
+                VectorFieldSnapshot{"E_raw", state.electricField(), Quantity::Electric,
+                                    units_m.electricFactor()},
+                VectorFieldSnapshot{"B_raw", raw_m, Quantity::RawMagnetic,
+                                    units_m.magneticFactor()}};
+            writer_m.writeFrame({static_cast<int>(step),
+                                 state.labelTime(Quantity::VectorPotential, step), state.getDt()},
+                                state.levelContract(), snapshots);
         }
 
         /// Close the diagnostic stream and complete the series before recording success.

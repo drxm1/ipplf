@@ -37,9 +37,24 @@ def read_cells(path, name, plane="xy"):
 
 
 def field_time(grid, field):
-    """Use the writer's explicit time label for the selected field."""
-    name = "E_time" if field == "E_raw" else "B_time"
-    return grid.GetFieldData().GetArray(name).GetTuple1(0)
+    """Read per-array times, with support for previously saved two-field runs."""
+    array = grid.GetFieldData().GetArray(f"{field}_time")
+    if array is None:
+        array = grid.GetFieldData().GetArray("E_time" if field == "E_raw" else "B_time")
+    if array is None:
+        raise ValueError(f"Missing sample time for {field}")
+    return array.GetTuple1(0)
+
+
+def component_offset(grid, field, component):
+    """Read one component position; old datasets combined the E and B offsets."""
+    array = grid.GetFieldData().GetArray(f"{field}_component_offsets")
+    if array is not None:
+        return vtk_to_numpy(array)[component]
+    array = grid.GetFieldData().GetArray("component_offsets")
+    if array is None:
+        raise ValueError(f"Missing component positions for {field}")
+    return vtk_to_numpy(array)[component + (3 if field == "B_raw" else 0)]
 
 
 def scan_frames(directory, frames, field, plane):
@@ -72,8 +87,7 @@ def display_geometry(grid, field, plane):
     centres = [origin[d] + (np.arange(cells[d]) + 0.5) * spacing[d] for d in axes]
     extent = [value for d in axes
               for value in (origin[d], origin[d] + cells[d] * spacing[d])]
-    offsets = vtk_to_numpy(grid.GetFieldData().GetArray("component_offsets"))
-    offset = offsets[component + (3 if field == "B_raw" else 0)]
+    offset = component_offset(grid, field, component)
     shifted = [value + offset[axes[i // 2]] * spacing[axes[i // 2]]
                for i, value in enumerate(extent)]
     return centres, extent, shifted

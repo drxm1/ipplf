@@ -101,8 +101,12 @@ of a constraint-preserving open boundary.
 ## Output and rendering
 
 ParaView can open `wave.pvti.series` and `material.pvti`. Field metadata records
-component offsets, timestep and separate sample times: E is at the half step
-and raw B at the integer step. The renderer uses those times and offsets.
+the timestep and per-array sample times and positions, derived from the solver's
+`LevelContract`. `E_raw_time` labels E at the half step and `B_raw_time` labels
+raw B at the integer step. `E_raw_component_offsets` and
+`B_raw_component_offsets` each contain three component-position offsets.
+The renderer uses these times and offsets and also reads the earlier metadata
+names in previously saved runs.
 After successful output finalization, `run.json` records the input, effective
 solver settings, resolved observation schedules, unit factors and build/execution
 information. Case parameters in the CSV comment and the record's `effective`

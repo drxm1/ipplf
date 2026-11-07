@@ -68,15 +68,15 @@ def run_case(options, directory):
     """Run the real writer first, then require VTK/ParaView readback to succeed."""
     environment = test_environment(directory)
     data = directory / "data"
-    command = options.command + [str(data)]
-    if options.case != "valid":
-        command.append(options.case)
+    encoding = "ascii" if options.ranks == 1 else "binary"
+    command = options.command + [str(data), options.case, encoding]
     results = [execute(command, directory, environment, "writer")]
     if results[-1]["exit_code"] == 0:
         mode = str(options.ranks) if options.case == "valid" else options.case
         reader = [options.reader, "--disable-registry", str(HERE / "read_output_fixture.py")]
         results.append(execute(reader + [str(data), mode], directory, environment, "reader"))
-    record = {"case": options.case, "ranks": options.ranks, "sources": source_hashes(),
+    record = {"case": options.case, "ranks": options.ranks, "encoding": encoding,
+              "sources": source_hashes(),
               "commands": results, "omp_threads": 1, "gui_walkthrough": False}
     (directory / "record.json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Evidence: {directory / 'record.json'}", flush=True)

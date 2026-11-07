@@ -30,7 +30,9 @@ from wave_checks import K, load_rows, check_rows, mode_recurrence, check_phase
 
 
 def field_metadata(grid):
-    names = ['TimeValue', 'potential_time', 'E_time', 'B_time', 'dt', 'step', 'normalization']
+    names = ['TimeValue', 'series_time', 'E_raw_time', 'B_raw_time', 'dt', 'step',
+             'normalization', 'reconstruction_convention', 'spatial_discretization',
+             'phi_is_zero_declared']
     return {name: grid.GetFieldData().GetArray(name).GetTuple1(0) for name in names}
 
 def cell_keys(grid):
@@ -68,8 +70,8 @@ def expected_fields(frame):
     electric = [(-(value * (current - previous)).imag / (K * meta['dt']), 0., 0.) for value in wave]
     factor = math.sin(K * frame['spacing'][2]) / (K * frame['spacing'][2])
     magnetic = [(0., factor * (value * current).real, 0.) for value in wave]
-    continuum_e = [math.cos(K * (value - meta['E_time'])) for value in z]
-    continuum_b = [math.cos(K * (value - meta['B_time'])) for value in z]
+    continuum_e = [math.cos(K * (value - meta['E_raw_time'])) for value in z]
+    continuum_b = [math.cos(K * (value - meta['B_raw_time'])) for value in z]
     return electric, magnetic, continuum_e, continuum_b
 
 def relative_error(actual, expected):
@@ -84,8 +86,10 @@ def check_frame(frame, nz, time, row):
     meta = frame['metadata']
     assert tuple(frame['extent']) == (0, nz // 8, 0, nz // 8, 0, nz)
     assert tuple(frame['origin']) == (0, 0, 0) and tuple(frame['spacing']) == (1 / nz,) * 3
-    assert meta['potential_time'] == meta['B_time'] == meta['TimeValue'] == time
-    assert meta['dt'] == 1 / (2 * nz) and meta['E_time'] == time - meta['dt'] / 2
+    assert meta['series_time'] == meta['B_raw_time'] == meta['TimeValue'] == time
+    assert meta['dt'] == 1 / (2 * nz) and meta['E_raw_time'] == time - meta['dt'] / 2
+    assert meta['reconstruction_convention'] == meta['spatial_discretization'] == 0
+    assert meta['phi_is_zero_declared'] == 1
     assert meta['step'] == row['step'] and meta['normalization'] == 1
     assert meta['step'] * meta['dt'] == time
     keys = frame['keys']

@@ -2,7 +2,7 @@
 # @brief pvpython reader of the files that output_fixture.cpp writes with
 # core/output/FieldOutput.h, the writer of all three programs.
 # @details Case "valid" (argument: the number of pieces, 1 or 2): VTK reads each PVTI and
-# each piece, and ParaView reads the series. Every E and B component and every metadata
+# each piece, and ParaView reads the series. Every E/raw-B/R2-B component and metadata
 # value must equal the independent Python formula bit for bit. Only origin, spacing, cell
 # centres and cell widths use a tolerance, 1e-14 relative and absolute. Each image must
 # hold exactly its owned cells (12 per z layer, no halo values), and the series must list
@@ -53,20 +53,43 @@ def expected_vectors(i, j, k, time):
     magnetic = (math.nextafter(-10 - 2 * i, -math.inf),
                 math.nextafter(-math.pi * (100 + 3 * j), -math.inf),
                 math.nextafter((-1000 - 5 * k) / math.pi, 0.0))
-    return electric, magnetic
+    averaged = tuple((value + 0.25) * 0.5 for value in magnetic)
+    return electric, magnetic, averaged
 
 
-def check_metadata(image, step, time):
-    """Verify dataset/array timestamps, step and the declared normalization code."""
-    values = {"TimeValue": time, "potential_time": time,
-              "E_time": math.nextafter(time - 0.0625, -math.inf),
-              "B_time": math.nextafter(time + 0.03125, math.inf),
-              "dt": 0.125, "step": step, "normalization": 1}
+def check_scalar_metadata(image, values):
+    """Require scalar metadata to survive serialization without rounding changes."""
     for name, expected in values.items():
         array = image.GetFieldData().GetArray(name)
         assert array is not None, name
         assert array.GetNumberOfTuples() == 1 and array.GetNumberOfComponents() == 1, name
         exact(array.GetTuple1(0), expected)
+
+
+def check_array_metadata(image, name, time, quantity, scale):
+    """Check declared native time, conversion and independent staggered-position table."""
+    check_scalar_metadata(image, {f"{name}_time": time, f"{name}_quantity": quantity,
+                                  f"{name}_scale_from_solver": scale})
+    expected = ((0.5, 0, 0), (0, 0.5, 0), (0, 0, 0.5)) if name == "E" else (
+        (0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0))
+    array = image.GetFieldData().GetArray(f"{name}_component_offsets")
+    assert array is not None and array.GetNumberOfTuples() == 3
+    assert array.GetNumberOfComponents() == 3
+    for c, offset in enumerate(expected):
+        for actual, target in zip(array.GetTuple3(c), offset):
+            exact(actual, target)
+
+
+def check_metadata(image, step, time):
+    """Check the R2 labels independently of the C++ LevelContract implementation."""
+    check_scalar_metadata(image, {"TimeValue": time, "series_time": time, "dt": 0.125,
+                                  "step": step, "normalization": 1,
+                                  "length_scale_from_solver": 1, "time_scale_from_solver": 1,
+                                  "reconstruction_convention": 1, "spatial_discretization": 1,
+                                  "phi_is_zero_declared": 0})
+    check_array_metadata(image, "E", time - 0.0625, 0, 1)
+    check_array_metadata(image, "B_raw", time, 2, 1)
+    check_array_metadata(image, "B_R2", time - 0.0625, 1, 0.5)
 
 
 def physical_index(image, cell):
@@ -84,7 +107,7 @@ def physical_index(image, cell):
 def check_cells(image, first_z, end_z, time):
     """Check every signed vector and require exactly one cell at each expected center."""
     assert image.GetNumberOfCells() == 12 * (end_z - first_z)
-    arrays = [image.GetCellData().GetArray(name) for name in ("E_raw", "B_raw")]
+    arrays = [image.GetCellData().GetArray(name) for name in ("E", "B_raw", "B_R2")]
     for array in arrays:
         assert array is not None and array.GetNumberOfComponents() == 3
         assert array.GetDataTypeAsString() == "double"
@@ -169,7 +192,7 @@ def main():
     else:
         check_xml_frames(directory, int(argument))
         check_series(directory)
-        print(f"PASS all 72 cells: bit-exact nextafter/pi vectors and explicit times, extents, halo exclusion: {argument} piece(s)")
+        print(f"PASS all 72 cells: three bit-exact vectors, contract times/positions, extents, halo exclusion: {argument} piece(s)")
 
 
 if __name__ == "__main__":

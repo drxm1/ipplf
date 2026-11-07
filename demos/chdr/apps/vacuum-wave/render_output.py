@@ -44,11 +44,14 @@ def read_frame(options):
 
 
 def metadata(image):
-    """Read labels directly from the dataset, including the separate E/B timestamps."""
-    names = ("potential_time", "E_time", "B_time", "dt", "step", "normalization")
+    """Read per-array times; retain readback of the earlier two-field metadata."""
+    names = {"series_time": "potential_time", "E_raw_time": "E_time", "B_raw_time": "B_time",
+             "dt": "dt", "step": "step", "normalization": "normalization"}
     result = {}
-    for name in names:
+    for name, previous in names.items():
         array = image.GetFieldData().GetArray(name)
+        if array is None:
+            array = image.GetFieldData().GetArray(previous)
         if array is None:
             raise ValueError(f"Missing metadata: {name}")
         result[name] = array.GetTuple1(0)
@@ -117,9 +120,9 @@ def annotate(view, values):
     time_unit = ' s' if values['normalization'] == 0 else ''
     convention = 'raw SI fields; coordinates in m' if time_unit else 'raw normalized fields'
     label = Text()
-    label.Text = (f"potential time {values['potential_time']:.8g}{time_unit}; "
-                  f"E time {values['E_time']:.8g}{time_unit}; "
-                  f"B time {values['B_time']:.8g}{time_unit}\n"
+    label.Text = (f"series time {values['series_time']:.8g}{time_unit}; "
+                  f"E time {values['E_raw_time']:.8g}{time_unit}; "
+                  f"B time {values['B_raw_time']:.8g}{time_unit}\n"
                   f"+x upward; +z rightward; {convention}")
     display = Show(label, view)
     display.WindowLocation = "Upper Left Corner"

@@ -9,8 +9,8 @@
  * Logical x-fastest traversal follows VTK 9.5.2 vtkStructuredData::ComputeCellId
  * and GetLinearIndex (vtkStructuredData.h, lines 280-283 and 329-333):
  * https://github.com/Kitware/VTK/blob/v9.5.2/Common/DataModel/vtkStructuredData.h .
- * Caller-supplied timestamps retain their distinct labels, with optional unit
- * conversion; this writer derives no array times from potential time or dt.
+ * LevelContract supplies each quantity's time and component positions. The caller
+ * selects the arrays, series clock and output units without redefining that contract.
  * No GPU validation is claimed.
  */
 #ifndef CHDR_FIELD_OUTPUT_H
@@ -29,12 +29,16 @@
 #include <limits>
 #include <locale>
 #include <mpi.h>
-#include <optional>
+#include <set>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "core/base/FieldContainer.h"
+#include "core/base/LevelContract.h"
 
 namespace chdr::output {
 
@@ -47,26 +51,36 @@ namespace chdr::output {
 
     /** @brief Completed solver state: step is separate from output-frame numbering. */
     struct FrameRecord {
-        int step_m;              ///< Completed solver step, not frame ordinal.
-        double potentialTime_m;  ///< Dataset/series time supplied by the caller.
-        double electricTime_m;   ///< Actual raw E sample time supplied by the caller.
-        double magneticTime_m;   ///< Actual raw B sample time supplied by the caller.
-        double dt_m;             ///< Actual positive solver timestep.
+        int step_m;           ///< Completed solver step, not frame ordinal.
+        double seriesTime_m;  ///< Dataset/series clock; array times follow LevelContract.
+        double dt_m;          ///< Actual positive solver timestep, in solver units.
+    };
+
+    /** @brief Bind a native vector field to its identity and output conversion.
+     * @details The reference is borrowed only during writeFrame(). Quantity identifies
+     * the sampling contract; it does not reconstruct or modify the supplied values.
+     * Scalar quantities require a different storage interface and are rejected here.
+     */
+    struct VectorFieldSnapshot {
+        std::string name_m;
+        const EMFieldsType& field_m;
+        Quantity quantity_m;
+        double valueScale_m;
     };
 
     /** @brief Multiplicative conversions applied only to serialized output.
      * @details Factors convert the supplied solver quantities to the selected output units.
-     * Geometry and times use their own factors; E and B are converted independently.
+     * Geometry and times use these factors; each vector description supplies its value factor.
      * Component offsets remain dimensionless fractions of mesh spacing. No solver array
      * is changed. si_m labels SI output; default factors preserve normalized output.
      */
     struct OutputScales {
-        double lengthFactor_m = 1, timeFactor_m = 1, electricFactor_m = 1, magneticFactor_m = 1;
+        double lengthFactor_m = 1, timeFactor_m = 1;
         bool si_m = false;
 
         /// Reject unusable scales before writing any output file.
         void validate() const {
-            for (double scale : {lengthFactor_m, timeFactor_m, electricFactor_m, magneticFactor_m})
+            for (double scale : {lengthFactor_m, timeFactor_m})
                 if (!std::isfinite(scale) || scale <= 0)
                     throw std::invalid_argument("Output scale must be finite and positive");
         }
@@ -75,14 +89,36 @@ namespace chdr::output {
     /// Obtain output factors from a unit convention without making the writer own input parsing.
     template <class UnitSystem>
     OutputScales fieldOutputScales(const UnitSystem& units) {
-        return {units.lengthFactor(), units.timeFactor(), units.electricFactor(),
-                units.magneticFactor(), units.isSI()};
+        return {units.lengthFactor(), units.timeFactor(), units.isSI()};
     }
 
     namespace output_detail {
         using Extent = std::array<int, 6>;  ///< Global point ranges, inclusive at both ends.
         static_assert(sizeof(Extent) == 6 * sizeof(int),
                       "MPI extent gather requires packed arrays");
+
+        /// Evaluated metadata owns no solver arrays; offsets are in mesh-spacing units.
+        struct VectorMetadata {
+            std::string name_m;
+            Quantity quantity_m;
+            double sampleTime_m, valueScale_m;
+            /** @brief Flattened 3-by-3 table of native component positions.
+             * @details Entry [3*c+d] is the displacement along coordinate d of field
+             * component c; both indices follow x, y, z order. Displacements are relative
+             * to the logical cell centre, in units of mesh spacing along d.
+             * LevelContract::positionOffset supplies each row. This ordering writes
+             * three VTK tuples: the (x,y,z) offset of field-x, then field-y, then field-z.
+             */
+            std::array<double, 9> componentOffsets_m;
+        };
+
+        /// One resolved frame, with converted times and all per-vector sampling metadata.
+        struct FrameMetadata {
+            FrameRecord frame_m;
+            LevelContract contract_m;
+            bool phiIsZero_m;
+            std::vector<VectorMetadata> vectors_m;
+        };
 
         /** @brief Locale-independent numbers with double round-trip precision. */
         inline void configureStream(std::ostream& out) {
@@ -106,41 +142,60 @@ namespace chdr::output {
         }
 
         /** @brief Controlled basename: step is nonnegative and rank is communicator-local. */
-        inline std::string frameName(int step, int rank = -1) {
-            const auto stem = "wave-" + std::to_string(step);
+        inline std::string frameName(const std::string& basename, int step, int rank = -1) {
+            const auto stem = basename + "-" + std::to_string(step);
             return rank < 0 ? stem + ".pvti" : stem + "-rank-" + std::to_string(rank) + ".vti";
         }
 
         /** @brief One numerical metadata tuple; names/type strings are internal constants. */
         template <class T>
-        void scalar(std::ostream& out, const char* name, const char* type, T value) {
+        void scalar(std::ostream& out, const std::string& name, const char* type, T value) {
             out << "<DataArray type=\"" << type << "\" Name=\"" << name
                 << "\" NumberOfTuples=\"1\" format=\"ascii\">" << value << "</DataArray>\n";
         }
 
-        /** @brief Explicit array times and conversions; normalization is 1 for solver units, 0 for
-         * SI.
+        /** @brief Write a vector's contract-derived time, offsets and conversion factor.
+         * @details Quantity codes follow Quantity: E=0, B=1, raw B=2, phi=3, A=4,
+         * rho=5, J=6. Only vector quantities are accepted by this writer.
          */
-        inline void metadata(std::ostream& out, const FrameRecord& frame,
-                             const std::optional<std::array<double, 18>>& offsets = std::nullopt,
-                             OutputScales scales                                  = {}) {
+        inline void vectorMetadata(std::ostream& out, const VectorMetadata& vector) {
+            scalar(out, vector.name_m + "_time", "Float64", vector.sampleTime_m);
+            scalar(out, vector.name_m + "_scale_from_solver", "Float64", vector.valueScale_m);
+            scalar(out, vector.name_m + "_quantity", "Int32", static_cast<int>(vector.quantity_m));
+            out << "<DataArray type=\"Float64\" Name=\"" << vector.name_m
+                << "_component_offsets\" NumberOfComponents=\"3\" "
+                   "NumberOfTuples=\"3\" format=\"ascii\">"
+                << arrayText(vector.componentOffsets_m) << "</DataArray>\n";
+        }
+
+        /** @brief Record the supplied contract without identifying it through an array name.
+         * @details Reconstruction codes are R1=0, R2=1, R2Prime=2; spatial codes are
+         * collocated=0 and staggered=1. phi_is_zero_declared records the caller's explicit
+         * declaration.
+         */
+        inline void contractMetadata(std::ostream& out, const FrameMetadata& metadata) {
+            scalar(out, "reconstruction_convention", "Int32",
+                   static_cast<int>(metadata.contract_m.ebReconstructionConvention_m));
+            scalar(out, "spatial_discretization", "Int32",
+                   static_cast<int>(metadata.contract_m.spatialDiscretization_m));
+            scalar(out, "phi_is_zero_declared", "Int32", metadata.phiIsZero_m ? 1 : 0);
+        }
+
+        /// Common and per-array metadata; normalization is 1 for solver units, 0 for SI.
+        inline void metadata(std::ostream& out, const FrameMetadata& metadata,
+                             OutputScales scales) {
+            const auto& frame = metadata.frame_m;
             out << "<FieldData>\n";
-            scalar(out, "TimeValue", "Float64", frame.potentialTime_m);
-            scalar(out, "potential_time", "Float64", frame.potentialTime_m);
-            scalar(out, "E_time", "Float64", frame.electricTime_m);
-            scalar(out, "B_time", "Float64", frame.magneticTime_m);
+            scalar(out, "TimeValue", "Float64", frame.seriesTime_m);
+            scalar(out, "series_time", "Float64", frame.seriesTime_m);
             scalar(out, "dt", "Float64", frame.dt_m);
             scalar(out, "step", "Int64", frame.step_m);
             scalar(out, "normalization", "Int32", scales.si_m ? 0 : 1);
             scalar(out, "length_scale_from_solver", "Float64", scales.lengthFactor_m);
             scalar(out, "time_scale_from_solver", "Float64", scales.timeFactor_m);
-            scalar(out, "E_scale_from_solver", "Float64", scales.electricFactor_m);
-            scalar(out, "B_scale_from_solver", "Float64", scales.magneticFactor_m);
-            if (offsets)
-                out << "<DataArray type=\"Float64\" Name=\"component_offsets\" "
-                       "NumberOfComponents=\"3\" "
-                       "NumberOfTuples=\"6\" format=\"ascii\">"
-                    << arrayText(*offsets) << "</DataArray>\n";
+            contractMetadata(out, metadata);
+            for (const auto& vector : metadata.vectors_m)
+                vectorMetadata(out, vector);
             out << "</FieldData>\n";
         }
 
@@ -162,13 +217,100 @@ namespace chdr::output {
             return geometry;
         }
 
-        /// Convert every explicit time label independently, without changing the solver step.
+        /// Convert the series clock and timestep without changing the completed-solve index.
         inline FrameRecord scaledFrame(FrameRecord frame, OutputScales scales) {
-            frame.potentialTime_m *= scales.timeFactor_m;
-            frame.electricTime_m *= scales.timeFactor_m;
-            frame.magneticTime_m *= scales.timeFactor_m;
+            frame.seriesTime_m *= scales.timeFactor_m;
             frame.dt_m *= scales.timeFactor_m;
             return frame;
+        }
+
+        /// Restrict caller-supplied names to characters safe in XML, JSON and path basenames.
+        inline void validateName(const std::string& name) {
+            if (name.empty()
+                || name.find_first_not_of(
+                       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
+                       != std::string::npos)
+                throw std::invalid_argument("Invalid field-output name: " + name);
+        }
+
+        /// Require distinct array names and metadata keys before any rank publishes a piece.
+        inline void validateNames(std::span<const VectorFieldSnapshot> fields) {
+            if (fields.empty())
+                throw std::invalid_argument("A field frame must contain at least one vector");
+            std::set<std::string> names;
+            std::set<std::string> keys{"TimeValue",
+                                       "series_time",
+                                       "dt",
+                                       "step",
+                                       "normalization",
+                                       "length_scale_from_solver",
+                                       "time_scale_from_solver",
+                                       "reconstruction_convention",
+                                       "spatial_discretization",
+                                       "phi_is_zero_declared"};
+            for (const auto& field : fields) {
+                validateName(field.name_m);
+                if (!names.insert(field.name_m).second)
+                    throw std::invalid_argument("Duplicate output vector: " + field.name_m);
+                for (const char* suffix :
+                     {"_time", "_component_offsets", "_scale_from_solver", "_quantity"})
+                    if (!keys.insert(field.name_m + suffix).second)
+                        throw std::invalid_argument("Conflicting vector metadata: " + field.name_m);
+            }
+        }
+
+        /// The concrete field stores three Cartesian components, not a scalar-potential slot.
+        inline void validateVectorQuantity(Quantity quantity) {
+            switch (quantity) {
+                case Quantity::Electric:
+                case Quantity::Magnetic:
+                case Quantity::RawMagnetic:
+                case Quantity::VectorPotential:
+                case Quantity::Current:
+                    return;
+                default:
+                    throw std::invalid_argument("Field output requires a vector Quantity");
+            }
+        }
+
+        /** @brief Resolve sampling metadata through the existing LevelContract methods.
+         * @details The contract owns the time and placement rules; no reconstruction is
+         * performed here. In particular, labelTime preserves the R1 electric restriction.
+         */
+        inline VectorMetadata resolveVector(const VectorFieldSnapshot& field,
+                                            const LevelContract& contract, const FrameRecord& frame,
+                                            double timeScale, bool phiIsZero) {
+            validateVectorQuantity(field.quantity_m);
+            if (!std::isfinite(field.valueScale_m) || field.valueScale_m <= 0)
+                throw std::invalid_argument("Vector output scale must be finite and positive");
+            VectorMetadata result{
+                field.name_m,
+                field.quantity_m,
+                contract.labelTime(field.quantity_m, frame.step_m, frame.dt_m, phiIsZero)
+                    * timeScale,
+                field.valueScale_m,
+                {}};
+            if (!std::isfinite(result.sampleTime_m))
+                throw std::invalid_argument("Nonfinite vector sample time");
+            for (unsigned c = 0; c < 3; ++c) {
+                const auto offset = contract.positionOffset(field.quantity_m, c);
+                for (unsigned d = 0; d < 3; ++d)
+                    result.componentOffsets_m[3 * c + d] = offset[d];
+            }
+            return result;
+        }
+
+        /// Resolve frame metadata without retaining references to the supplied field storage.
+        inline FrameMetadata resolveFrame(const FrameRecord& frame, const LevelContract& contract,
+                                          std::span<const VectorFieldSnapshot> fields,
+                                          OutputScales scales, bool phiIsZero) {
+            validateNames(fields);
+            FrameMetadata result{scaledFrame(frame, scales), contract, phiIsZero, {}};
+            result.vectors_m.reserve(fields.size());
+            for (const auto& field : fields)
+                result.vectors_m.push_back(
+                    resolveVector(field, contract, frame, scales.timeFactor_m, phiIsZero));
+            return result;
         }
 
         /** @brief Convert inclusive IPPL owned cell ranges to VTK point extents. */
@@ -202,15 +344,15 @@ namespace chdr::output {
             }
         }
 
-        /** @brief Validate matching E/B ownership before reading either host snapshot. */
-        template <class EField, class BField>
-        Extent checkedExtent(const EField& electric, const BField& magnetic,
-                             const OutputGeometry& geometry) {
-            const auto local = fieldExtent(electric);
-            validateField(electric, geometry, local);
-            validateField(magnetic, geometry, local);
-            if (local != fieldExtent(magnetic) || electric.getNghost() != magnetic.getNghost())
-                throw std::runtime_error("Output E/B ownership differs");
+        /// Validate matching ownership before reading any host snapshot; fields is nonempty.
+        inline Extent checkedExtent(std::span<const VectorFieldSnapshot> fields,
+                                    const OutputGeometry& geometry) {
+            const auto local = fieldExtent(fields.front().field_m);
+            for (const auto& snapshot : fields) {
+                validateField(snapshot.field_m, geometry, local);
+                if (local != fieldExtent(snapshot.field_m))
+                    throw std::runtime_error("Output vector ownership differs");
+            }
             return local;
         }
 
@@ -274,77 +416,140 @@ namespace chdr::output {
             out.write(reinterpret_cast<const char*>(values.data()), bytes);
         }
 
-        /** @brief Serialize one rank with global origin and its global-index point extent. */
-        template <class EView, class BView>
-        void piece(std::ostream& out, const OutputGeometry& geometry, const Extent& e,
-                   const EView& electric, const BView& magnetic, int ghost,
-                   const FrameRecord& frame,
-                   const std::optional<std::array<double, 18>>& offsets = std::nullopt,
-                   bool binary = false, OutputScales scales = {}) {
-            out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"ImageData\" version=\"1.0\" "
-                   "byte_order=\"LittleEndian\" header_type=\"UInt64\">\n"
-                << "<ImageData WholeExtent=\"" << arrayText(e) << "\" Origin=\""
-                << arrayText(geometry.origin_m) << "\" Spacing=\"" << arrayText(geometry.spacing_m)
-                << "\">\n";
-            metadata(out, frame, offsets, scales);
-            out << "<Piece Extent=\"" << arrayText(e) << "\"><CellData Vectors=\"E_raw\">\n";
-            if (binary) {
-                const std::uint64_t stride =
-                    8 + 3ULL * (e[1] - e[0]) * (e[3] - e[2]) * (e[5] - e[4]) * sizeof(double);
-                for (int c = 0; c < 2; ++c)
-                    out << "<DataArray type=\"Float64\" Name=\"" << (c ? "B_raw" : "E_raw")
-                        << "\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << c * stride
-                        << "\"/>\n";
-            } else {
-                vectors(out, "E_raw", electric, e, ghost, scales.electricFactor_m);
-                vectors(out, "B_raw", magnetic, e, ghost, scales.magneticFactor_m);
+        /// Begin a serial image or a parallel wrapper with explicit Cartesian geometry.
+        inline void imageHeader(std::ostream& out, const OutputGeometry& geometry,
+                                const Extent& extent, bool parallel) {
+            const char* type = parallel ? "PImageData" : "ImageData";
+            out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"" << type
+                << "\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">\n"
+                << '<' << type << " WholeExtent=\"" << arrayText(extent) << '"';
+            if (parallel)
+                out << " GhostLevel=\"0\"";
+            out << " Origin=\"" << arrayText(geometry.origin_m) << "\" Spacing=\""
+                << arrayText(geometry.spacing_m) << "\">\n";
+        }
+
+        /// Declare all vectors in the same order used by the appended binary blocks.
+        inline void vectorDeclarations(std::ostream& out, const std::vector<VectorMetadata>& fields,
+                                       bool parallel, std::uint64_t stride = 0) {
+            for (std::size_t i = 0; i < fields.size(); ++i) {
+                out << '<' << (parallel ? "PDataArray" : "DataArray") << " type=\"Float64\" Name=\""
+                    << fields[i].name_m << "\" NumberOfComponents=\"3\"";
+                if (!parallel)
+                    out << " format=\"appended\" offset=\"" << i * stride << '"';
+                out << "/>\n";
             }
+        }
+
+        /// Mirror one field at a time; copies finish before host serialization reads the values.
+        inline void writeVectors(std::ostream& out, const Extent& extent,
+                                 std::span<const VectorFieldSnapshot> fields, bool binary) {
+            for (const auto& snapshot : fields) {
+                const auto& field = snapshot.field_m;
+                const auto host =
+                    Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), field.getView());
+                if (binary)
+                    binaryVectors(out, host, extent, field.getNghost(), snapshot.valueScale_m);
+                else
+                    vectors(out, snapshot.name_m.c_str(), host, extent, field.getNghost(),
+                            snapshot.valueScale_m);
+            }
+        }
+
+        /// Serialize one rank's owned vectors with a common mesh and per-array metadata.
+        inline void piece(std::ostream& out, const OutputGeometry& geometry, const Extent& extent,
+                          std::span<const VectorFieldSnapshot> fields, const FrameMetadata& frame,
+                          bool binary, OutputScales scales) {
+            imageHeader(out, geometry, extent, false);
+            metadata(out, frame, scales);
+            out << "<Piece Extent=\"" << arrayText(extent) << "\"><CellData Vectors=\""
+                << fields.front().name_m << "\">\n";
+            if (binary) {
+                const std::uint64_t stride = 8
+                                             + 3ULL * (extent[1] - extent[0])
+                                                   * (extent[3] - extent[2])
+                                                   * (extent[5] - extent[4]) * sizeof(double);
+                vectorDeclarations(out, frame.vectors_m, false, stride);
+            } else
+                writeVectors(out, extent, fields, false);
             out << "</CellData><PointData/></Piece>\n</ImageData>\n";
             if (binary) {
                 out << "<AppendedData encoding=\"raw\">_";
-                binaryVectors(out, electric, e, ghost, scales.electricFactor_m);
-                binaryVectors(out, magnetic, e, ghost, scales.magneticFactor_m);
+                writeVectors(out, extent, fields, true);
                 out << "</AppendedData>\n";
             }
             out << "</VTKFile>\n";
         }
 
-        /** @brief Publish a parallel wrapper, including the serial one-piece case. */
+        /// Publish a parallel wrapper, including the serial one-piece case.
         inline void wrapper(std::ostream& out, const OutputGeometry& geometry,
-                            const std::vector<Extent>& extents, const FrameRecord& frame,
-                            const std::optional<std::array<double, 18>>& offsets = std::nullopt,
-                            OutputScales scales                                  = {}) {
-            out << "<?xml version=\"1.0\"?>\n<VTKFile type=\"PImageData\" version=\"1.0\" "
-                   "byte_order=\"LittleEndian\">\n"
-                << "<PImageData WholeExtent=\"" << arrayText(wholeExtent(geometry))
-                << "\" GhostLevel=\"0\" Origin=\"" << arrayText(geometry.origin_m)
-                << "\" Spacing=\"" << arrayText(geometry.spacing_m) << "\">\n";
-            metadata(out, frame, offsets, scales);
-            out << "<PPointData/><PCellData Vectors=\"E_raw\">\n"
-                << "<PDataArray type=\"Float64\" Name=\"E_raw\" NumberOfComponents=\"3\"/>\n"
-                << "<PDataArray type=\"Float64\" Name=\"B_raw\" "
-                   "NumberOfComponents=\"3\"/>\n</PCellData>\n";
+                            const std::vector<Extent>& extents, const FrameMetadata& frame,
+                            const std::string& basename, OutputScales scales) {
+            imageHeader(out, geometry, wholeExtent(geometry), true);
+            metadata(out, frame, scales);
+            out << "<PPointData/><PCellData Vectors=\"" << frame.vectors_m.front().name_m
+                << "\">\n";
+            vectorDeclarations(out, frame.vectors_m, true);
+            out << "</PCellData>\n";
             for (std::size_t rank = 0; rank < extents.size(); ++rank)
                 out << "<Piece Extent=\"" << arrayText(extents[rank]) << "\" Source=\""
-                    << frameName(frame.step_m, static_cast<int>(rank)) << "\"/>\n";
+                    << frameName(basename, frame.frame_m.step_m, static_cast<int>(rank))
+                    << "\"/>\n";
             out << "</PImageData>\n</VTKFile>\n";
         }
 
-        /** @brief Explicit potential-time list; no inference from filenames/frame numbers. */
-        inline void series(std::ostream& out, const std::vector<FrameRecord>& frames) {
+        /// Explicit series clocks; no inference from filenames, array times or frame ordinals.
+        inline void series(std::ostream& out, const std::vector<FrameRecord>& frames,
+                           const std::string& basename) {
             out << "{\"file-series-version\":\"1.0\",\"files\":[\n";
             for (std::size_t i = 0; i < frames.size(); ++i) {
-                out << (i ? ",\n" : "") << "{\"name\":\"" << frameName(frames[i].step_m)
-                    << "\",\"time\":" << frames[i].potentialTime_m << "}";
+                out << (i ? ",\n" : "") << "{\"name\":\"" << frameName(basename, frames[i].step_m)
+                    << "\",\"time\":" << frames[i].seriesTime_m << "}";
             }
             out << "\n]}\n";
+        }
+        /// Write owned scalar permittivity in the same logical order as vector tuples.
+        template <class View>
+        void materialValues(std::ostream& out, const View& host, const Extent& extent, int ghost) {
+            for (int k = 0; k < extent[5] - extent[4]; ++k)
+                for (int j = 0; j < extent[3] - extent[2]; ++j)
+                    for (int i = 0; i < extent[1] - extent[0]; ++i) {
+                        const double value = host(i + ghost, j + ghost, k + ghost);
+                        if (!std::isfinite(value))
+                            throw std::runtime_error("Nonfinite material output");
+                        out << value << '\n';
+                    }
+        }
+
+        /// Material output is optional and does not configure vector sampling metadata.
+        template <class View>
+        void materialPiece(std::ostream& out, const OutputGeometry& geometry, const Extent& extent,
+                           const View& host, int ghost) {
+            imageHeader(out, geometry, extent, false);
+            out << "<Piece Extent=\"" << arrayText(extent)
+                << "\"><CellData><DataArray type=\"Float64\" Name=\"epsilon_r\" "
+                   "format=\"ascii\">\n";
+            materialValues(out, host, extent, ghost);
+            out << "</DataArray></CellData><PointData/></Piece></ImageData></VTKFile>\n";
+        }
+
+        /// Declare the independently written immutable cell-permittivity pieces.
+        inline void materialWrapper(std::ostream& out, const OutputGeometry& geometry,
+                                    const std::vector<Extent>& extents) {
+            imageHeader(out, geometry, wholeExtent(geometry), true);
+            out << "<PPointData/><PCellData><PDataArray type=\"Float64\" "
+                   "Name=\"epsilon_r\"/></PCellData>\n";
+            for (std::size_t rank = 0; rank < extents.size(); ++rank)
+                out << "<Piece Extent=\"" << arrayText(extents[rank]) << "\" Source=\"material-"
+                    << rank << ".vti\"/>\n";
+            out << "</PImageData>\n</VTKFile>\n";
         }
     }  // namespace output_detail
 
     /** @brief Small collective output owner; constructor and calls require every rank.
      * @details Directory must be new or empty on a shared filesystem. Call with
-     * identical geometry, explicit frame metadata and cadence on every rank. E/B must share
-     * owned extents and halo width. The caller must pass the fields' actual mesh
+     * identical geometry, contract, vector descriptions and cadence on every rank.
+     * The supplied fields must share owned extents. The caller must pass their actual mesh
      * origin/spacing: this generic adapter checks index domains, not mesh objects.
      * Host mirrors exist only during output; fields
      * stay alive and unchanged until return. Normal I/O exceptions are reduced
@@ -358,42 +563,44 @@ namespace chdr::output {
     public:
         /** @brief Collectively prepare a fresh output directory; borrow the communicator. */
         FieldOutput(std::filesystem::path directory, OutputGeometry geometry, MPI_Comm communicator,
-                    bool binary = false, OutputScales scales = {})
+                    std::string basename, bool binary = false, OutputScales scales = {})
             : directory_m(std::move(directory))
             , geometry_m(geometry)
             , communicator_m(communicator)
+            , basename_m(std::move(basename))
             , binary_m(binary)
             , scales_m(scales) {
             MPI_Comm_rank(communicator_m, &rank_m);
             MPI_Comm_size(communicator_m, &size_m);
             collectively([&] {
-                scales_m.validate();
-                geometry_m = output_detail::scaledGeometry(geometry_m, scales_m);
-                output_detail::validateGeometry(geometry_m);
-                if (binary_m && std::endian::native != std::endian::little)
-                    throw std::runtime_error("Binary VTK output requires a little-endian host");
-                extents_m.resize(size_m);
-                if (rank_m == 0)
-                    prepareDirectory();
+                prepareOutput();
             });
         }
 
-        /** @brief Write a completed raw E/B state with caller-supplied measured timestamps. */
-        template <class EField, class BField>
-        void writeFrame(const EField& electric, const BField& magnetic, const FrameRecord& frame) {
+        /** @brief Write selected native vectors from one completed solver state.
+         * @details LevelContract supplies all array times and component positions. The
+         * optional phiIsZero declaration is passed through to its R1 electric time check;
+         * this writer never infers it from a field, name or experiment. Fields are not
+         * modified or retained. Series time is independent of individual sample times.
+         * @pre Every rank supplies the same names, quantities, factors, contract and frame.
+         */
+        void writeFrame(const FrameRecord& frame, const LevelContract& contract,
+                        std::span<const VectorFieldSnapshot> fields, bool phiIsZero = false) {
             output_detail::Extent local{};
-            const auto converted = output_detail::scaledFrame(frame, scales_m);
+            output_detail::FrameMetadata resolved{};
             collectively([&] {
-                validateFrame(converted);
-                local = writeLocalPiece(electric, magnetic, converted);
+                resolved =
+                    output_detail::resolveFrame(frame, contract, fields, scales_m, phiIsZero);
+                validateFrame(resolved.frame_m);
+                local = writeLocalPiece(fields, resolved);
             });
             MPI_Allgather(local.data(), 6, MPI_INT, extents_m.data(), 6, MPI_INT, communicator_m);
             collectively([&] {
                 if (rank_m == 0)
-                    publishWrapper(converted);
+                    publishWrapper(resolved);
             });
             collectively([&] {
-                frames_m.push_back(converted);
+                frames_m.push_back(resolved.frame_m);
             });
         }
 
@@ -401,71 +608,30 @@ namespace chdr::output {
         void writeSeries() const {
             collectively([&] {
                 if (rank_m == 0)
-                    output_detail::atomicFile(directory_m / "wave.pvti.series",
+                    output_detail::atomicFile(directory_m / (basename_m + ".pvti.series"),
                                               [&](std::ostream& out) {
-                                                  output_detail::series(out, frames_m);
+                                                  output_detail::series(out, frames_m, basename_m);
                                               });
             });
         }
 
-        /** @brief Write immutable cell permittivity once and record component locations.
+        /** @brief Write immutable cell permittivity once, independently of field frames.
          * @details geometry supplies ownership and halo width; epsilon is its scalar view.
-         * Offsets are E_x,E_y,E_z,B_x,B_y,B_z in units of mesh spacing. Values are stored
-         * at their original staggered locations, without interpolation. All ranks call once,
-         * before the first frame. VTK XML cell arrays follow the file format cited above.
+         * All ranks call once before the first frame. Vector component positions are
+         * recorded by writeFrame even when no material file is requested.
          */
         template <class Field, class View>
-        void writeMaterial(const Field& geometry, View epsilon, std::array<double, 18> offsets) {
+        void writeMaterial(const Field& geometry, View epsilon) {
             const auto local = output_detail::fieldExtent(geometry);
             collectively([&] {
                 if (materialWritten_m || !frames_m.empty())
                     throw std::logic_error("Write the material once before the first frame");
                 output_detail::validateField(geometry, geometry_m, local);
-                offsets_m       = offsets;
-                const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), epsilon);
-                output_detail::atomicFile(
-                    directory_m / ("material-" + std::to_string(rank_m) + ".vti"),
-                    [&](std::ostream& out) {
-                        out << "<VTKFile type=\"ImageData\" version=\"1.0\" "
-                               "byte_order=\"LittleEndian\"><ImageData WholeExtent=\""
-                            << output_detail::arrayText(local) << "\" Origin=\""
-                            << output_detail::arrayText(geometry_m.origin_m) << "\" Spacing=\""
-                            << output_detail::arrayText(geometry_m.spacing_m)
-                            << "\"><Piece Extent=\"" << output_detail::arrayText(local)
-                            << "\"><CellData><DataArray type=\"Float64\" Name=\"epsilon_r\" "
-                               "format=\"ascii\">\n";
-                        const int g = geometry.getNghost();
-                        for (int k = 0; k < local[5] - local[4]; ++k)
-                            for (int j = 0; j < local[3] - local[2]; ++j)
-                                for (int i = 0; i < local[1] - local[0]; ++i) {
-                                    const double value = host(i + g, j + g, k + g);
-                                    if (!std::isfinite(value))
-                                        throw std::runtime_error("Nonfinite material output");
-                                    out << value << '\n';
-                                }
-                        out << "</DataArray></CellData><PointData/></Piece></ImageData></"
-                               "VTKFile>\n";
-                    });
+                writeLocalMaterial(geometry, epsilon, local);
             });
             MPI_Allgather(local.data(), 6, MPI_INT, extents_m.data(), 6, MPI_INT, communicator_m);
             collectively([&] {
-                if (rank_m == 0)
-                    output_detail::atomicFile(
-                        directory_m / "material.pvti", [&](std::ostream& out) {
-                            out << "<VTKFile type=\"PImageData\" version=\"1.0\" "
-                                   "byte_order=\"LittleEndian\"><PImageData WholeExtent=\""
-                                << output_detail::arrayText(output_detail::wholeExtent(geometry_m))
-                                << "\" GhostLevel=\"0\" Origin=\""
-                                << output_detail::arrayText(geometry_m.origin_m) << "\" Spacing=\""
-                                << output_detail::arrayText(geometry_m.spacing_m)
-                                << "\"><PPointData/><PCellData><PDataArray type=\"Float64\" "
-                                   "Name=\"epsilon_r\"/></PCellData>\n";
-                            for (int rank = 0; rank < size_m; ++rank)
-                                out << "<Piece Extent=\""
-                                    << output_detail::arrayText(extents_m[rank])
-                                    << "\" Source=\"material-" << rank << ".vti\"/>\n";
-                            out << "</PImageData></VTKFile>\n";
-                        });
+                publishMaterial();
             });
             materialWritten_m = true;
         }
@@ -486,8 +652,21 @@ namespace chdr::output {
             if (!message.empty())
                 std::cerr << "Output rank " << rank_m << ": " << message << '\n';
             if (anyFailed)
-                throw std::runtime_error("Collective vacuum output failed in "
+                throw std::runtime_error("Collective field output failed in "
                                          + directory_m.string());
+        }
+
+        /// Resolve output geometry and prepare the directory within the collective error path.
+        void prepareOutput() {
+            scales_m.validate();
+            output_detail::validateName(basename_m);
+            geometry_m = output_detail::scaledGeometry(geometry_m, scales_m);
+            output_detail::validateGeometry(geometry_m);
+            if (binary_m && std::endian::native != std::endian::little)
+                throw std::runtime_error("Binary VTK output requires a little-endian host");
+            extents_m.resize(size_m);
+            if (rank_m == 0)
+                prepareDirectory();
         }
 
         /** @brief Avoid accidentally presenting stale output from an earlier run. */
@@ -497,53 +676,67 @@ namespace chdr::output {
             std::filesystem::create_directories(directory_m);
         }
 
-        /** @brief Require finite times and advancing state labels; impose no E/B offset formula. */
+        /// Require a finite series clock and positive timestep without assigning array times.
         void validateFrame(const FrameRecord& frame) const {
-            if (frame.step_m < 0 || !std::isfinite(frame.potentialTime_m)
-                || !std::isfinite(frame.dt_m) || frame.dt_m <= 0
-                || !std::isfinite(frame.electricTime_m) || !std::isfinite(frame.magneticTime_m))
+            if (frame.step_m < 0 || !std::isfinite(frame.seriesTime_m) || !std::isfinite(frame.dt_m)
+                || frame.dt_m <= 0)
                 throw std::runtime_error("Invalid output step/time/dt");
             if (!frames_m.empty()
                 && (frame.step_m <= frames_m.back().step_m
-                    || frame.potentialTime_m <= frames_m.back().potentialTime_m))
+                    || frame.seriesTime_m <= frames_m.back().seriesTime_m))
                 throw std::runtime_error("Output frames must advance in step and time");
         }
 
-        /** @brief Mirror E/B by logical index and synchronously finish this rank's file. */
-        template <class EField, class BField>
-        output_detail::Extent writeLocalPiece(const EField& electric, const BField& magnetic,
-                                              const FrameRecord& frame) const {
-            const auto local = output_detail::checkedExtent(electric, magnetic, geometry_m);
+        /// Mirror selected vectors by logical index and synchronously finish this rank's file.
+        output_detail::Extent writeLocalPiece(std::span<const VectorFieldSnapshot> fields,
+                                              const output_detail::FrameMetadata& frame) const {
+            const auto local = output_detail::checkedExtent(fields, geometry_m);
             Kokkos::fence();
-            const auto e =
-                Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), electric.getView());
-            const auto b =
-                Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), magnetic.getView());
-            output_detail::atomicFile(directory_m / output_detail::frameName(frame.step_m, rank_m),
-                                      [&](std::ostream& out) {
-                                          output_detail::piece(out, geometry_m, local, e, b,
-                                                               electric.getNghost(), frame,
-                                                               offsets_m, binary_m, scales_m);
-                                      });
+            output_detail::atomicFile(
+                directory_m / output_detail::frameName(basename_m, frame.frame_m.step_m, rank_m),
+                [&](std::ostream& out) {
+                    output_detail::piece(out, geometry_m, local, fields, frame, binary_m, scales_m);
+                });
             return local;
         }
 
         /** @brief Rank-zero wrapper publication follows collective piece success. */
-        void publishWrapper(const FrameRecord& frame) const {
+        void publishWrapper(const output_detail::FrameMetadata& frame) const {
             output_detail::atomicFile(
-                directory_m / output_detail::frameName(frame.step_m), [&](std::ostream& out) {
-                    output_detail::wrapper(out, geometry_m, extents_m, frame, offsets_m, scales_m);
+                directory_m / output_detail::frameName(basename_m, frame.frame_m.step_m),
+                [&](std::ostream& out) {
+                    output_detail::wrapper(out, geometry_m, extents_m, frame, basename_m, scales_m);
+                });
+        }
+
+        /// Mirror the optional scalar material view and write only its owned cells.
+        template <class Field, class View>
+        void writeLocalMaterial(const Field& geometry, View epsilon,
+                                const output_detail::Extent& local) const {
+            const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), epsilon);
+            output_detail::atomicFile(directory_m / ("material-" + std::to_string(rank_m) + ".vti"),
+                                      [&](std::ostream& out) {
+                                          output_detail::materialPiece(out, geometry_m, local, host,
+                                                                       geometry.getNghost());
+                                      });
+        }
+
+        /// Publish material ownership after every rank has completed its piece.
+        void publishMaterial() const {
+            if (rank_m == 0)
+                output_detail::atomicFile(directory_m / "material.pvti", [&](std::ostream& out) {
+                    output_detail::materialWrapper(out, geometry_m, extents_m);
                 });
         }
 
         std::filesystem::path directory_m;
         OutputGeometry geometry_m;
         MPI_Comm communicator_m;
+        std::string basename_m;
         int rank_m = 0;
         int size_m = 1;
         std::vector<output_detail::Extent> extents_m;
         std::vector<FrameRecord> frames_m;
-        std::optional<std::array<double, 18>> offsets_m;
         bool materialWritten_m = false;
         bool binary_m          = false;
         OutputScales scales_m;

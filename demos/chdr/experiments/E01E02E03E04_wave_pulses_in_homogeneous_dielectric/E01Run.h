@@ -1,5 +1,5 @@
 /** @file E01Run.h
- * @brief E01 observation times, evolution, global errors and longitudinal profiles.
+ * @brief E01 observation times, evolution, global errors, profiles and field snapshots.
  */
 #pragma once
 
@@ -19,11 +19,11 @@
 #include "core/input/RunInput.h"
 #include "core/output/RunRecord.h"
 #include "core/simulation/ChDRSimulationManager.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01FieldSnapshots.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Profiles.h"
 
 namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
-    using E01Solver     = solver::ChdrSolver<solver::StandardSolverPeriodic>;
     using E01Simulation = simulation::ChDRSimulationManager<E01Solver>;
 
     /** @brief Select the number of longitudinal cells across the full E01 pulse width.
@@ -51,7 +51,10 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         if (request.units_m.system_m != "normalized")
             throw std::invalid_argument("E01 currently requires normalized units");
         input::validateParameters(request, {"cells_per_pulse"});
-        input::validateObservationNames(request, {});
+        input::validateObservationNames(request, {"fields"});
+        if (request.outputDirectory_m.empty() && request.observations_m.contains("fields")
+            && input::observationEnabled(request, "fields"))
+            throw std::invalid_argument("E01 field snapshots require an output directory");
         if (request.duration_m)
             throw std::invalid_argument("E01 fixes its target time; use run.steps to stop early");
         if (request.steps_m && *request.steps_m < 0)
@@ -280,24 +283,26 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         /// Publish the common provenance record only after the selected run and CSVs finish.
         inline void recordRun(E01Simulation& run, const input::ChdrYamlRunInput& request,
                               const simulation::ChdrCartesianGridSettings& grid,
-                              const E01Reference& reference, const RunPlan& plan) {
+                              const E01Reference& reference, const RunPlan& plan,
+                              const E01FieldSnapshots& snapshots) {
             if (request.outputDirectory_m.empty())
                 return;
             auto description = output::describeRun(
                 "experiments-wave-pulses-in-homogeneous-dielectric", grid, run.solver(),
                 plan.steps_m,
-                "E01 longitudinal refinement; global errors and longitudinal profiles");
+                "E01 longitudinal refinement; errors, profiles and optional field snapshots");
             description.effective_m["material/relative_permittivity"] =
                 run.material().homogeneousValue();
             recordReference(description, reference);
             recordSchedule(description, plan);
             recordProfiles(description);
+            snapshots.record(description);
             output::writeRunRecord(request.outputDirectory_m, request, description,
                                    run.solver().A_n.getLayout().comm);
         }
     }  // namespace e01_run_detail
 
-    /** @brief Advance the E01 pulse and save its four global errors and longitudinal profiles.
+    /** @brief Advance E01 and save errors, longitudinal profiles and scheduled field frames.
      * @details The manager observes state zero and every completed solve. Expensive reductions
      * occur only at the independently selected potential/field checkpoints and, for a short
      * run, its additional endpoint. The output and schedule implement E01.typ, meas01-04.
@@ -311,11 +316,15 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                                      run.solver().A_n.getLayout().comm);
         E01ProfileCsv profiles(request.outputDirectory_m, reference, run.solver().levelContract(),
                                run.solver().A_n.getLayout().comm);
+        E01FieldSnapshots snapshots(request, grid, run.solver(),
+                                    plan.checkpoints_m.front().potentialStep_m);
         run.advance(plan.steps_m, [&](long long step, E01Solver& state, const auto&) {
             e01_run_detail::observe(state, reference, plan, step, csv, profiles);
+            snapshots.observe(step, state, plan.steps_m);
         });
         csv.finish();
         profiles.finish();
-        e01_run_detail::recordRun(run, request, grid, reference, plan);
+        snapshots.finish();
+        e01_run_detail::recordRun(run, request, grid, reference, plan, snapshots);
     }
 }  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric

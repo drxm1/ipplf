@@ -1,3 +1,4 @@
+#include <array>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -68,7 +69,7 @@ namespace {
         }
         return std::make_unique<chdr::output::FieldOutput>(
             input.outputDirectory_m, outputGeometry(fields), fields.getFL().comm.getCommunicator(),
-            false, chdr::output::fieldOutputScales(input.units_m));
+            "wave", false, chdr::output::fieldOutputScales(input.units_m));
     }
 
     /// @brief Bound a requested partial run by the one-period benchmark duration.
@@ -137,11 +138,16 @@ namespace {
             throw std::runtime_error("Failed to write diagnostics");
     }
 
-    /// @brief Publish measured array times and update the series after a complete frame.
-    void writeCheckpoint(chdr::output::FieldOutput& output, Fields& fields,
-                         const chdr::apps::vacuumWave::Diagnostics& d) {
-        const chdr::output::FrameRecord frame{d.step_m, d.timeA_m, d.timeE_m, d.timeB_m, d.dt_m};
-        output.writeFrame(fields.getE(), fields.getB(), frame);
+    /// Publish contract-labelled fields; this benchmark's scalar potential is identically zero.
+    void writeCheckpoint(chdr::output::FieldOutput& output, VacuumSimulation& run,
+                         const Diagnostics& d, const chdr::input::UnitSystem& units) {
+        const chdr::output::FrameRecord frame{d.step_m, d.timeA_m, d.dt_m};
+        const std::array snapshots{
+            chdr::output::VectorFieldSnapshot{"E_raw", run.fields().getE(),
+                                              chdr::Quantity::Electric, units.electricFactor()},
+            chdr::output::VectorFieldSnapshot{"B_raw", run.fields().getB(),
+                                              chdr::Quantity::RawMagnetic, units.magneticFactor()}};
+        output.writeFrame(frame, run.solver().levelContract(), snapshots, /*phiIsZero=*/true);
         output.writeSeries();
     }
 
@@ -188,7 +194,7 @@ namespace {
             const auto diagnostic =
                 observeState(static_cast<int>(step), run, tracker, lastStep, input);
             if (output && schedule.selects(step, lastStep))
-                writeCheckpoint(*output, run.fields(), diagnostic);
+                writeCheckpoint(*output, run, diagnostic, input.units_m);
         });
     }
 

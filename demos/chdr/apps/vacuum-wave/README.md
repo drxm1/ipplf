@@ -204,11 +204,13 @@ their explicit potential times. `E_raw` and `B_raw` are three-component Cell Dat
 halos are excluded and tuples are serialized with x varying fastest. Geometry
 uses the fields' actual global origin, spacing and owned extents.
 
-Field Data records `potential_time`, `E_time`, `B_time`, `dt`, `step` and
+Field Data records `series_time`, `E_raw_time`, `B_raw_time`, `dt`, `step` and
 `normalization`. Code 1 denotes the dimensionless convention above, with no SI
 scale assigned. Code 0 denotes SI output: geometry in metres, times in seconds,
 E in volts per metre and B in tesla. ASCII doubles use round-trip precision and
-the classic locale.
+the classic locale. The series time is the potential time in this application.
+Array times and component positions are derived from the solver's `LevelContract`,
+with the zero scalar potential declared explicitly for its R1 reconstruction.
 These choices follow [VTK XML formats](https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html),
 [VTK time metadata](https://docs.vtk.org/en/latest/design_documents/IOXMLTimeInFieldData.html)
 and [ParaView temporal series](https://docs.paraview.org/en/latest/UsersGuide/dataIngestion.html#handling-temporal-file-series).
@@ -283,8 +285,15 @@ references and numerical assumptions.
 
 ## Writer extensions
 
-`FieldOutput` retains ASCII output by default; its optional `binary` constructor
-argument selects appended Float64 vectors with UInt64 byte counts. When the caller
-supplies component offsets, `component_offsets` records E then B locations in cell
-units; absent metadata makes no claim about staggering. `writeMaterial` also writes
-the immutable cell array `epsilon_r` once as `material.pvti`.
+`FieldOutput` accepts a collection of named vector fields and the solver's
+`LevelContract`. Each array has its own time, conversion factor and component
+positions. For this application, `E_raw_component_offsets` and
+`B_raw_component_offsets` each contain three Cartesian displacement vectors,
+in mesh-spacing units relative to a cell centre. The vacuum case is collocated,
+so these displacements are zero.
+
+The writer retains ASCII output by default; its optional `binary` constructor
+argument selects appended Float64 vectors with UInt64 byte counts.
+The caller selects the filename basename; this application retains `wave`.
+The separate `writeMaterial` operation writes the immutable cell array
+`epsilon_r` once as `material.pvti`; field-position metadata does not depend on it.
