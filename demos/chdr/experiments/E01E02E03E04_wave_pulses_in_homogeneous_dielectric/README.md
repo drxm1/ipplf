@@ -90,6 +90,69 @@ endpoint rows. A complete run has twenty measurement rows.
 
 The first results are single-grid comparisons, not a convergence study.
 
+## Full refinement study
+
+`E01-study.yaml` selects the C++ study mode of the same executable.
+It lists four ordinary E01 input files under `inputs/`, one for each resolution.
+Each input is read independently through the common YAML parser and passed to
+the existing E01 run function. The study runner does not construct substitute
+simulation settings in memory.
+
+To launch the study from the project root after building:
+
+```sh
+OMP_NUM_THREADS=16 OMP_PLACES=cores OMP_PROC_BIND=spread \
+  build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric --input ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01-study.yaml
+```
+
+The study input's `parameters.input_files` paths are relative to the invocation
+directory. Each run file owns its case, parameters, units and observation settings.
+Its `output.directory` must name a distinct direct child, such as `n32`.
+The runner uses the study folder as the working directory while executing those
+inputs, so the ordinary relative-output rules place every result there.
+Exact copies of the YAML files are saved under the study's `inputs/` directory
+and loaded again before execution. Full-study mode rejects shortened runs.
+The required level sequence is 32, 64, 128, 256;
+the supplied `inputs/E01-n512.yaml` can be appended for the optional fifth level.
+
+The output folder contains:
+
+```text
+study.json
+README.md
+analyze_e01.py
+inputs/              # exact per-run YAML copies
+n32/                 # errors.csv, profiles.csv, fields/, run.json
+n64/
+n128/
+n256/
+```
+
+`study.json` records which runs have completed. Each run releases its simulation
+storage before the next begins. All MPI ranks execute the same sequence.
+The existing `E01.yaml` still selects a single run.
+
+The Python analysis is a normal source file copied into the result folder.
+It needs Python 3 and Matplotlib. With `parameters.run_analysis: true`,
+the former rank-zero process invokes it once after IPPL/MPI has finalized,
+using `parameters.python_executable` (default `python3`). Its console output
+is retained in `analysis.log`; an analysis failure leaves completed runs intact
+and returns a nonzero process status. Set `run_analysis: false` to analyze later:
+
+```sh
+python3 build/results/e01-study/analyze_e01.py
+```
+
+The script locates its data relative to itself, so the completed study folder
+can be moved without rewriting paths. It writes `convergence.csv`, `analysis.json`
+and PNG/PDF figures under `figures/`: convergence, sparse error histories and
+numerical/reference longitudinal profiles. Actual recorded sample times and
+positions are retained. Orders with zero errors remain undefined.
+Recorded native times come from `run.json`'s `error_observations.sample_times`,
+which the executable obtains from its actual `LevelContract`.
+The script rejects incomplete or incompatible runs and does not assign an
+accuracy pass/fail threshold.
+
 ## Longitudinal profiles
 
 `profiles.csv` contains numerical and analytic `Ax`, `Ex` and R2 `By`

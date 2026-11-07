@@ -1,7 +1,9 @@
 #include <cmath>
+#include <optional>
 
 #include "core/input/Application.h"
 #include "core/simulation/ChDRSimulationManager.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01AnalysisProcess.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01AnalyticContinuumReference.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Run.h"
 
@@ -49,7 +51,27 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
     }
 }  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric
 
+namespace {
+    namespace experiment = chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric;
+
+    // Only plain host data crosses the IPPL lifetime boundary. The study sets this on
+    // rank zero only, so the optional Python process starts once after MPI is finalized.
+    std::optional<experiment::E01AnalysisCommand> pendingAnalysis;
+
+    /// Use the same YAML application entry point for one E01 run or a complete study.
+    void runConfigured(const chdr::input::ChdrYamlRunInput& input) {
+        if (input.caseName_m == "E01-study")
+            pendingAnalysis = experiment::runE01Study(input, experiment::runE01);
+        else if (input.caseName_m == "E01")
+            experiment::runE01(input);
+        else
+            throw std::invalid_argument("Supported cases are E01 and E01-study");
+    }
+}  // namespace
+
 int main(int argc, char** argv) {
-    return chdr::input::runApplication(
-        argc, argv, chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric::runE01);
+    const int status = chdr::input::runApplication(argc, argv, runConfigured);
+    if (status != 0 || !pendingAnalysis)
+        return status;
+    return experiment::runE01Analysis(*pendingAnalysis);
 }

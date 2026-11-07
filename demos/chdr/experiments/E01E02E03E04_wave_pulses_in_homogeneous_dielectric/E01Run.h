@@ -269,6 +269,25 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             node["magnetic_convention"] = "R2 averaged magnetic field";
         }
 
+        /// Export native comparison times so analysis need not duplicate LevelContract rules.
+        inline void recordSampleTimes(output::RunRecordDescription& description,
+                                      const E01Solver& state, const RunPlan& plan) {
+            const std::array quantities{Quantity::VectorPotential, Quantity::Electric,
+                                        Quantity::Magnetic};
+            const std::array names{"A", "E", "B"};
+            for (unsigned c = 0; c < quantities.size(); ++c) {
+                std::vector<double> times{state.labelTime(quantities[c], 0)};
+                for (const auto& checkpoint : plan.checkpoints_m) {
+                    const int step = quantities[c] == Quantity::VectorPotential
+                                         ? checkpoint.potentialStep_m
+                                         : checkpoint.fieldStep_m;
+                    times.push_back(state.labelTime(quantities[c], step));
+                }
+                description.effective_m[std::string("error_observations/sample_times/") + names[c]]
+                    .set(times);
+            }
+        }
+
         /// Identify the fixed native line and its connection to the error observations.
         inline void recordProfiles(output::RunRecordDescription& description) {
             auto profiles                   = description.effective_m["profiles"];
@@ -295,6 +314,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                 run.material().homogeneousValue();
             recordReference(description, reference);
             recordSchedule(description, plan);
+            recordSampleTimes(description, run.solver(), plan);
             recordProfiles(description);
             snapshots.record(description);
             output::writeRunRecord(request.outputDirectory_m, request, description,
