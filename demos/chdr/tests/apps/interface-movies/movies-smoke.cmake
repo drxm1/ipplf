@@ -1,5 +1,6 @@
 # Each output directory belongs exclusively to this four-step smoke check.
 file(REMOVE_RECURSE "${OUTPUT}")
+file(MAKE_DIRECTORY "${OUTPUT}")
 foreach(
   movie
   half-space
@@ -11,8 +12,11 @@ foreach(
   slab-tm
   diagonal-tm)
   set(directory "${OUTPUT}/${movie}")
-  execute_process(COMMAND "${PROGRAM}" "${movie}" --smoke --output "${directory}"
-                          COMMAND_ERROR_IS_FATAL ANY)
+  file(
+    WRITE "${OUTPUT}/${movie}.yaml"
+    "schema_version: 1\ncase: ${movie}\nunits: {system: normalized}\nparameters: {smoke: true}\noutput: {directory: '${directory}'}\n"
+  )
+  execute_process(COMMAND "${PROGRAM}" --input "${OUTPUT}/${movie}.yaml" COMMAND_ERROR_IS_FATAL ANY)
   file(READ "${directory}/wave.pvti.series" series)
   string(JSON count LENGTH "${series}" files)
   if(NOT count EQUAL 2)

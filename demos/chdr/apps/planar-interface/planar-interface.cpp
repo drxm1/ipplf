@@ -6,7 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <sstream>
-#include <vector>
+#include <string>
 
 #include "apps/planar-interface/InterfaceRun.h"
 #include "apps/planar-interface/PacketCase.h"
@@ -17,25 +17,6 @@
 #include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::apps::planarInterface {
-    /// Translate the existing command line into the same input used by YAML runs.
-    input::RunInput legacyInput(const std::vector<std::string>& arguments) {
-        if (arguments.empty())
-            throw std::invalid_argument("Use CASE [--smoke] [--output DIRECTORY]");
-        input::RunInput result;
-        result.caseName_m = arguments.front();
-        for (std::size_t i = 1; i < arguments.size(); ++i) {
-            if (arguments[i] == "--smoke")
-                result.parameters_m["smoke"] = "true";
-            else if (arguments[i] == "--output" && i + 1 < arguments.size())
-                result.outputDirectory_m = arguments[++i];
-            else
-                throw std::invalid_argument("Use CASE [--smoke] [--output DIRECTORY]");
-        }
-        if (result.caseName_m == "plane" && arguments.size() != 1)
-            throw std::invalid_argument("The legacy plane command accepts no additional options");
-        return result;
-    }
-
     /// Preserve renderer metadata and explicitly identify the existing packet's effective data.
     std::string packetMetadata(const PacketCase& selected) {
         const auto& box    = selected.box_m;
@@ -193,6 +174,5 @@ namespace chdr::apps::planarInterface {
 }  // namespace chdr::apps::planarInterface
 
 int main(int argc, char** argv) {
-    return chdr::input::runApplication(argc, argv, chdr::apps::planarInterface::legacyInput,
-                                       chdr::apps::planarInterface::runConfigured);
+    return chdr::input::runApplication(argc, argv, chdr::apps::planarInterface::runConfigured);
 }

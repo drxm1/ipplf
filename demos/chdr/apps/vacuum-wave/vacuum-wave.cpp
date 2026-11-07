@@ -4,7 +4,6 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
@@ -17,7 +16,6 @@
 #include "core/simulation/ObservationSchedule.h"
 
 namespace {
-    chdr::input::RunInput parseOptions(const std::vector<std::string>& arguments);
     void runConfigured(const chdr::input::RunInput& input);
 }  // namespace
 
@@ -27,50 +25,11 @@ namespace {
  * @return Status from the shared application lifecycle and this case's checks.
  */
 int main(int argc, char* argv[]) {
-    return chdr::input::runApplication(argc, argv, parseOptions, runConfigured);
+    return chdr::input::runApplication(argc, argv, runConfigured);
 }
 
 namespace {
     using namespace chdr::apps::vacuumWave;
-
-    /// @brief Read a required next CLI value or throw before field construction.
-    std::string argumentValue(std::size_t& index, const std::vector<std::string>& arguments) {
-        if (index + 1 >= arguments.size())
-            throw std::invalid_argument("Missing value after " + arguments[index]);
-        return arguments[++index];
-    }
-
-    /// @brief Parse a nonnegative step count with no ignored suffix.
-    int parseSteps(const std::string& text) {
-        std::size_t consumed = 0;
-        const int steps      = std::stoi(text, &consumed);
-        if (consumed != text.size() || steps < 0)
-            throw std::invalid_argument("--steps needs a nonnegative integer");
-        return steps;
-    }
-
-    /// Translate one legacy option into the common run description.
-    void parseArgument(chdr::input::RunInput& input, std::size_t& index,
-                       const std::vector<std::string>& arguments) {
-        const auto& arg = arguments[index];
-        if (arg == "--fine")
-            input.caseName_m = "fine";
-        else if (arg == "--steps")
-            input.steps_m = parseSteps(argumentValue(index, arguments));
-        else if (arg == "--output")
-            input.outputDirectory_m = argumentValue(index, arguments);
-        else
-            throw std::invalid_argument("Unknown argument: " + arg);
-    }
-
-    /// @brief Parse identical per-rank options; output must be new/empty when supplied.
-    chdr::input::RunInput parseOptions(const std::vector<std::string>& arguments) {
-        chdr::input::RunInput input;
-        input.caseName_m = "coarse";
-        for (std::size_t index = 0; index < arguments.size(); ++index)
-            parseArgument(input, index, arguments);
-        return input;
-    }
 
     /// Select an existing benchmark grid; its fixed acceptance checks require these cases.
     int selectedResolution(const chdr::input::RunInput& input) {
@@ -117,7 +76,7 @@ namespace {
         const int periodSteps = static_cast<int>(std::llround(1.0 / dt));
         const int steps       = chdr::input::resolvedSteps(input, dt, periodSteps);
         if (steps > periodSteps)
-            throw std::invalid_argument("--steps exceeds the one-period benchmark");
+            throw std::invalid_argument("Requested run exceeds the one-period benchmark");
         return steps;
     }
 
@@ -145,7 +104,7 @@ namespace {
                   << d.phaseImag_m << ',';
     }
 
-    /// Label SI publication without changing the legacy normalized CSV header or values.
+    /// Label SI publication without changing the normalized CSV header or values.
     void printCsvHeader(const chdr::input::UnitSystem& units) {
         if (units.isSI())
             std::cout << std::setprecision(17)
@@ -209,7 +168,7 @@ namespace {
         return diagnostic;
     }
 
-    /// Resolve the legacy quarter-period cadence and any requested field-output overrides.
+    /// Resolve the default quarter-period cadence and any requested field-output overrides.
     chdr::simulation::ObservationSchedule fieldSchedule(const chdr::input::RunInput& input,
                                                         double dt) {
         const chdr::simulation::ObservationSchedule fallback{

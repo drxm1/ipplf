@@ -11,28 +11,25 @@ and are rendered with the `render_movie.py` described here.
 
 ```sh
 OMP_NUM_THREADS=1 interface-movies --input half-space.yaml
-OMP_NUM_THREADS=1 interface-movies half-space --output open-half-space
-OMP_NUM_THREADS=1 interface-movies brick --output open-brick
-OMP_NUM_THREADS=1 interface-movies slab --output open-slab
-OMP_NUM_THREADS=1 interface-movies diagonal --output open-diagonal
-OMP_NUM_THREADS=1 interface-movies half-space-tm --output open-half-space-tm
-OMP_NUM_THREADS=1 interface-movies brick-tm --output open-brick-tm
-OMP_NUM_THREADS=1 interface-movies slab-tm --output open-slab-tm
-OMP_NUM_THREADS=1 interface-movies diagonal-tm --output open-diagonal-tm
 python3 render_movie.py open-half-space
+```
+
+The output directory must be new or empty. Set `parameters: {smoke: true}`
+for a 64 by 2 by 64 mesh and four steps. `run.steps` overrides the case's duration. Full cases
+use a 600 by 2 by 600 mesh with unit spacing and a frame every eight steps.
+Two-rank runs can use `mpiexec --bind-to none -n 2 interface-movies --input half-space.yaml`.
+
+The program requires `--input FILE`, using the
+[common YAML schema](../../core/input/README.md).
+[half-space.yaml](half-space.yaml) selects the existing full half-space case.
+To run another case, copy that file and change `case` and `output.directory`.
+For example, `case: half-space-tm` with `output.directory` set to `open-half-space-tm` selects
+the TM pulse. After running that input, render and measure its fields with:
+
+```sh
 python3 render_movie.py open-half-space-tm --field B_raw
 python3 measure_tm_constraints.py open-half-space-tm
 ```
-
-The output directory must be new or empty. Add `--smoke` for a 64 by 2 by
-64 mesh and four steps. `--steps N` overrides the case's duration. Full cases
-use a 600 by 2 by 600 mesh with unit spacing and a frame every eight steps.
-Two-rank runs can use `mpiexec --bind-to none -n 2 interface-movies ...`.
-
-`--input FILE` uses the [common YAML schema](../../core/input/README.md).
-[half-space.yaml](half-space.yaml) selects the existing full half-space case.
-The historical commands are translated into the same input and use the same
-setup and execution path. YAML cannot be combined with legacy case overrides.
 
 All eight cases accept `parameters: {smoke: true}`, optional `run.steps` or
 `run.duration`, and observations named `fields` and `diagnostics`. The output

@@ -24,7 +24,7 @@ namespace chdr::input {
         std::optional<bool> includeFinal_m, enabled_m;
     };
 
-    /** @brief Common input shared by YAML and legacy command-line entry points.
+    /** @brief Common run configuration read from the shared YAML schema.
      * @details Each application validates its case name, supported parameter keys and
      * observation names before allocating fields. Empty outputDirectory_m retains
      * stdout-only runs. parameters_m owns its data independently of the input document.

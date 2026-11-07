@@ -2,7 +2,7 @@
 ## @file verify_partial_output.py
 # @brief CTest entry chdr.vacuum.readback.partial: VTK readback of the zero-step and
 # one-step output of chdr.vacuum.cli.
-# @details For the cases output-initial (--steps 0) and output-first-step (--steps 1) of
+# @details For output-initial (YAML run.steps: 0) and output-first-step (run.steps: 1) of
 # cli-checks.json, the CSV rows must be steps 0 to the last step with timeA = step/128.
 # The series must list exactly wave-0.pvti (and wave-1.pvti) at the times step/128, each
 # with one piece. Each frame must pass check_frame() of verify_wave_output.py: discrete

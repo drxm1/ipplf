@@ -11,7 +11,7 @@ target_include_directories(chdr-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(chdr-core PUBLIC ippl chdr-material chdr-fel-headers)
 
 # Common input and run records remain optional for low-level solver/unit-test consumers.
-add_library(chdr-application STATIC input/RunInput.cpp output/RunRecord.cpp)
+add_library(chdr-application STATIC input/Application.cpp input/RunInput.cpp output/RunRecord.cpp)
 target_link_libraries(chdr-application PUBLIC chdr-core catalyst::catalyst
                       PRIVATE nlohmann_json::nlohmann_json)
 # Refresh provenance for each build; unchanged content keeps RunRecord.cpp up to date.

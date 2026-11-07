@@ -5,7 +5,11 @@
     #set raw(theme: none)
 
     = Running an experiment <running-an-experiment>
-    The executables `chdr-vacuum-wave`, `planar-interface` and `interface-movies` accept `--input FILE`. They use the same YAML schema. The required keys are `schema_version: 1`, `case` and `units`; the case name must be supported by the chosen executable. The optional keys are listed below. Unknown keys, unsupported names and values of the wrong type are rejected, including unsupported observation names marked as disabled. The following input runs the coarse vacuum case with `chdr-vacuum-wave --input experiment.yaml`.
+    The executables `chdr-vacuum-wave`, `planar-interface` and `interface-movies` require `--input FILE`.
+    They use the same YAML schema.
+    The required keys are `schema_version: 1`, `case` and `units`.
+    The optional keys are listed below.
+    The following input runs the coarse vacuum case with `chdr-vacuum-wave --input experiment.yaml`.
 
     ```yaml
     schema_version: 1
@@ -29,9 +33,17 @@
       [`observations`], [Supported measurement names with individual schedule overrides; omitted fields retain their defaults.],
     )
 
-    A run can also be configured directly on the command line, without a YAML file. `chdr-vacuum-wave` accepts `--fine`, `--steps N` and `--output DIR`; without `--fine` it selects the coarse case. `planar-interface` takes a positional case name with optional `--smoke` and `--output DIR`, except that the `plane` case accepts neither of these options. `interface-movies` takes a positional case name and requires `--output DIR`; it also accepts `--smoke` and `--steps N`. These arguments are translated into the same `RunInput` as YAML. They cannot be mixed with `--input FILE`. IPPL handles its own options before this selection. Each application's README lists its supported cases and parameters.
+    IPPL handles its own options before the YAML selector.
+    Each application's README lists its supported cases and parameters.
 
-    A case supplies the domain, material, solver settings, initial data, measurements and interpretation of their results. `ChDRSimulationManager` owns the field storage, material and solver, advances the state, and calls the supplied observation function at the initial state and after each advance. `Application.h` handles input selection, IPPL initialization and finalization, and fatal errors. This interface is implemented for the existing presets. It does not expose arbitrary geometry or initial fields through YAML; in particular, the `plane` case retains its prescribed duration and Fourier gates. The SI scales give the physical interpretation described in @units-si-input-energy.
+    A case supplies the domain, material, solver settings, initial data, measurements and interpretation of their results.
+    `ChDRSimulationManager` owns the field storage, material and solver,
+    advances the state, and calls the supplied observation function at the initial state and after each advance.
+    `runApplication` handles input selection, IPPL initialization and finalization, and fatal errors.
+    This interface is implemented for the existing presets.
+    It does not expose arbitrary geometry or initial fields through YAML;
+    in particular, the `plane` case retains its prescribed duration and Fourier gates.
+    The SI scales give the physical interpretation described in @units-si-input-energy.
 
     == Observations and output <experiment-observations-output>
     Observation indices count completed advances. State zero is the initialized state, and a run with zero advances can still observe it. Each observation accepts `enabled`, `first`, `every`, `last` and `include_final`. The interval from `first` to `last` is inclusive; `last: -1` leaves its upper end open. The cadence starts at `first`, with positive spacing `every`. `include_final: true` additionally selects the final run state if it lies inside this interval. A final state already on the cadence is sampled once. For example, `first: 1`, `every: 3`, `last: 8` and `include_final: true` select states 1, 4, 7 and 8 in a run of eight advances.
