@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <concepts>
 
 #include "core/base/FieldContainer.h"
 #include "core/base/SpatialDimension.h"
@@ -13,6 +14,15 @@ static_assert(chdr::SpatialDim == 3,
               "BoxSetup.h requires three spatial dimensions for its Cartesian implementation");
 
 namespace chdr::solver {
+    /// Sample one component at spatial coordinates and time in solver units, returning double.
+    template <class T>
+    concept FieldComponentSampler = requires(const T& sample, unsigned component) {
+        {
+            sample(double{} /* x */, double{} /* y */, double{} /* z */, double{} /* t */,
+                   component)
+        } -> std::same_as<double>;
+    };
+
     /** @brief Construct mesh/layout ownership; allocate with initializeFieldStorage.
      * @pre All ranks must call it with identical arguments; lengths are finite and positive.
      * @param cells     Global cell counts in x, y and z; each must be at least two.
@@ -31,8 +41,8 @@ namespace chdr::solver {
         unsigned splitAxis = 0, std::array<bool, SpatialDim> periodic = {true, true, true});
 
     /** @brief Write owned analytic components at their declared positions and times.
-     * @tparam AnalyticSampler Device-copyable functor returning one component value from
-     * sample(x,y,z,time,component), callable inside a Kokkos kernel.
+     * @tparam AnalyticSampler Device-copyable FieldComponentSampler, callable inside a Kokkos
+     * kernel as sample(x,y,z,time,component).
      * @param field Allocated four-component potential or source destination: component
      * zero stores scalar potential or charge density; components 1 through SpatialDim
      * store vector potential or current density. Mesh/layout owners remain with the caller.
@@ -49,7 +59,7 @@ namespace chdr::solver {
      *
      * TODO: Document this function better and review it line by line.
      */
-    template <class AnalyticSampler>
+    template <FieldComponentSampler AnalyticSampler>
     void writeSamples(AJFourFieldsType& field, AnalyticSampler sample, std::array<double, 4> times,
                       LevelContract contract = {}) {
         const auto view = field.getView();
@@ -78,7 +88,7 @@ namespace chdr::solver {
     /** @brief Load both potential slots, synchronize halos and close physical ghosts.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * ChdrSolver enforces this choice and supplies the required history and label interface.
-     * @tparam AnalyticSampler Device-copyable scalar-valued analytic potential sampler.
+     * @tparam AnalyticSampler Device-copyable FieldComponentSampler for the potentials.
      * @param solver An initialized ChdrSolver whose final time spacing is already selected.
      * @param sample Device-callable sample(x,y,z,time,component), with scalar potential
      * in component zero and Cartesian vector potential in components 1 through SpatialDim.
@@ -94,7 +104,7 @@ namespace chdr::solver {
      * initial gauge and continuity histories [christlieb2024GaugeConserving,
      * Theorems 3.3 and 3.5]; continuum-sampled histories may leave a free gauge wave.
      */
-    template <class PotentialSolverBase, class AnalyticSampler>
+    template <class PotentialSolverBase, FieldComponentSampler AnalyticSampler>
     void loadHistory(ChdrSolver<PotentialSolverBase>& solver, AnalyticSampler sample) {
         solver.markHistoryLoaded();
         const double a   = solver.labelTime(Quantity::VectorPotential, 0);
@@ -108,7 +118,7 @@ namespace chdr::solver {
     /** @brief Write the source consumed by the next solve; stepping reads owned source cells only.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * ChdrSolver enforces this choice and supplies the required source and label interface.
-     * @tparam AnalyticSampler Device-copyable scalar-valued charge/current sampler.
+     * @tparam AnalyticSampler Device-copyable FieldComponentSampler for charge/current density.
      * @param solver The ChdrSolver whose sourceField is overwritten on owned cells.
      * @param sample Device-callable sample(x,y,z,time,component), returning charge density
      * for component zero and Cartesian current density for components 1 through SpatialDim.
@@ -118,7 +128,7 @@ namespace chdr::solver {
      * The functor and integer source index remain explicit so a test can deliberately
      * plant a mislabelled source without changing the production level table.
      */
-    template <class PotentialSolverBase, class AnalyticSampler>
+    template <class PotentialSolverBase, FieldComponentSampler AnalyticSampler>
     void writeSource(ChdrSolver<PotentialSolverBase>& solver, AnalyticSampler sample,
                      long long sourceStep) {
         const double current = solver.labelTime(Quantity::Current, sourceStep);

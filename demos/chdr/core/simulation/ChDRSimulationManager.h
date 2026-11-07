@@ -62,9 +62,9 @@ namespace chdr::simulation {
          * @details The device-callable sampler follows solver::loadHistory. Observations are
          * separate so the caller can create writers and probes after the fields are initialized.
          */
-        template <class Sampler>
-        void load(Sampler sample) {
-            solver::loadHistory(*solver_m, sample);
+        template <solver::FieldComponentSampler InitialFourPotentialASampler>
+        void load(InitialFourPotentialASampler sampleFourPotentialA) {
+            solver::loadHistory(*solver_m, sampleFourPotentialA);
             solver_m->evaluateInitialFields();
         }
 

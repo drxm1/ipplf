@@ -111,13 +111,14 @@ namespace chdr::solver::test {
     };
 
     /** @brief Replay the distributed run with the same solver on a single-rank layout.
+     * @tparam AnalyticWave FieldComponentSampler whose sources() supplies charge/current samples.
      * @details Copy the distributed material's cached uniform permittivity and
      * actual step; neither is re-estimated from a mean or a new safety factor.
      * The owner-free vacuum path remains owner-free. This reference isolates
      * decomposition effects; it shares the production update and is not an
      * independent reference for the underlying equations.
      */
-    template <class SolverType, class AnalyticWave>
+    template <class SolverType, FieldComponentSampler AnalyticWave>
     SerialState evolveSerialReference(SerialFields& fields, SolverType& distributed,
                                       const AnalyticWave& wave, int steps,
                                       SpatialDiscretization spatialDiscretization) {
@@ -139,7 +140,7 @@ namespace chdr::solver::test {
     }
 
     /// Execute and compare on global rank zero while other ranks wait for the final broadcast.
-    template <class SolverType, class AnalyticWave>
+    template <class SolverType, FieldComponentSampler AnalyticWave>
     std::array<double, 2> compareReferenceAtRoot(SolverType& solver, const AnalyticWave& wave,
                                                  int steps,
                                                  SpatialDiscretization spatialDiscretization,
@@ -173,14 +174,15 @@ namespace chdr::solver::test {
      * Setting assertChecks to false still computes, prints and broadcasts both
      * errors, allowing the caller to retain a diagnostic record without assertions.
      * @tparam SolverType The same concrete solver type used for both decompositions.
-     * @tparam AnalyticWave Analytic potential and source samples accepted by loadHistory.
+     * @tparam AnalyticWave FieldComponentSampler for potentials, with sources() returning a
+     * FieldComponentSampler for charge/current density.
      * @param solver Distributed state after the requested number of steps.
      * @param wave Initial potential histories and sources for the serial replay.
      * @param steps Number of solves to repeat from the labelled initial histories.
      * @param spatialDiscretization Component placement for the serial reconstruction.
      * @param assertChecks Whether to enforce the stated bounds in addition to recording errors.
      */
-    template <class SolverType, class AnalyticWave>
+    template <class SolverType, FieldComponentSampler AnalyticWave>
     void verifySerialReference(SolverType& solver, const AnalyticWave& wave, int steps,
                                SpatialDiscretization spatialDiscretization,
                                bool assertChecks = true) {
