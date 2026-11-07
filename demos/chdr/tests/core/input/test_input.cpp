@@ -27,8 +27,8 @@ namespace {
     using namespace chdr::input;
 
     /// Exercise a reader or input selector and remove its temporary file on either outcome.
-    RunInput parseYaml(const std::string& text,
-                       RunInput (*readInput)(const std::string&) = readRunInput) {
+    ChdrYamlRunInput parseYaml(const std::string& text,
+                               ChdrYamlRunInput (*readInput)(const std::string&) = readRunInput) {
         auto path = (std::filesystem::temp_directory_path() / "chdr-input-XXXXXX").string();
         const int descriptor = mkstemp(path.data());
         if (descriptor < 0)

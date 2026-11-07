@@ -81,7 +81,7 @@ namespace chdr::apps::interfaceMovies {
 
     /// Save the completed solver state and the same schedules used by the output callback.
     template <class Solver>
-    void recordMovie(const input::RunInput& request, const MovieCase& selected,
+    void recordMovie(const input::ChdrYamlRunInput& request, const MovieCase& selected,
                      simulation::ChDRSimulationManager<Solver>& run, const std::string& metadata,
                      const output::FieldRunSettings& observations) {
         auto description = output::describeRun("interface-movies", selected.box_m, run.solver(),
@@ -93,7 +93,7 @@ namespace chdr::apps::interfaceMovies {
 
     /// Execute one existing case through the shared lifecycle and write its completed run record.
     template <class Solver, class Region>
-    void runMovieCase(const input::RunInput& request, MovieCase selected, Region region) {
+    void runMovieCase(const input::ChdrYamlRunInput& request, MovieCase selected, Region region) {
         const simulation::SolverSettings settings;
         simulation::ChDRSimulationManager<Solver> run(
             selected.box_m, material::TwoMaterialMap{region, selected.epsilon_m, 1.0}, settings);
@@ -111,7 +111,7 @@ namespace chdr::apps::interfaceMovies {
     }
 
     /// Resolve the selected preset; YAML and compatibility arguments enter the same run path.
-    void runConfigured(const input::RunInput& request) {
+    void runConfigured(const input::ChdrYamlRunInput& request) {
         input::validateParameters(request, {"smoke"});
         input::validateObservationNames(request, {"fields", "diagnostics"});
         if (request.outputDirectory_m.empty())

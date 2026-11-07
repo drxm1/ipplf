@@ -27,7 +27,7 @@ namespace chdr::output {
     };
 
     /// Resolve input once so output dispatch and the saved record use identical settings.
-    inline FieldRunSettings fieldRunSettings(const input::RunInput& request, int every) {
+    inline FieldRunSettings fieldRunSettings(const input::ChdrYamlRunInput& request, int every) {
         const simulation::ObservationSchedule defaults{.every_m = every, .includeFinal_m = true};
         return {input::observationSchedule(request, "fields", defaults),
                 input::observationSchedule(request, "diagnostics", defaults),
@@ -172,7 +172,7 @@ namespace chdr::output {
 
     /// Record the resolved schedules and the intentionally mixed diagnostic/SI column units.
     inline void recordFieldRunOutput(RunRecordDescription& description,
-                                     const input::RunInput& request,
+                                     const input::ChdrYamlRunInput& request,
                                      const FieldRunSettings& settings) {
         recordObservation(description, "fields", settings.fields_m, settings.fieldsEnabled_m);
         recordObservation(description, "diagnostics", settings.diagnostics_m,

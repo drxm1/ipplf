@@ -47,7 +47,7 @@ namespace chdr::input {
         return result;
     }
 
-    RunInput applicationInput(const std::vector<std::string>& args) {
+    ChdrYamlRunInput applicationInput(const std::vector<std::string>& args) {
         if (args.size() != 2 || args.front() != "--input")
             throw std::invalid_argument("Use --input FILE without additional arguments");
         return readRunInput(args[1]);

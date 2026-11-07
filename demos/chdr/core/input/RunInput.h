@@ -29,7 +29,7 @@ namespace chdr::input {
      * observation names before allocating fields. Empty outputDirectory_m retains
      * stdout-only runs. parameters_m owns its data independently of the input document.
      */
-    struct RunInput {
+    struct ChdrYamlRunInput {
         std::string caseName_m, outputDirectory_m;
         std::optional<int> steps_m;
         std::optional<double> duration_m;
@@ -44,23 +44,25 @@ namespace chdr::input {
      * All ranks read the same file before simulation setup; this function is host-only.
      * @throws std::invalid_argument For malformed or unsupported settings.
      */
-    RunInput readRunInput(const std::string& path);
+    ChdrYamlRunInput readRunInput(const std::string& path);
 
     /// Reject parameter names not implemented by this application, including misspellings.
-    void validateParameters(const RunInput& input, std::initializer_list<std::string> allowed);
+    void validateParameters(const ChdrYamlRunInput& input,
+                            std::initializer_list<std::string> allowed);
     /// Reject observation names not implemented by this application, even when disabled.
-    void validateObservationNames(const RunInput& input,
+    void validateObservationNames(const ChdrYamlRunInput& input,
                                   std::initializer_list<std::string> allowed);
 
     /// Read a Boolean parameter in Conduit's true/false or zero/one representation.
-    bool booleanParameter(const RunInput& input, const std::string& name, bool fallback);
+    bool booleanParameter(const ChdrYamlRunInput& input, const std::string& name, bool fallback);
     /// Return the selected enabled state, retaining the caller's default when omitted.
-    bool observationEnabled(const RunInput& input, const std::string& name, bool fallback = true);
+    bool observationEnabled(const ChdrYamlRunInput& input, const std::string& name,
+                            bool fallback = true);
     /** @brief Merge explicitly supplied schedule fields into the application's defaults.
      * @details The combined schedule is validated, including interactions between a
      * supplied endpoint and an endpoint inherited from the application.
      */
-    simulation::ObservationSchedule observationSchedule(const RunInput& input,
+    simulation::ObservationSchedule observationSchedule(const ChdrYamlRunInput& input,
                                                         const std::string& name,
                                                         simulation::ObservationSchedule fallback);
 
@@ -68,11 +70,11 @@ namespace chdr::input {
      * @details Duration is expressed in the selected time units. Its ratio to the actual
      * time step must be an integer within floating-point roundoff; no truncation is used.
      */
-    int resolvedSteps(const RunInput& input, double codeTimeStep, int defaultSteps);
+    int resolvedSteps(const ChdrYamlRunInput& input, double codeTimeStep, int defaultSteps);
 
     /** @brief Serialize supplied options for the common run record.
      * @details This preserves explicit overrides. The application's effective run
      * description records defaults resolved from its case and actual solver state.
      */
-    conduit_cpp::Node runInputRecord(const RunInput& input);
+    conduit_cpp::Node runInputRecord(const ChdrYamlRunInput& input);
 }  // namespace chdr::input

@@ -104,7 +104,7 @@ namespace chdr::input {
         }
 
         /// Decode duration or step count; the application's numerical step is never adjusted.
-        void readDuration(const Node& run, RunInput& input) {
+        void readDuration(const Node& run, ChdrYamlRunInput& input) {
             keys(run, "run", {"steps", "duration"});
             if (run.has_path("steps") && run.has_path("duration"))
                 fail("run", "steps and duration are mutually exclusive");
@@ -121,7 +121,7 @@ namespace chdr::input {
         }
 
         /// Decode only common run settings; case-specific limits remain with the application.
-        void readRun(const Node& root, RunInput& input) {
+        void readRun(const Node& root, ChdrYamlRunInput& input) {
             if (root.has_path("run"))
                 readDuration(root["run"], input);
             if (root.has_path("output")) {
@@ -177,7 +177,7 @@ namespace chdr::input {
         }
 
         /// Preserve observation names as direct identifiers rather than Conduit paths.
-        void readObservations(const Node& node, RunInput& input) {
+        void readObservations(const Node& node, ChdrYamlRunInput& input) {
             mapping(node, "observations");
             for (conduit_index_t i = 0; i < node.number_of_children(); ++i) {
                 const auto child = node.child(i);
@@ -203,7 +203,7 @@ namespace chdr::input {
         }
 
         /// Decode the identity and unit convention shared by every application.
-        void readIdentity(const Node& root, RunInput& input) {
+        void readIdentity(const Node& root, ChdrYamlRunInput& input) {
             keys(
                 root, "root",
                 {"schema_version", "case", "parameters", "run", "output", "observations", "units"});
@@ -240,10 +240,10 @@ namespace chdr::input {
         }
     }  // namespace
 
-    RunInput readRunInput(const std::string& path) {
+    ChdrYamlRunInput readRunInput(const std::string& path) {
         Node root;
         conduit_node_load(conduit_cpp::c_node(&root), path.c_str(), "yaml");
-        RunInput input;
+        ChdrYamlRunInput input;
         readIdentity(root, input);
         if (root.has_path("parameters")) {
             mapping(root["parameters"], "parameters");
@@ -255,31 +255,32 @@ namespace chdr::input {
         return input;
     }
 
-    void validateParameters(const RunInput& input, std::initializer_list<std::string> allowed) {
+    void validateParameters(const ChdrYamlRunInput& input,
+                            std::initializer_list<std::string> allowed) {
         if (!input.parameters_m.dtype().is_empty())
             keys(input.parameters_m, "parameters", allowed);
     }
 
-    void validateObservationNames(const RunInput& input,
+    void validateObservationNames(const ChdrYamlRunInput& input,
                                   std::initializer_list<std::string> allowed) {
         for (const auto& [name, options] : input.observations_m)
             if (std::find(allowed.begin(), allowed.end(), name) == allowed.end())
                 fail("observations/" + name, "unsupported observation for this application");
     }
 
-    bool booleanParameter(const RunInput& input, const std::string& name, bool fallback) {
+    bool booleanParameter(const ChdrYamlRunInput& input, const std::string& name, bool fallback) {
         return input.parameters_m.has_path(name)
                    ? boolean(input.parameters_m[name], "parameters/" + name)
                    : fallback;
     }
 
-    bool observationEnabled(const RunInput& input, const std::string& name, bool fallback) {
+    bool observationEnabled(const ChdrYamlRunInput& input, const std::string& name, bool fallback) {
         const auto found = input.observations_m.find(name);
         return found == input.observations_m.end() ? fallback
                                                    : found->second.enabled_m.value_or(fallback);
     }
 
-    simulation::ObservationSchedule observationSchedule(const RunInput& input,
+    simulation::ObservationSchedule observationSchedule(const ChdrYamlRunInput& input,
                                                         const std::string& name,
                                                         simulation::ObservationSchedule fallback) {
         if (const auto found = input.observations_m.find(name);
@@ -294,7 +295,7 @@ namespace chdr::input {
         return fallback;
     }
 
-    int resolvedSteps(const RunInput& input, double codeTimeStep, int defaultSteps) {
+    int resolvedSteps(const ChdrYamlRunInput& input, double codeTimeStep, int defaultSteps) {
         if (input.steps_m && input.duration_m)
             fail("run", "steps and duration are mutually exclusive");
         if (!input.duration_m) {
@@ -306,7 +307,7 @@ namespace chdr::input {
         return durationSteps(*input.duration_m, input.units_m.timeFactor(), codeTimeStep);
     }
 
-    conduit_cpp::Node runInputRecord(const RunInput& input) {
+    conduit_cpp::Node runInputRecord(const ChdrYamlRunInput& input) {
         Node result;
         result["schema_version"] = 1;
         result["case"]           = input.caseName_m;

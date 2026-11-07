@@ -103,8 +103,9 @@ namespace chdr::output {
         }
 
         /// Assemble a completed record; effective values remain explicitly in solver units.
-        Node makeRecord(const input::RunInput& input, const RunRecordDescription& description,
-                        int ranks, const std::vector<int>& bounds) {
+        Node makeRecord(const input::ChdrYamlRunInput& input,
+                        const RunRecordDescription& description, int ranks,
+                        const std::vector<int>& bounds) {
             Node result;
             result["record_version"] = 1;
             result["status"]         = "completed";
@@ -219,7 +220,7 @@ namespace chdr::output {
         node["include_final"] = schedule.includeFinal_m ? 1 : 0;
     }
 
-    void writeRunRecord(const std::string& directory, const input::RunInput& input,
+    void writeRunRecord(const std::string& directory, const input::ChdrYamlRunInput& input,
                         const RunRecordDescription& description, MPI_Comm communicator) {
         if (directory.empty())
             return;

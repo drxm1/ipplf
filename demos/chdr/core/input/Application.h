@@ -10,7 +10,7 @@
 
 namespace chdr::input {
     /// Configure and run one experiment from the supplied input; throw on failure.
-    using ExperimentFunction = void (*)(const RunInput&);
+    using ExperimentFunction = void (*)(const ChdrYamlRunInput&);
 
     /** @brief Remove IPPL options already consumed during initialization from application input.
      * @details Retain the experiment arguments for the common YAML selector.
@@ -21,7 +21,7 @@ namespace chdr::input {
     /** @brief Read the YAML file selected by exactly --input FILE.
      * @throws std::invalid_argument For missing, additional or malformed arguments.
      */
-    RunInput applicationInput(const std::vector<std::string>& args);
+    ChdrYamlRunInput applicationInput(const std::vector<std::string>& args);
 
     /** @brief Run an experiment with YAML input selected by --input FILE.
      * @param execute Function taking const RunInput& and returning void. It validates the

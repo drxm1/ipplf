@@ -88,6 +88,6 @@ namespace chdr::output {
      * settings. Rank-zero filesystem failures are broadcast before any caller returns.
      * Source/build definitions are injected by CMake; absent definitions read "unrecorded".
      */
-    void writeRunRecord(const std::string& directory, const input::RunInput& input,
+    void writeRunRecord(const std::string& directory, const input::ChdrYamlRunInput& input,
                         const RunRecordDescription& description, MPI_Comm communicator);
 }  // namespace chdr::output
