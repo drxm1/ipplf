@@ -22,8 +22,8 @@ namespace chdr::material {
     using Position             = ippl::Vector<double, 3>;
     using Policy               = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
 
-    /// Require const invocation with the material sampling arguments and an exact double result.
     using EpsilonrType = double;
+    /// Require const invocation with the material sampling arguments and an exact double result.
     template <class T>
     concept PermittivitySampler =
         requires(const T& sample, const CellIndex& cellIdx, bool& marked) {
