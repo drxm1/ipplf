@@ -19,7 +19,7 @@ mkdir -p build/results
 )
 ```
 
-`inputs/E01-n32.yaml` selects the full E01 target on the coarsest `16 x 16 x 704`
+`inputs/E01-n32.yaml` selects the full E01 target on the coarsest `8 x 8 x 704`
 periodic mesh, advancing 1869 steps with timestep `1/32`.
 The command above writes to `build/results/n32/`.
 `output.directory` must be new or empty; paths are relative to the process's
@@ -41,10 +41,18 @@ across the full pulse width, as defined in E01.typ.
 | 64 | 1408 | 1/32 | 1/64 | 3737 |
 | 128 | 2816 | 1/64 | 1/128 | 7473 |
 | 256 | 5632 | 1/128 | 1/256 | 14945 |
-| 512 (optional) | 11264 | 1/256 | 1/512 | 29890 |
+| 512 | 11264 | 1/256 | 1/512 | 29890 |
+| 1024 | 22528 | 1/512 | 1/1024 | 59780 |
+| 2048 | 45056 | 1/1024 | 1/2048 | 119559 |
+| 4096 | 90112 | 1/2048 | 1/4096 | 239117 |
 
-The transverse mesh remains `16 x 16` with spacing `1/16`, and the physical box
-remains `1 x 1 x 44`. Material, pulse parameters and target times are fixed.
+The required `parameters.transverse_cells_per_axis` selects both transverse counts.
+The current inputs use `8 x 8` with spacing `1/8`; all levels of a study must
+use the same count. The physical box remains `1 x 1 x 44`.
+E01's fields depend only on z and time, as defined in E01.typ;
+their x/y component directions do not imply variation in those directions.
+This is a longitudinal convergence study, not a test of general 3D variation.
+Material, pulse parameters and target times are fixed.
 Choose a new output directory for each run. The CSV and run record contain the
 actual mesh, timestep and selected observation indices.
 
@@ -78,11 +86,17 @@ checkpoint name, target time, completed-step index and actual comparison time.
 References are evaluated at the numerical component's position and actual time.
 All owned cells and all three vector components contribute; ghost cells do not.
 
-The full run saves initialization and the four targets `T/4`, `T/2`, `3T/4`, `T`
-specified in E01.typ. On the coarsest level, potential observations use steps
-467, 934, 1401 and 1868; electric/magnetic observations use steps 468, 935, 1402
-and 1869. Each refined level selects its nearest available native times using
-its actual timestep.
+The full run saves initialization, an early observation after travelling `2w`,
+and the original targets `T/4`, `T/2`, `3T/4`, `T`.
+These correspond to travel distances `2w`, `10w`, `20w`, `30w`, `40w`;
+the early target is `T/20`, approximately 2.9189 in solver time units.
+The pulse centre then lies at `z = 4w`, since it starts at `z = 2w`.
+On the coarsest level, the early potential observation uses step 93,
+and E/R2 B use step 94. The later potential steps remain 467, 934, 1401 and 1868;
+the later field steps remain 468, 935, 1402 and 1869.
+Each refined level selects the nearest available times through its actual
+`LevelContract` and timestep. Checkpoint names, travel distances and selected
+indices are recorded in `run.json`.
 The initial potential time is zero and the initial R2 field time is `-dt/2`.
 
 A short run keeps those same protocol targets and skips any it has not reached.
@@ -90,14 +104,17 @@ It additionally measures its last stored state with checkpoint `partial_final`,
 unless that quantity group was already measured at a protocol checkpoint there.
 For this extra endpoint, `target_time` is the integer potential time; the E/B
 comparison time is half a step earlier. Initialization-only runs have no extra
-endpoint rows. A complete run has twenty measurement rows.
+endpoint rows. A complete run has twenty-four measurement rows.
 
-The first results are single-grid comparisons, not a convergence study.
+The completed original study used four levels and a `16 x 16` transverse mesh.
+The current inputs prepare a new study with the early observation and extended
+refinement; they do not overwrite or combine with those older results.
 
 ## Full refinement study
 
 `E01-study.yaml` selects the C++ study mode of the same executable.
-It lists four ordinary E01 input files under `inputs/`, one for each resolution.
+It lists eight ordinary E01 input files under `inputs/`, one for each resolution
+from 32 through 4096 cells per pulse.
 Each input is read independently through the common YAML parser and passed to
 the existing E01 run function. The study runner does not construct substitute
 simulation settings in memory.
@@ -146,8 +163,10 @@ The runner uses the study folder as the working directory while executing those
 inputs, so the ordinary relative-output rules place every result there.
 Exact copies of the YAML files are saved under the study's `inputs/` directory
 and loaded again before execution. Full-study mode rejects shortened runs.
-The required level sequence is 32, 64, 128, 256;
-the supplied `inputs/E01-n512.yaml` can be appended for the optional fifth level.
+The input list must be a prefix of the doubling sequence from 32 through 4096,
+with at least the original four levels. The current overnight configuration
+selects all eight, with a fixed `8 x 8` transverse mesh.
+Its output directory is `build/results/e01-study-2w-n4096`.
 
 The output folder contains:
 
@@ -160,6 +179,10 @@ n32/                 # errors.csv, profiles.csv, fields/, run.json
 n64/
 n128/
 n256/
+n512/
+n1024/
+n2048/
+n4096/
 ```
 
 `study.json` records which runs have completed. Each run releases its simulation
@@ -173,7 +196,7 @@ is retained in `analysis.log`; an analysis failure leaves completed runs intact
 and returns a nonzero process status. Set `run_analysis: false` to analyze later:
 
 ```sh
-python3 build/results/e01-study/analyze_e01.py
+python3 build/results/e01-study-2w-n4096/analyze_e01.py
 ```
 
 The script locates its data relative to itself, so the completed study folder
@@ -185,6 +208,8 @@ Recorded native times come from `run.json`'s `error_observations.sample_times`,
 which the executable obtains from its actual `LevelContract`.
 The script rejects incomplete or incompatible runs and does not assign an
 accuracy pass/fail threshold.
+Its plots and tables follow the named schedule in each run record, including
+the `travel_2w` checkpoint. The original five-observation studies remain readable.
 
 ## Longitudinal profiles
 
@@ -194,15 +219,18 @@ at their respective error observations, including initialization and any
 target time, completed-step index, actual time, global z-cell index `k`,
 native coordinates `x,y,z` and the two values.
 
-All refinements sample the fixed transverse cell indices `(i,j) = (7,7)`.
-For these components, this gives the same physical line `x = 1/2, y = 15/32`.
+All refinements sample transverse cell indices `(Nx/2-1, Ny/2-1)` using integer
+division. For the current `8 x 8` inputs, `(i,j) = (3,3)` and these components
+share the native line `x = 1/2, y = 7/16`. With a `16 x 16` mesh, this selection
+retains the original line `x = 1/2, y = 15/32`.
+The line stays fixed across a study because its transverse mesh stays fixed.
 Use the recorded `z` coordinates for plotting: `By` is half a longitudinal
 cell beyond `Ax` and `Ex`, following the staggered placement in E01.typ.
 Its last owned sample is at `z = 44` and is retained; ghost cells are excluded.
 Only the selected line is transferred to rank zero for writing.
 
-A complete run contains five observations per component, giving `15 * Nz`
-profile rows (10,560 on the coarsest mesh), in addition to the CSV header.
+A complete run contains six observations per component, giving `18 * Nz`
+profile rows (12,672 on the coarsest mesh), in addition to the CSV header.
 
 ## Full-domain snapshots
 
@@ -212,8 +240,9 @@ Each selected solver state contains three vector arrays: `E`, `B_R2` and
 raw B is reconstructed into separate storage only when saving a frame.
 All ranks write their owned cells through the shared `core/output/FieldOutput.h`.
 
-The default interval is the nearest integer step to the first quarter target,
-as specified in E01.typ: 467, 934, 1868 and 3736 steps on the four main meshes.
+The default interval remains the nearest integer step to the first quarter target,
+as specified in E01.typ: 467, 934, 1868 and 3736 steps on the original four meshes.
+The early `2w` error/profile observation does not change this full-field cadence.
 Snapshots include initialization and the final completed state,
 without duplicating a frame when the final state is already on the cadence.
 Thus the full coarsest run saves steps 0, 467, 934, 1401, 1868 and 1869.

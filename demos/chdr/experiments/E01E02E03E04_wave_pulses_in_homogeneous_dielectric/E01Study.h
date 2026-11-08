@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <mpi.h>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -38,7 +39,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         struct StudyLevel {
             std::filesystem::path sourceInput_m, copiedInput_m;
             std::string directory_m;
-            int cellsPerPulse_m;
+            int cellsPerPulse_m, transverseCells_m;
         };
 
         /// Resolved study choices; level settings remain in their individual YAML files.
@@ -54,9 +55,10 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             if (!request.parameters_m.has_path("input_files"))
                 throw std::invalid_argument("E01-study requires parameters.input_files");
             const auto values = Json::parse(request.parameters_m["input_files"].to_json());
-            if (!values.is_array() || (values.size() != 4 && values.size() != 5))
+            if (!values.is_array() || values.size() < 4
+                || values.size() > E01CellsPerPulseLevels.size())
                 throw std::invalid_argument(
-                    "E01-study requires four input files, with an optional fifth");
+                    "E01-study requires four through eight consecutive refinement input files");
             for (const auto& value : values)
                 if (!value.is_string() || value.get<std::string>().empty())
                     throw std::invalid_argument(
@@ -90,15 +92,14 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
 
         /// Describe one input using its actual settings, with the expected ladder position.
         inline StudyLevel inspectLevel(const std::string& inputFile, std::size_t index) {
-            constexpr std::array allowed{32, 64, 128, 256, 512};
             const auto source   = std::filesystem::absolute(inputFile).lexically_normal();
             const auto selected = readLevelInput(source);
             const int cells     = e01CellsPerPulse(selected);
-            if (cells != allowed.at(index))
+            if (cells != E01CellsPerPulseLevels.at(index))
                 throw std::invalid_argument(
                     "E01-study refinement levels must follow the agreed ladder");
             return {source, std::filesystem::path("inputs") / (std::to_string(index + 1) + ".yaml"),
-                    selected.outputDirectory_m, cells};
+                    selected.outputDirectory_m, cells, e01TransverseCells(selected)};
         }
 
         /// Preflight every real input file before creating any study output.
@@ -108,6 +109,8 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             std::vector<StudyLevel> result;
             for (std::size_t i = 0; i < values.size(); ++i) {
                 auto level = inspectLevel(values[i].get<std::string>(), i);
+                if (!result.empty() && level.transverseCells_m != result.front().transverseCells_m)
+                    throw std::invalid_argument("E01-study must keep the transverse mesh fixed");
                 if (!directories.insert(level.directory_m).second)
                     throw std::invalid_argument(
                         "E01-study level output directories must be distinct");
@@ -193,10 +196,12 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                           {"levels", Json::array()},
                           {"input", Json::parse(input::runInputRecord(request).to_json())}};
             for (const auto& level : plan.levels_m)
-                manifest["levels"].push_back({{"cells_per_pulse", level.cellsPerPulse_m},
-                                              {"directory", level.directory_m},
-                                              {"input_file", level.copiedInput_m.generic_string()},
-                                              {"status", "pending"}});
+                manifest["levels"].push_back(
+                    {{"cells_per_pulse", level.cellsPerPulse_m},
+                     {"transverse_cells_per_axis", level.transverseCells_m},
+                     {"directory", level.directory_m},
+                     {"input_file", level.copiedInput_m.generic_string()},
+                     {"status", "pending"}});
             return manifest;
         }
 
@@ -243,6 +248,7 @@ The data and copied script can be moved together; their internal paths are relat
                                                         const StudyLevel& level) {
             auto selected = readLevelInput(plan.directory_m / level.copiedInput_m);
             if (e01CellsPerPulse(selected) != level.cellsPerPulse_m
+                || e01TransverseCells(selected) != level.transverseCells_m
                 || selected.outputDirectory_m != level.directory_m)
                 throw std::runtime_error("Copied E01 input disagrees with its study manifest");
             return selected;
@@ -254,6 +260,8 @@ The data and copied script can be moved together; their internal paths are relat
             onRoot(rank, [&] {
                 manifest["levels"][index]["status"] = status;
                 writeText(plan.directory_m / "study.json", manifest.dump(2));
+                std::cout << "E01 n" << plan.levels_m[index].cellsPerPulse_m << ": " << status
+                          << std::endl;
             });
         }
 

@@ -26,8 +26,11 @@
 namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
     using E01Simulation = simulation::ChDRSimulationManager<E01Solver>;
 
+    /// Available longitudinal resolutions, including the extended convergence study.
+    inline constexpr std::array E01CellsPerPulseLevels{32, 64, 128, 256, 512, 1024, 2048, 4096};
+
     /** @brief Select the number of longitudinal cells across the full E01 pulse width.
-     * @details E01.typ specifies 32, 64, 128 and 256, with 512 as an optional extension.
+     * @details The original four levels are extended by successive doublings through 4096.
      * The parameter is required. No rounding or narrowing of other values is used.
      */
     inline int e01CellsPerPulse(const input::ChdrYamlRunInput& request) {
@@ -37,11 +40,25 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         if (!node.dtype().is_number() || node.number_of_elements() != 1)
             throw std::invalid_argument("E01 parameters.cells_per_pulse must be a numeric scalar");
         const double value = node.to_float64();
-        for (int allowed : std::array{32, 64, 128, 256, 512})
+        for (int allowed : E01CellsPerPulseLevels)
             if (value == allowed)
                 return allowed;
         throw std::invalid_argument(
-            "E01 parameters.cells_per_pulse must be 32, 64, 128, 256 or 512");
+            "E01 parameters.cells_per_pulse must be a supported doubling from 32 through 4096");
+    }
+
+    /// Select a fixed transverse count per axis; the physical cross-section remains one by one.
+    inline int e01TransverseCells(const input::ChdrYamlRunInput& request) {
+        if (!request.parameters_m.has_path("transverse_cells_per_axis"))
+            throw std::invalid_argument("E01 requires parameters.transverse_cells_per_axis");
+        const auto node = request.parameters_m["transverse_cells_per_axis"];
+        if (!node.dtype().is_number() || node.number_of_elements() != 1)
+            throw std::invalid_argument("E01 transverse_cells_per_axis must be an integer >= 2");
+        const double value = node.to_float64();
+        if (!std::isfinite(value) || value < 2 || value > std::numeric_limits<int>::max()
+            || std::floor(value) != value)
+            throw std::invalid_argument("E01 transverse_cells_per_axis must be an integer >= 2");
+        return static_cast<int>(value);
     }
 
     /// Reject unsupported E01 case, unit, parameter and observation options.
@@ -50,7 +67,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             throw std::invalid_argument("This executable currently supports case E01 only");
         if (request.units_m.system_m != "normalized")
             throw std::invalid_argument("E01 currently requires normalized units");
-        input::validateParameters(request, {"cells_per_pulse"});
+        input::validateParameters(request, {"cells_per_pulse", "transverse_cells_per_axis"});
         input::validateObservationNames(request, {"fields"});
         if (request.outputDirectory_m.empty() && request.observations_m.contains("fields")
             && input::observationEnabled(request, "fields"))
@@ -65,33 +82,49 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         /// One prescribed target has separate nearest integer-potential and half-step-field states.
         struct Checkpoint {
             const char* name_m;
-            double targetTime_m;
+            double travelWidths_m, targetTime_m;
             int potentialStep_m, fieldStep_m;
         };
 
         /// The full protocol schedule stays fixed when run.steps requests an earlier stop.
         struct RunPlan {
-            std::array<Checkpoint, 4> checkpoints_m;
-            int fullSteps_m, steps_m;
+            std::array<Checkpoint, 5> checkpoints_m;
+            int fullSteps_m, steps_m, defaultSnapshotEvery_m;
         };
 
-        /** @brief Resolve the four targets and the last required solver state.
-         * @details E01.typ prescribes travel distance 40 and targets at its quarter intervals.
-         * Its nearest-time rule uses \f$n_A=\lfloor\tau/h_t+1/2\rfloor\f$ and
-         * \f$n_{EB}=\lfloor\tau/h_t+1\rfloor\f$. These follow from the integer potential
-         * and R2 half-step labels [fallahi2020mithra20fullwavesimulation, Eqs. (3.50)-(3.55)].
+        /** @brief Select the nearest available state using the actual sampling contract.
+         * @details The fixed-step labels are supplied by LevelContract. Subtracting the
+         * zero-state label before rounding inverts that map without duplicating its offsets.
          */
+        inline int nearestObservationStep(double target, Quantity quantity,
+                                          const LevelContract& contract, double dt) {
+            return static_cast<int>(
+                std::floor((target - contract.labelTime(quantity, 0, dt)) / dt + 0.5));
+        }
+
+        /// Convert a travelled distance into its target time and nearest native observations.
+        inline Checkpoint observationCheckpoint(const char* name, double widths,
+                                                const E01Reference& reference,
+                                                const LevelContract& contract, double dt) {
+            const double target = widths * E01_analytic_continuum_reference::w / reference.v_m;
+            return {name, widths, target,
+                    nearestObservationStep(target, Quantity::VectorPotential, contract, dt),
+                    nearestObservationStep(target, Quantity::Electric, contract, dt)};
+        }
+
+        /// Resolve travel targets 2w, 10w, 20w, 30w and 40w; retain quarter-run snapshots.
         inline RunPlan runPlan(const input::ChdrYamlRunInput& request,
-                               const E01Reference& reference, double dt) {
+                               const E01Reference& reference, const LevelContract& contract,
+                               double dt) {
             RunPlan plan{};
-            constexpr std::array names{"quarter_1", "quarter_2", "quarter_3", "final"};
-            const double finalTarget = 40.0 / reference.v_m;
-            for (unsigned q = 0; q < plan.checkpoints_m.size(); ++q) {
-                const double target   = (q + 1) * finalTarget / 4.0;
-                plan.checkpoints_m[q] = {names[q], target, int(std::floor(target / dt + 0.5)),
-                                         int(std::floor(target / dt + 1.0))};
-            }
-            const auto& last = plan.checkpoints_m.back();
+            constexpr std::array names{"travel_2w", "quarter_1", "quarter_2", "quarter_3", "final"};
+            constexpr std::array distances{2.0, 10.0, 20.0, 30.0, 40.0};
+            for (unsigned q = 0; q < plan.checkpoints_m.size(); ++q)
+                plan.checkpoints_m[q] =
+                    observationCheckpoint(names[q], distances[q], reference, contract, dt);
+            const auto& last            = plan.checkpoints_m.back();
+            plan.defaultSnapshotEvery_m = nearestObservationStep(
+                last.targetTime_m / 4, Quantity::VectorPotential, contract, dt);
             plan.fullSteps_m = std::max(last.potentialStep_m, last.fieldStep_m);
             plan.steps_m     = request.steps_m.value_or(plan.fullSteps_m);
             if (plan.steps_m < 0 || plan.steps_m > plan.fullSteps_m)
@@ -249,19 +282,28 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             node["support_half_width"]  = E01_analytic_continuum_reference::w;
         }
 
-        /// Keep the prescribed schedule visible even when a partial run stops before its targets.
-        inline void recordSchedule(output::RunRecordDescription& description, const RunPlan& plan) {
-            std::vector<double> targets;
+        /// Record each target's name and distance alongside its selected native state indices.
+        inline void recordTargets(output::RunRecordDescription& description, const RunPlan& plan) {
+            auto node = description.effective_m["error_observations"];
+            std::vector<double> targets, distances;
             std::vector<int> potentialSteps, fieldSteps;
             for (const auto& checkpoint : plan.checkpoints_m) {
+                node["protocol_checkpoint_names"].append().set(std::string(checkpoint.name_m));
                 targets.push_back(checkpoint.targetTime_m);
+                distances.push_back(checkpoint.travelWidths_m);
                 potentialSteps.push_back(checkpoint.potentialStep_m);
                 fieldSteps.push_back(checkpoint.fieldStep_m);
             }
-            auto node = description.effective_m["error_observations"];
+            node["protocol_travel_distances_in_w"].set(distances);
             node["protocol_target_times"].set(targets);
             node["protocol_potential_steps"].set(potentialSteps);
             node["protocol_field_steps"].set(fieldSteps);
+        }
+
+        /// Keep the prescribed schedule visible even when a partial run stops before its targets.
+        inline void recordSchedule(output::RunRecordDescription& description, const RunPlan& plan) {
+            recordTargets(description, plan);
+            auto node                   = description.effective_m["error_observations"];
             node["initial_step"]        = 0;
             node["partial_final"]       = plan.steps_m > 0 && plan.steps_m < plan.fullSteps_m;
             node["file"]                = "errors.csv";
@@ -289,11 +331,12 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         }
 
         /// Identify the fixed native line and its connection to the error observations.
-        inline void recordProfiles(output::RunRecordDescription& description) {
+        inline void recordProfiles(output::RunRecordDescription& description,
+                                   const simulation::ChdrCartesianGridSettings& grid) {
             auto profiles                   = description.effective_m["profiles"];
             profiles["file"]                = "profiles.csv";
-            profiles["global_cell_i"]       = e01ProfileDetail::LineCellX;
-            profiles["global_cell_j"]       = e01ProfileDetail::LineCellY;
+            profiles["global_cell_i"]       = e01ProfileDetail::lineCell(grid.cells_m[0]);
+            profiles["global_cell_j"]       = e01ProfileDetail::lineCell(grid.cells_m[1]);
             profiles["components"]          = "Ax,Ex,By";
             profiles["magnetic_convention"] = "R2 averaged magnetic field";
             profiles["schedule"] = "same observations as the corresponding global errors";
@@ -315,7 +358,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             recordReference(description, reference);
             recordSchedule(description, plan);
             recordSampleTimes(description, run.solver(), plan);
-            recordProfiles(description);
+            recordProfiles(description, grid);
             snapshots.record(description);
             output::writeRunRecord(request.outputDirectory_m, request, description,
                                    run.solver().A_n.getLayout().comm);
@@ -331,13 +374,13 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
     inline void evolveE01(E01Simulation& run, const input::ChdrYamlRunInput& request,
                           const simulation::ChdrCartesianGridSettings& grid,
                           const E01Reference& reference) {
-        const auto plan = e01_run_detail::runPlan(request, reference, run.solver().getDt());
+        const auto plan = e01_run_detail::runPlan(request, reference, run.solver().levelContract(),
+                                                  run.solver().getDt());
         e01_run_detail::ErrorCsv csv(request.outputDirectory_m, grid, run.solver().getDt(),
                                      run.solver().A_n.getLayout().comm);
         E01ProfileCsv profiles(request.outputDirectory_m, reference, run.solver().levelContract(),
                                run.solver().A_n.getLayout().comm);
-        E01FieldSnapshots snapshots(request, grid, run.solver(),
-                                    plan.checkpoints_m.front().potentialStep_m);
+        E01FieldSnapshots snapshots(request, grid, run.solver(), plan.defaultSnapshotEvery_m);
         run.advance(plan.steps_m, [&](long long step, E01Solver& state, const auto&) {
             e01_run_detail::observe(state, reference, plan, step, csv, profiles);
             snapshots.observe(step, state, plan.steps_m);

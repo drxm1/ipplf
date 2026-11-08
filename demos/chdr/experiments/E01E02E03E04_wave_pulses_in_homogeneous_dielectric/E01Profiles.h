@@ -20,8 +20,15 @@
 
 namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
     namespace e01ProfileDetail {
-        /// Fixed global cell indices on the transverse mesh, which E01 does not refine.
-        inline constexpr int LineCellX = 7, LineCellY = 7;
+        /** @brief Select a transverse cell just below the integer midpoint of its domain.
+         * @details Returns a zero-based cell offset, not a physical coordinate. For even
+         * counts this is the lower of the two central cells. A fixed transverse mesh
+         * therefore selects the same line on every longitudinal refinement level.
+         * @pre count is at least two, as required by the E01 input validation.
+         */
+        inline int lineCell(int count) {
+            return count / 2 - 1;
+        }
 
         /** @brief Extract the owned part of the line without copying a full field to the host.
          * @details Nonowners contribute zeros. Each global z index has exactly one owner;
@@ -33,14 +40,16 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             const auto local  = field.getLayout().getLocalNDIndex();
             const auto global = field.getLayout().getDomain();
             const auto view   = field.getView();
+            const int lineX   = global[0].first() + lineCell(global[0].length());
+            const int lineY   = global[1].first() + lineCell(global[1].length());
             const int ghost = field.getNghost(), firstZ = local[2].first() - global[2].first();
             using ExecutionSpace = typename Field::view_type::execution_space;
             Kokkos::View<double*, typename Field::view_type::device_type> line(
                 "E01 profile samples", global[2].length());
-            if (local[0].first() <= LineCellX && LineCellX <= local[0].last()
-                && local[1].first() <= LineCellY && LineCellY <= local[1].last()) {
-                const int i = LineCellX - local[0].first() + ghost;
-                const int j = LineCellY - local[1].first() + ghost;
+            if (local[0].first() <= lineX && lineX <= local[0].last() && local[1].first() <= lineY
+                && lineY <= local[1].last()) {
+                const int i = lineX - local[0].first() + ghost;
+                const int j = lineY - local[1].first() + ghost;
                 Kokkos::parallel_for(
                     "Extract E01 profile",
                     Kokkos::RangePolicy<ExecutionSpace>(0, local[2].length()),
@@ -74,11 +83,13 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         }
     }  // namespace e01ProfileDetail
 
-    /** @brief Write profiles.csv on the fixed native line through global cells (7,7).
-     * @details E01's fixed transverse mesh places Ax, Ex and By at
-     * \f$x=1/2,\ y=15/32\f$. Their longitudinal positions follow LevelContract
-     * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)]: By is half a cell beyond
-     * Ax/Ex. Its last owned point is at the periodic endpoint, not a duplicate ghost.
+    /** @brief Write profiles.csv on a native longitudinal line selected from the transverse mesh.
+     * @details lineCell selects the transverse cell indices. On E01's unit box with
+     * an even transverse count, the contract places Ax, Ex and By at
+     * \f$x=1/2,\ y=(N_y-1)/(2N_y)\f$: \f$y=7/16\f$ for eight cells and
+     * \f$y=15/32\f$ for sixteen. Actual coordinates use LevelContract's component offsets
+     * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)]. By is half a longitudinal
+     * cell beyond Ax/Ex; its last owned point is at the periodic endpoint, not a ghost.
      * The caller supplies R2 magneticField() and the same times as the error measurements.
      * @pre A nonempty output directory has already been prepared collectively. An empty
      * directory disables profiles, preserving the error-only CSV on standard output.
@@ -132,10 +143,13 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                        double target, long long step, double time,
                        const std::vector<double>& values) {
             const auto h = field.get_mesh().getMeshSpacing(), origin = field.get_mesh().getOrigin();
+            const auto global = field.getLayout().getDomain();
             const auto offset = contract_m.positionOffset(quantity, component);
-            const double x    = origin[0] + (e01ProfileDetail::LineCellX + 0.5 + offset[0]) * h[0];
-            const double y    = origin[1] + (e01ProfileDetail::LineCellY + 0.5 + offset[1]) * h[1];
-            const int firstZ  = field.getLayout().getDomain()[2].first();
+            const int lineX   = global[0].first() + e01ProfileDetail::lineCell(global[0].length());
+            const int lineY   = global[1].first() + e01ProfileDetail::lineCell(global[1].length());
+            const double x    = origin[0] + (lineX + 0.5 + offset[0]) * h[0];
+            const double y    = origin[1] + (lineY + 0.5 + offset[1]) * h[1];
+            const int firstZ  = global[2].first();
             for (std::size_t n = 0; n < values.size(); ++n) {
                 const int k        = firstZ + static_cast<int>(n);
                 const double z     = origin[2] + (k + 0.5 + offset[2]) * h[2];

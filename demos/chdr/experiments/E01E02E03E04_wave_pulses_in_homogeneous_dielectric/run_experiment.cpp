@@ -11,11 +11,12 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
 
     void runE01(const chdr::input::ChdrYamlRunInput& input) {
         validateE01Input(input);
-        const int cellsPerPulse = e01CellsPerPulse(input);
-        // Keep the physical box and transverse mesh fixed; refine only z as specified in E01.typ.
+        const int cellsPerPulse   = e01CellsPerPulse(input);
+        const int transverseCells = e01TransverseCells(input);
+        // Keep the unit transverse box and the selected transverse mesh fixed within a study.
         const simulation::ChdrCartesianGridSettings gridSettings{
-            {16, 16, 22 * cellsPerPulse},
-            {1.0 / 16, 1.0 / 16, 2.0 / cellsPerPulse},
+            {transverseCells, transverseCells, 22 * cellsPerPulse},
+            {1.0 / transverseCells, 1.0 / transverseCells, 2.0 / cellsPerPulse},
             0,
             {true, true, true},
             2};
