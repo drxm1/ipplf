@@ -22,13 +22,21 @@ The exact analytic reference case and how we initialize/sample the field storage
 Also described in `./E01.typ`.
 
 ## Experiment 02 (E02)
-Exactly the same setup as E01, except that the z-boundary now has Mur BCs enabled.
+E02 uses E01's pulse and solver settings in a shorter domain, with Mur at
+the left (-z) and right (+z) faces. The 6w domain retains the existing E01
+comparison after 2w of travel, then lets the pulse reach the right face
+after another w of travel. E02.typ defines its own short observation schedule.
 
-We do the same cases and study as in E01 (to the point where the wave is close to the boudnary) to verify that the results are not affected by the Mur conditions as long as the plane wave pulse doesn't reach the domain-boundary.
+We reuse E01's saved 2w profiles and error definitions for the propagation comparison.
+After exit, measure the residual E/B norms relative to their initial norms
+and keep the electric probe trace; no extra reference evaluation or window analysis is required.
+The E02 refinement ladder is 32, 64, 128, 256 and 512 cells per pulse.
 
 Additionaly we perform the following study:
 1. Let the wave propagate for even longer such that it passes the Mur boundary at the z-domain-face.
-2. Measure the reflection that is due to Mur and probably also the error in Gauss's law. Also in an error convergence study.
+2. Compare the residual fields and spatial profiles across the refinement ladder.
+
+See `E02.typ` for draft specs.
 
 ## Experiment 03 (E03)
 A circular (TODO: and/or spherical) wave pulse is initialized such that it then propagates towards the outer faces of the mesh domain.
@@ -40,6 +48,8 @@ The wave is propagated until it is close to the domain boundaries.
 Cases: (TODO: if there is also a TE/TM destinction here, cover them otherwise ignore).
 Study: Again an error convergence study.
 
+See `E03.typ` for draft specs.
+
 ## Experiment 04 (E04)
 Exactly the same setup as E03, but with all-mur epsilon=2.13 absorbing domain-boundary faces.
 We do the same cases and study as in E01 again to verify that the results are not affected by the Mur conditions as long as the wave does not reach the domain-boundary.
@@ -48,12 +58,7 @@ Additionally we perform the following study:
 1. Let the wave propagate for even longer such that it passes the Mur boundary at the domain face(s).
 2. Measure the reflection that is due to Mur and probably also the error in Gauss's law. Also in an error convergence study.
 
-# Which "app" code this will run on
-To be determined. Vacuum-wave is probably not suitable because it contains a lot of legacy comparison boilerplate.
-interface-movies might also not be suitable because it has the code for interface movies from earlier.
-planar-interface wave initializations might be usable but this case here concerns no interface.
-Ideally we write a small standalone app that supports homogeneous dielectric with the four wave cases for the four experiments above,
-with configurable domain sizes etc.
+See `E04.typ` for draft specs.
 
 # Where E01-E04 live
 E01 to E04 measurement code will live here in `experiments/01-04_wave_pulses_in_homogeneous_dielectric`.
