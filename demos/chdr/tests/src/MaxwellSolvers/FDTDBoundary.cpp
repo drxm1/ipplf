@@ -67,7 +67,7 @@ TEST(FDTDBoundary, DescriptionAndInteriorOwnership) {
 }
 
 /** Opposite faces of a single open axis may have distinct valid speeds. Periodic speeds have
- * no meaning. Intersecting open faces require the matched kernel speed, as validateBoundary
+ * no meaning. Intersecting open faces require a common kernel speed, as validateBoundary
  * documents from the edge/corner compatibility equations.
  */
 TEST(FDTDBoundary, ValidateSpeedsAndIntersections) {
@@ -87,11 +87,12 @@ TEST(FDTDBoundary, ValidateSpeedsAndIntersections) {
         boundary.speed[0] = speed;
         EXPECT_THROW(ippl::validateBoundary(boundary, layout, 1, 1, 1), IpplException);
     }
-    for (const auto periodic : {std::array{false, false, true}, std::array{false, false, false}}) {
+    for (const auto periodic : {std::array{false, false, true}, std::array{false, true, false},
+                                std::array{true, false, false}, std::array{false, false, false}}) {
         auto intersecting = makeLayout(periodic);
-        auto matched      = ippl::FDTDBoundary::fromLayout(intersecting);
+        auto matched      = ippl::FDTDBoundary::fromLayout(intersecting, .8);
         EXPECT_NO_THROW(ippl::validateBoundary(matched, intersecting, 1, 1, 1));
-        matched.speed[1] = .9;
+        matched.speed[periodic[0] ? 3 : 1] = .9;
         EXPECT_THROW(ippl::validateBoundary(matched, intersecting, 1, 1, 1), IpplException);
     }
 }

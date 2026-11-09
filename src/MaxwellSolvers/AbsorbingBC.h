@@ -433,9 +433,8 @@ struct second_order_mur_boundary_conditions {
      * @param speeds Mur wave speeds in kernel units, indexed in the same paired order.
      * Entries for unselected faces are ignored. With Mur faces on only one axis,
      * the two opposing faces may have different validated speeds; they do not intersect.
-     * With Mur faces on two or three axes, validateBoundary requires every selected
-     * speed to be exactly one: this dispatcher retains unit-speed edge/corner updates.
-     * One denotes the normalized interior wave speed, not one metre per second.
+     * With Mur faces on two or three axes, validateBoundary requires the same
+     * speed on each selected face. The edge and corner updates use that speed.
      * @pre The caller has checked the face pairs, speeds and storage with validateBoundary.
      * The intersecting-face restriction follows the matched-speed contract documented
      * there [Bamberger, Joly and Roberts (1987), section II, Eqs. (2.10)-(2.11)].
@@ -458,7 +457,8 @@ struct second_order_mur_boundary_conditions {
         ippl::Vector<uint32_t, 3> local_nr{uint32_t(A_n.extent(0)), uint32_t(A_n.extent(1)),
                                            uint32_t(A_n.extent(2))};
 
-        const unsigned activeMask = toDispatchMask(openFaces);
+        const unsigned activeMask      = toDispatchMask(openFaces);
+        const scalar intersectionSpeed = selectedIntersectionSpeed(openFaces, speeds);
 
         constexpr uint32_t min_abc_boundary     = 1;
         constexpr uint32_t max_abc_boundary_sub = min_abc_boundary + 1;
@@ -562,40 +562,52 @@ struct second_order_mur_boundary_conditions {
                     const bool onUpperY = (val & 16u) != 0;
                     const bool onUpperZ = (val & 32u) != 0;
                     if (onLowerX && onLowerZ) {
-                        second_order_abc_edge<scalar, 1, 2, 0, true, true> soa(hr, dt);
+                        second_order_abc_edge<scalar, 1, 2, 0, true, true> soa(hr, dt,
+                                                                               intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerX && onLowerY) {
-                        second_order_abc_edge<scalar, 2, 0, 1, true, true> soa(hr, dt);
+                        second_order_abc_edge<scalar, 2, 0, 1, true, true> soa(hr, dt,
+                                                                               intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerY && onLowerZ) {
-                        second_order_abc_edge<scalar, 0, 1, 2, true, true> soa(hr, dt);
+                        second_order_abc_edge<scalar, 0, 1, 2, true, true> soa(hr, dt,
+                                                                               intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerX && onUpperZ) {
-                        second_order_abc_edge<scalar, 1, 2, 0, false, true> soa(hr, dt);
+                        second_order_abc_edge<scalar, 1, 2, 0, false, true> soa(hr, dt,
+                                                                                intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerX && onUpperY) {
-                        second_order_abc_edge<scalar, 2, 0, 1, true, false> soa(hr, dt);
+                        second_order_abc_edge<scalar, 2, 0, 1, true, false> soa(hr, dt,
+                                                                                intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerY && onUpperZ) {
-                        second_order_abc_edge<scalar, 0, 1, 2, true, false> soa(hr, dt);
+                        second_order_abc_edge<scalar, 0, 1, 2, true, false> soa(hr, dt,
+                                                                                intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onLowerZ) {
-                        second_order_abc_edge<scalar, 1, 2, 0, true, false> soa(hr, dt);
+                        second_order_abc_edge<scalar, 1, 2, 0, true, false> soa(hr, dt,
+                                                                                intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onLowerY) {
-                        second_order_abc_edge<scalar, 2, 0, 1, false, true> soa(hr, dt);
+                        second_order_abc_edge<scalar, 2, 0, 1, false, true> soa(hr, dt,
+                                                                                intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperY && onLowerZ) {
-                        second_order_abc_edge<scalar, 0, 1, 2, false, true> soa(hr, dt);
+                        second_order_abc_edge<scalar, 0, 1, 2, false, true> soa(hr, dt,
+                                                                                intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onUpperZ) {
-                        second_order_abc_edge<scalar, 1, 2, 0, false, false> soa(hr, dt);
+                        second_order_abc_edge<scalar, 1, 2, 0, false, false> soa(hr, dt,
+                                                                                 intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onUpperY) {
-                        second_order_abc_edge<scalar, 2, 0, 1, false, false> soa(hr, dt);
+                        second_order_abc_edge<scalar, 2, 0, 1, false, false> soa(hr, dt,
+                                                                                 intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperY && onUpperZ) {
-                        second_order_abc_edge<scalar, 0, 1, 2, false, false> soa(hr, dt);
+                        second_order_abc_edge<scalar, 0, 1, 2, false, false> soa(hr, dt,
+                                                                                 intersectionSpeed);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else {
                         assert(false);
@@ -630,28 +642,28 @@ struct second_order_mur_boundary_conditions {
                     const bool onUpperY = (val & 16u) != 0;
                     const bool onUpperZ = (val & 32u) != 0;
                     if (onLowerX && onLowerY && onLowerZ) {
-                        second_order_abc_corner<scalar, 1, 1, 1> coa(hr, dt);
+                        second_order_abc_corner<scalar, 1, 1, 1> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onLowerY && onLowerZ) {
-                        second_order_abc_corner<scalar, 0, 1, 1> coa(hr, dt);
+                        second_order_abc_corner<scalar, 0, 1, 1> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerX && onUpperY && onLowerZ) {
-                        second_order_abc_corner<scalar, 1, 0, 1> coa(hr, dt);
+                        second_order_abc_corner<scalar, 1, 0, 1> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onUpperY && onLowerZ) {
-                        second_order_abc_corner<scalar, 0, 0, 1> coa(hr, dt);
+                        second_order_abc_corner<scalar, 0, 0, 1> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerX && onLowerY && onUpperZ) {
-                        second_order_abc_corner<scalar, 1, 1, 0> coa(hr, dt);
+                        second_order_abc_corner<scalar, 1, 1, 0> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onLowerY && onUpperZ) {
-                        second_order_abc_corner<scalar, 0, 1, 0> coa(hr, dt);
+                        second_order_abc_corner<scalar, 0, 1, 0> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onLowerX && onUpperY && onUpperZ) {
-                        second_order_abc_corner<scalar, 1, 0, 0> coa(hr, dt);
+                        second_order_abc_corner<scalar, 1, 0, 0> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else if (onUpperX && onUpperY && onUpperZ) {
-                        second_order_abc_corner<scalar, 0, 0, 0> coa(hr, dt);
+                        second_order_abc_corner<scalar, 0, 0, 0> coa(hr, dt, intersectionSpeed);
                         A_np1(i, j, k) = coa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     } else {
                         assert(false);
@@ -662,6 +674,19 @@ struct second_order_mur_boundary_conditions {
     }
 
 private:
+    /** @brief Return a selected speed without reading a periodic-face entry.
+     * @details Intersection updates only run with at least two open axes,
+     * when validation has established that all selected speeds are equal.
+     */
+    template <typename Scalar>
+    static Scalar selectedIntersectionSpeed(unsigned openFaces,
+                                            const ippl::Vector<Scalar, 6>& speeds) {
+        for (unsigned face = 0; face < 6; ++face)
+            if ((openFaces >> face) & 1u)
+                return speeds[face];
+        return 1;
+    }
+
     /** @brief Convert paired face bits to the Mur dispatcher's internal ordering.
      * @param openFaces Bits ordered lower x, upper x, lower y, upper y, lower z, upper z.
      * @return The same selected faces ordered lower x, lower y, lower z, upper x,
