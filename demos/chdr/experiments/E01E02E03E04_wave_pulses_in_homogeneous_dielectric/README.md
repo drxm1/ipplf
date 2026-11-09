@@ -280,7 +280,7 @@ when using the snapshots for comparisons; see the reconstruction convention in E
 
 E02 uses a fixed 8 by 8 transverse mesh and a longitudinal length of 6.
 The z faces use the physical dielectric speed; x and y remain periodic.
-The five inputs are `inputs/E02-n32.yaml` through `inputs/E02-n512.yaml`.
+The six inputs are `inputs/E02-n32.yaml` through `inputs/E02-n1024.yaml`.
 
 | Cells per pulse | Z-cells | Timestep | Full-run steps |
 |---|---:|---|---:|
@@ -289,6 +289,7 @@ The five inputs are `inputs/E02-n32.yaml` through `inputs/E02-n512.yaml`.
 | 128 | 384 | 1/128 | 1402 |
 | 256 | 768 | 1/256 | 2803 |
 | 512 | 1536 | 1/512 | 5605 |
+| 1024 | 3072 | 1/1024 | 11209 |
 
 The last field sample is nearest to the prescribed target of 7.5 pulse half-widths divided by the wave speed.
 All component times and positions come from the solver's LevelContract.

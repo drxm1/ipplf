@@ -8,7 +8,7 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Protocol.h"
 
 namespace chdr::experiments::e01e02 {
-    inline constexpr std::array E02CellsPerPulseLevels{32, 64, 128, 256, 512};
+    inline constexpr std::array E02CellsPerPulseLevels{32, 64, 128, 256, 512, 1024};
     inline constexpr std::array E02Targets{
         PulseTarget{"travel_1w", 1.0, true, false}, PulseTarget{"travel_2w", 2.0, true, true},
         PulseTarget{"travel_4w", 4.0, false, true}, PulseTarget{"travel_6w", 6.0, false, true},

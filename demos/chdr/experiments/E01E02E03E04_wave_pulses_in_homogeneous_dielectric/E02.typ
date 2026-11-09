@@ -21,13 +21,13 @@ Standard/staggered/R2 and $h_t=h_z/2$. The E02 settings are:
   stroke: 0.5pt,
   [Domain], [$L_x=L_y=w$, $L_z=6w$],
   [Transverse mesh], [$N_x=N_y=8$, matching the completed E01 study],
-  [Longitudinal ladder], [$N_"pulse"=32,64,128,256,512$;
+  [Longitudinal ladder], [$N_"pulse"=32,64,128,256,512,1024$;
     $h_z=2w/N_"pulse"$ and $N_z=3N_"pulse"$],
   [Boundaries], [Periodic in $x,y$; Mur at the left ($-z$) and right ($+z$) faces],
   [Mur speed], [$v_"Mur"=v=1/sqrt(epsilon_r) approx 0.68519$ on both faces],
 )
 
-Run one 3D E02 calculation per level, five runs in total.
+Run one 3D E02 calculation per level, six runs in total.
 There is no additional 3D control or repeat of the long E01 study.
 
 The compact pulse initially occupies $[w,3w]$ and, after $2w$ of travel,
@@ -71,7 +71,7 @@ $
 $
 The continuum pulse has left by $5w/v$. Its first right-face reflection
 reaches the left recurrence plane at $(9w-3h_z)/v$, after the final sample
-on all five levels. These times follow from E01's pulse support and the
+on all six levels. These times follow from E01's pulse support and the
 recurrence planes above; numerical tails need not share that support.
 
 === Pre-contact comparison

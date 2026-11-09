@@ -8,6 +8,7 @@ parameters:
     - ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/inputs/E02-n128.yaml
     - ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/inputs/E02-n256.yaml
     - ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/inputs/E02-n512.yaml
+    - ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/inputs/E02-n1024.yaml
   e01_reference_directory: build/results/e01-study-2w-n4096
   run_analysis: true
   python_executable: python3

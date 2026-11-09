@@ -68,7 +68,7 @@ def planned_levels(root):
     require(study["status"] == "completed", "The study has not completed")
     entries = study["levels"]
     counts = [entry["cells_per_pulse"] for entry in entries]
-    require((len(counts) == 5 if study["case"] == "E02-study" else 4 <= len(counts) <= len(REFINEMENT_LADDER))
+    require((5 <= len(counts) <= 6 if study["case"] == "E02-study" else 4 <= len(counts) <= len(REFINEMENT_LADDER))
             and counts == list(REFINEMENT_LADDER[:len(counts)]), "Unexpected refinement ladder")
     paths = [Path(entry["directory"]) for entry in entries]
     require(len(set(paths)) == len(paths), "Repeated level directory")
@@ -311,6 +311,24 @@ def save_figure(figure, directory, name, plt):
     plt.close(figure)
 
 
+def annotate_orders(axis, rows, color="C0", offset=7):
+    """Label adjacent refinement segments using observed_order, at their log-axis midpoints.
+
+    Text offsets separate nearby checkpoint curves without changing the measured positions.
+    Pairs containing a zero error have no logarithmic order and receive no label.
+    """
+    for coarse, fine in zip(rows, rows[1:]):
+        order = observed_order(coarse, fine)
+        if order is None:
+            continue
+        midpoint = (math.sqrt(coarse["hz"] * fine["hz"]),
+                    math.sqrt(coarse["relative_error"] * fine["relative_error"]))
+        axis.annotate(f"p={order:.2f}", midpoint, xytext=(0, offset),
+                      textcoords="offset points", ha="center",
+                      va="bottom" if offset > 0 else "top", fontsize=7, color=color,
+                      bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.8, "pad": 0.2})
+
+
 def plot_convergence(levels, directory, plt):
     """Show each checkpoint's positive errors against recorded longitudinal spacing."""
     figure, axes = plt.subplots(2, 2, figsize=(10, 7), layout="constrained")
@@ -321,9 +339,11 @@ def plot_convergence(levels, directory, plt):
             if positive:
                 axis.loglog([row["hz"] for row in positive], [row["relative_error"] for row in positive],
                             "o-", color=f"C{index}", label=checkpoint_label(levels[0], checkpoint))
+                annotate_orders(axis, rows, color=f"C{index}", offset=7 if index % 2 == 0 else -7)
         spacings = [level.errors[measurement, "initial"]["hz"] for level in levels]
         refinement_ticks(axis, spacings)
         axis.set(xlabel=r"$h_z$ (solver units)", ylabel=LABELS[measurement])
+        axis.margins(y=0.1)
         axis.grid(True, which="both", alpha=0.25)
         axis.legend(fontsize="small")
     figure.suptitle(f"{levels[0].record['input']['case']} longitudinal space/time refinement\n"
@@ -489,6 +509,7 @@ def plot_residuals(levels, directory, plt):
     for axis, name in zip(axes, ("E_L2", "B_L2")):
         rows = [level.residuals[name] for level in levels if level.residuals[name]["relative_residual"] > 0]
         axis.loglog([row["hz"] for row in rows], [row["relative_residual"] for row in rows], "o-")
+        annotate_orders(axis, [level.residuals[name] for level in levels])
         symbol = "E" if name == "E_L2" else "B"
         axis.set(xlabel=r"$h_z$", ylabel=rf"$d_{symbol}$ (final / initial $L^2$ norm)")
         refinement_ticks(axis, [row["hz"] for row in rows])
