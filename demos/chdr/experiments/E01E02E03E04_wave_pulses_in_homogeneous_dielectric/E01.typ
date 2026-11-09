@@ -178,9 +178,12 @@ We return 0 in code for $a, a'$ when $abs(r) >= w$. The jump in $r$ at the perio
 
 E01 uses a 3D domain with periodic boundaries in all three directions.
 
+We use eight MPI ranks with domain decomposition along $z$,
+and four OpenMP threads per rank.
+
 The transverse domain is $[0,L_x] times [0,L_y]$. At every refinement level,
 $
-  L_x = L_y = w = 1, quad N_x = N_y = 16, quad h_x = h_y = 1/16.
+  L_x = L_y = w = 1, quad N_x = N_y = 8, quad h_x = h_y = 1/8.
 $
 
 #block(breakable: false)[
@@ -205,7 +208,7 @@ using the 3D O1VS implementation. We keep the transverse mesh fixed while
 refining $h_z$ and $h_t$. This does not establish convergence for fields with
 transverse variation, but our reference field here is independent of those directions.
 
-We use the following four longitudinal resolutions:
+We use the following longitudinal resolutions:
 
 #align(center)[
   #table(
@@ -218,15 +221,14 @@ We use the following four longitudinal resolutions:
     [64],  [$1/32$],  [1408],
     [128], [$1/64$],  [2816],
     [256], [$1/128$], [5632],
+    [512], [$1/256$], [11264],
+    [1024],[$1/512$], [22528],
+    [2048],[$1/1024$],[45056],
+    [4096],[$1/2048$],[90112]
   )
 ]
 
-We keep the physical domain, profile parameters and target travel distance fixed across these levels.
-Four levels provide three successive error comparisons, such that we can examine whether the observed convergence order stabilizes.
-If the finest levels leave the trend unclear, we may add $N_"pulse"=512$ ($N_z=11264$),
-subject to the runtime budget.
-We aim for approximately 1–2 hours for the complete convergence study on the 9950X3D,
-with flexibility if needed.
+We keep the physical domain, profile parameters and target travel distance fixed across these levels. We have added the more refined levels to see whether the order stabilizes in the longer propagation.
 
 Spatial profile plots display $z$ horizontally and the field or potential
 value vertically.
@@ -234,7 +236,7 @@ value vertically.
 === Time steps and comparison times
 
 We set $h_t=h_z\/2$ on every refinement level.
-The four time steps are therefore $1/32$, $1/64$, $1/128$ and $1/256$.
+The time steps are therefore $1/N_"pulse"$.
 This choice satisfies the vacuum Standard stability bound used by `O1VSUpdate::maxStableTimeStep` (which is stricter than the bound in the homogeneous dielectric here),
 $
   h_t < 1/sqrt(h_x^(-2) + h_y^(-2) + h_z^(-2)),
@@ -261,9 +263,9 @@ We record the actual times with the errors and evaluate each analytic reference 
 === Saved output and sampling schedule
 
 On every refinement level,
-we save the initial observation and use the four target times
+we save the initial observation and use the five target times
 $
-  tau in {T/4, T/2, 3T/4, T}.
+  tau in {T/20, T/4, T/2, 3T/4, T}.
 $
 For each positive target,
 replace $T$ by $tau$ in the nearest-time selection above.
@@ -292,15 +294,21 @@ so $vb(A)$ is sampled at time zero and the R2 fields $vb(E), vb(B)$ at $-h_t/2$.
     ],
     [*Full-domain field snapshots*],
     [
-      Also save the numerical vector fields $vb(E)$ and $vb(B)$ over the full 3D domain at roughly quarter-run intervals,
+      Save the three numerical vector arrays `E`, `B_R2` and `B_raw` over the full 3D domain at roughly quarter-run intervals,
       including the initial and final run states.
+      At solver state $n$,
+      `E` and `B_R2` have time label $(n-1/2)h_t$,
+      while `B_raw` has time label $n h_t$.
+      These labels and the component positions come from the solver's `LevelContract`.
+
       Use a configurable step interval,
       with the default
       $
         N_"save" = floor(T/(4 h_t) + 1/2).
       $
-      This gives intervals of 467, 934, 1868 and 3736 steps on the four meshes,
-      so the interval in physical time stays fixed under refinement.
+      The physical interval $N_"save" h_t$ approximates $T/4$ on each mesh.
+      The additional error and profile observation at $T/20$ does not add a full-domain snapshot.
+
       Write a frame at steps $0, N_"save", 2 N_"save", dots$ within the run,
       and also at the final step if it is not already selected.
       Record the component positions, actual field times and magnetic reconstruction convention with the snapshots.
