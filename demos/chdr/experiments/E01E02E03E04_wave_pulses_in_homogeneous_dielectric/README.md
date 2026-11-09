@@ -349,6 +349,42 @@ They are not isolated reflection coefficients or absorbed-energy fractions.
 No window integration or reference subtraction is performed,
 as specified in E02.typ.
 
+## E03 spherical pulse study
+
+`E03.typ` defines the two spherical reference fields, the cubic mesh ladder and
+the E03.meas01–06 observations. The executable accepts `case: E03`,
+`cells_per_axis` and `polarization` (`TEr` or `TMr`). `write_plane: true`
+adds the initial and final central sections. `inputs/E03-n96-TEr.yaml` is a
+single-run example.
+
+Run the two pilot levels from the project root with Open MPI, GNU time and
+Python with NumPy and Matplotlib available:
+
+```sh
+python3 ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/run_e03_study.py \
+  --executable build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric \
+  --output build/results/e03-study --ranks 4 --threads 4
+```
+
+The study pins the executable in its output directory. To continue the same
+study, use that executable and add `--levels 216 324`. The run logs and raw
+measurement files stay in the per-case directories. `convergence.csv` adds
+normalized norms and successive orders. Memory records contain per-rank peak
+RSS and their sum, which is an upper bound on the sum of rank RSS at one time.
+
+## E04 spherical pulse exit
+
+`E04.typ` uses the same inputs without `write_plane` and selects `case: E04`.
+The periodic replay compares the initial and pre-contact fields on the same
+native grid. The matched-speed Mur run saves E04.meas01 energy, E04.meas02
+per-face powers and E04.meas03 constraint norms in separate CSV traces.
+
+Run `run_e04_study.py` with the E03 study command's arguments and a distinct
+output directory. It starts at 96 and 144 cells per axis. `results.csv`
+contains the late-energy targets, inward crossing integrals, precursor rates
+and every-other-sample integral. `checkpoints.csv` retains the native
+observation times and residual sample counts.
+
 ## Code organization
 
 `E01.h` and `E02.h` contain the named experiment protocols.

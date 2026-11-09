@@ -15,45 +15,14 @@
 
 #include "core/output/RunRecord.h"
 #include "core/simulation/ChDRSimulationManager.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Plane.h"
 
 namespace chdr::experiments::e03 {
     namespace {
-        using Simulation = simulation::ChDRSimulationManager<>;
+        using Simulation = SphericalSimulation;
         using Solver     = Simulation::Solver;
-
-        /// Validate the cubic resolution before converting the YAML number to an index.
-        int cellsPerAxis(const input::ChdrYamlRunInput& request) {
-            if (!request.parameters_m.has_path("cells_per_axis"))
-                throw std::invalid_argument("E03 requires cells_per_axis");
-            const auto node = request.parameters_m["cells_per_axis"];
-            if (node.dtype().is_number() && node.number_of_elements() == 1) {
-                const double cells = node.to_float64();
-                if (std::find(E03Levels.begin(), E03Levels.end(), cells) != E03Levels.end())
-                    return static_cast<int>(cells);
-            }
-            throw std::invalid_argument("E03 cells_per_axis must be 96, 144, 216 or 324");
-        }
-
-        /// Both cases use the same grid and histories at their respective native times.
-        std::string polarization(const input::ChdrYamlRunInput& request) {
-            if (request.parameters_m.has_path("polarization")) {
-                const auto node = request.parameters_m["polarization"];
-                if (node.dtype().is_string()) {
-                    const auto name = node.as_string();
-                    if (name == "TEr" || name == "TMr")
-                        return name;
-                }
-            }
-            throw std::invalid_argument("E03 polarization must be TEr or TMr");
-        }
-
-        /// Invert LevelContract's label map to select the nearest state to a target.
-        int nearestStep(Solver& state, Quantity quantity, double target) {
-            return static_cast<int>(
-                std::floor((target - state.labelTime(quantity, 0)) / state.getDt() + 0.5));
-        }
 
         /// The potential, scalar and reconstructed fields may select different states.
         struct Checkpoint {
@@ -65,9 +34,9 @@ namespace chdr::experiments::e03 {
             std::array<Checkpoint, 4> result{};
             for (unsigned i = 0; i < result.size(); ++i) {
                 const double target = 0.5 * (i + 1) / v;
-                result[i] = {target, nearestStep(state, Quantity::VectorPotential, target),
-                             nearestStep(state, Quantity::Phi, target),
-                             nearestStep(state, Quantity::Electric, target)};
+                result[i] = {target, nearestSphericalStep(state, Quantity::VectorPotential, target),
+                             nearestSphericalStep(state, Quantity::Phi, target),
+                             nearestSphericalStep(state, Quantity::Electric, target)};
             }
             return result;
         }
@@ -253,26 +222,11 @@ namespace chdr::experiments::e03 {
 
     void runE03(const input::ChdrYamlRunInput& request) {
         input::validateParameters(request, {"cells_per_axis", "polarization", "write_plane"});
-        input::validateObservationNames(request, {});
-        if (request.units_m.system_m != "normalized" || request.duration_m
-            || request.outputDirectory_m.empty())
-            throw std::invalid_argument(
-                "E03 requires normalized units, fixed duration and output.directory");
-        const int n     = cellsPerAxis(request);
-        const auto name = polarization(request);
-        const double h  = 2 * E03BoxCentre / n;
-        const simulation::ChdrCartesianGridSettings grid{
-            {n, n, n}, {h, h, h}, 0, {true, true, true}, 2};
-        const E03Reference ref{
-            1 / std::sqrt(E03Epsilon),
-            name == "TEr" ? reference::Polarization::TEr : reference::Polarization::TMr,
-            E03BoxCentre};
-        const auto dielectric =
-            KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
-            marked = false;
-            return E03Epsilon;
-        };
-        Simulation run{grid, dielectric, {.timeStep_m = h / 2}};
+        validateSphericalRun(request);
+        const auto name = sphericalPolarization(request);
+        const auto grid = sphericalGrid(sphericalCells(request), true);
+        const auto ref  = sphericalReference(name);
+        auto run        = makeSphericalSimulation(grid, ref);
         run.load(ref);
         evolveE03(run, request, grid, ref, name);
     }

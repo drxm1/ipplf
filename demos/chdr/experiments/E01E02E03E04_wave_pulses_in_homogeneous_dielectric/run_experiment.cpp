@@ -5,6 +5,7 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02AnalysisProcess.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E02.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04.h"
 
 namespace chdr::experiments::e01e02 {
     /// Periodic propagation uses the shared pulse implementation with E01's explicit protocol.
@@ -36,9 +37,11 @@ namespace {
             experiment::runE02(input);
         else if (input.caseName_m == "E03")
             chdr::experiments::e03::runE03(input);
+        else if (input.caseName_m == "E04")
+            chdr::experiments::e04::runE04(input);
         else
             throw std::invalid_argument(
-                "Supported cases are E01, E02, E03, E01-study and E02-study");
+                "Supported cases are E01 through E04, E01-study and E02-study");
     }
 }  // namespace
 
