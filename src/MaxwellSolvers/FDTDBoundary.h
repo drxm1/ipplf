@@ -45,7 +45,8 @@ namespace ippl {
      * @brief Host description of the six faces of a three-dimensional potential solver.
      *
      * Face 2*d is the lower face of axis d; face 2*d+1 is its upper face.
-     * Speeds use the interior update's units, in which its wave speed is one.
+     * Speeds use the time coordinate of the potential update. The bulk speed
+     * in that coordinate depends on the formulation.
      * Periodic faces ignore their speed. Kernels capture the mask and scalar values,
      * rather than a host object or a virtual boundary operation.
      */
@@ -136,8 +137,9 @@ namespace ippl {
      * The speed bound follows Trefethen and Halpern, "Well-posedness of one-way wave
      * equations and absorbing boundary conditions", Math. Comp. 47 (1986), 421-435,
      * Theorem 2, p. 424; it is not a discrete stability guarantee.
-     * Intersecting open faces require the matched speed because the compatibility
-     * equations eliminate normal derivatives with the interior wave equation
+     * Intersecting open faces require a common kernel speed. The caller matches it
+     * to the bulk speed because the compatibility equations eliminate normal
+     * derivatives with the interior wave equation
      * [bamberger1987SecondOrderCorner, section II, equations (2.10)-(2.11)].
      *
      * Ghost widths count layers of cells on each side of the local owned domain, not
@@ -168,6 +170,7 @@ namespace ippl {
         unsigned openAxes = 0;
         for (unsigned d = 0; d < 3; ++d)
             openAxes += boundary.kind[2 * d] == FaceKind::mur;
+        double commonSpeed = 0;
         for (unsigned d = 0; d < 3; ++d) {
             require(layout.getDomain()[d].first() == 0, "FDTD global indices must start at zero");
             const auto expected = layout.isPeriodic(d) ? FaceKind::periodic : FaceKind::mur;
@@ -179,8 +182,10 @@ namespace ippl {
                     const double speed = boundary.speed[face];
                     require(std::isfinite(speed) && speed > 0 && speed < std::sqrt(2.0),
                             "Mur speed must be finite, positive and below sqrt(2)");
-                    require(openAxes < 2 || speed == 1,
-                            "Intersecting Mur faces need matched speed");
+                    if (commonSpeed == 0)
+                        commonSpeed = speed;
+                    require(openAxes < 2 || speed == commonSpeed,
+                            "Intersecting Mur faces need a common kernel speed");
                 }
             }
             const auto domains = layout.getHostLocalDomains();
