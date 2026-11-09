@@ -1,5 +1,5 @@
-/** @file E01Measurements.h
- * @brief Global vector-field errors against the E01 continuum reference.
+/** @file E01E02Measurements.h
+ * @brief Global numerical norms and continuum errors for the shared transverse pulse.
  */
 #pragma once
 
@@ -16,16 +16,47 @@
 #include "core/base/LevelContract.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01AnalyticContinuumReference.h"
 
-namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
-    using E01Reference = E01_analytic_continuum_reference::E01AnalyticContinuumReferenceSampler;
+namespace chdr::experiments::e01e02 {
+    namespace e01Reference = chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric::
+        E01_analytic_continuum_reference;
+    using E01Reference = e01Reference::E01AnalyticContinuumReferenceSampler;
 
     /// Reference-normalized errors of all three Cartesian components over the whole domain.
-    struct E01ErrorNorms {
+    struct PulseErrorNorms {
         double relativeL2_m;
         double relativeLinf_m;
     };
 
-    namespace e01MeasurementDetail {
+    /** @brief Unweighted squared norm of a numerical vector field over unique owned samples.
+     * @details All three components contribute, without exterior ghosts. The uniform cell
+     * volume cancels in E02's final/initial norm ratio [salari2000CodeVerificationMms,
+     * section 4.1, Eq. (15)]. This reduction does not sample an analytic reference.
+     */
+    template <class Field>
+    double pulseSquaredNorm(Field& field) {
+        const auto view         = field.getView();
+        double squared          = 0;
+        std::uint64_t nonfinite = 0;
+        Kokkos::parallel_reduce(
+            "Pulse numerical vector norm", field.getFieldRangePolicy(),
+            KOKKOS_LAMBDA(int i, int j, int k, double& sum, std::uint64_t& invalid) {
+                for (unsigned c = 0; c < 3; ++c) {
+                    const double value = view(i, j, k)[c];
+                    if (!Kokkos::isfinite(value))
+                        ++invalid;
+                    else
+                        sum += value * value;
+                }
+            },
+            squared, nonfinite);
+        MPI_Allreduce(MPI_IN_PLACE, &squared, 1, MPI_DOUBLE, MPI_SUM, field.getLayout().comm);
+        MPI_Allreduce(MPI_IN_PLACE, &nonfinite, 1, MPI_UINT64_T, MPI_SUM, field.getLayout().comm);
+        if (nonfinite || !std::isfinite(squared))
+            throw std::runtime_error("Pulse norm contains nonfinite numerical data");
+        return squared;
+    }
+
+    namespace pulseMeasurementDetail {
         /// Local reductions, combined across ranks before forming either error ratio.
         struct ErrorReduction {
             double squaredError_m     = 0;
@@ -52,7 +83,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
          * reference norm. Uniform cell volume cancels between numerator and denominator.
          * Nonfinite data or a zero reference norm invalidate the measurement on every rank.
          */
-        inline E01ErrorNorms globalNorms(ErrorReduction local, MPI_Comm communicator) {
+        inline PulseErrorNorms globalNorms(ErrorReduction local, MPI_Comm communicator) {
             double squares[]{local.squaredError_m, local.squaredReference_m};
             double peaks[]{local.maximumError_m, local.maximumReference_m};
             MPI_Allreduce(MPI_IN_PLACE, squares, 2, MPI_DOUBLE, MPI_SUM, communicator);
@@ -62,10 +93,10 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                 || !std::isfinite(peaks[0]) || !std::isfinite(peaks[1]) || squares[1] <= 0
                 || peaks[1] <= 0)
                 throw std::runtime_error(
-                    "E01 error measurement has nonfinite data or zero reference norm");
+                    "Pulse error measurement has nonfinite data or zero reference norm");
             return {std::sqrt(squares[0] / squares[1]), peaks[0] / peaks[1]};
         }
-    }  // namespace e01MeasurementDetail
+    }  // namespace pulseMeasurementDetail
 
     /** @brief Measure one numerical vector field at its native positions and time.
      * @param field Current A_n, electricField() or magneticField(), matching quantity.
@@ -83,17 +114,17 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
      * during this measurement; no numerical field or halo is modified.
      */
     template <class Field>
-    E01ErrorNorms measureE01FieldError(Field& field, const E01Reference& reference,
-                                       LevelContract contract, Quantity quantity, double time) {
+    PulseErrorNorms measurePulseFieldError(Field& field, const E01Reference& reference,
+                                           LevelContract contract, Quantity quantity, double time) {
         const auto view = field.getView();
         const auto h = field.get_mesh().getMeshSpacing(), origin = field.get_mesh().getOrigin();
         const auto domain = field.getLayout().getLocalNDIndex();
         const ippl::Vector<int, 3> first{domain[0].first(), domain[1].first(), domain[2].first()};
         const int ghost                = field.getNghost();
         const unsigned componentOffset = quantity == Quantity::VectorPotential ? 1 : 0;
-        e01MeasurementDetail::ErrorReduction local;
+        pulseMeasurementDetail::ErrorReduction local;
         Kokkos::parallel_reduce(
-            "E01 continuum field error", field.getFieldRangePolicy(),
+            "Pulse continuum field error", field.getFieldRangePolicy(),
             KOKKOS_LAMBDA(int i, int j, int k, double& errorSquares, double& referenceSquares,
                           double& maximumError, double& maximumReference,
                           std::uint64_t& nonfinite) {
@@ -102,7 +133,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                 const double z = origin[2] + (k + first[2] - ghost + 0.5) * h[2];
                 for (unsigned c = 0; c < 3; ++c) {
                     const auto offset  = contract.positionOffset(quantity, c);
-                    const double exact = e01MeasurementDetail::referenceValue(
+                    const double exact = pulseMeasurementDetail::referenceValue(
                         reference, quantity, x + offset[0] * h[0], y + offset[1] * h[1],
                         z + offset[2] * h[2], time, c);
                     const double numerical = view(i, j, k)[c + componentOffset];
@@ -121,6 +152,6 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             local.squaredError_m, local.squaredReference_m,
             Kokkos::Max<double>(local.maximumError_m),
             Kokkos::Max<double>(local.maximumReference_m), local.nonfinite_m);
-        return e01MeasurementDetail::globalNorms(local, field.getLayout().comm);
+        return pulseMeasurementDetail::globalNorms(local, field.getLayout().comm);
     }
-}  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric
+}  // namespace chdr::experiments::e01e02

@@ -1,12 +1,14 @@
-/** @file E01FieldSnapshots.h
- * @brief Select E01 field frames and supply their arrays to the shared writer.
+/** @file E01E02FieldSnapshots.h
+ * @brief Select pulse field frames and supply their arrays to the shared writer.
  */
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 #include "core/input/RunInput.h"
 #include "core/output/FieldOutput.h"
@@ -14,30 +16,32 @@
 #include "core/simulation/SimulationConfig.h"
 #include "core/solver/ChdrSolver.h"
 
-namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
-    using E01Solver = solver::ChdrSolver<solver::StandardSolverPeriodic>;
+namespace chdr::experiments::e01e02 {
+    using PulseSolver = solver::ChdrSolver<solver::StandardSolverPeriodic>;
 
     /** @brief Schedule E, R2 B and raw B snapshots without changing the measured fields.
      * @details The shared writer derives positions and times from the solver's LevelContract.
      * Raw magnetic reconstruction uses independent storage through computeRawMagneticField;
-     * the R2 magnetic output remains the array used by E01's error measurements.
+     * the R2 magnetic output remains the array used by the field measurements.
      * @pre The run directory has been prepared collectively before construction.
      * All ranks construct, observe and finish this object in the same order.
      */
-    class E01FieldSnapshots {
+    class PulseFieldSnapshots {
     public:
-        /// Resolve the common YAML schedule over E01's refinement-dependent default interval.
-        E01FieldSnapshots(const input::ChdrYamlRunInput& request,
-                          const simulation::ChdrCartesianGridSettings& grid, E01Solver& state,
-                          int defaultEvery)
+        /// Resolve the common YAML schedule over the experiment's default interval and prescribed
+        /// field states.
+        PulseFieldSnapshots(const input::ChdrYamlRunInput& request,
+                            const simulation::ChdrCartesianGridSettings& grid, PulseSolver& state,
+                            int defaultEvery, std::vector<int> prescribedSteps = {})
             : schedule_m(input::observationSchedule(
                   request, "fields", {.every_m = defaultEvery, .includeFinal_m = true}))
+            , prescribedSteps_m(std::move(prescribedSteps))
             , enabled_m(input::observationEnabled(request, "fields",
                                                   !request.outputDirectory_m.empty())) {
             if (!enabled_m)
                 return;
             if (request.outputDirectory_m.empty())
-                throw std::invalid_argument("E01 field snapshots require an output directory");
+                throw std::invalid_argument("Pulse field snapshots require an output directory");
             writer_m = std::make_unique<output::FieldOutput>(
                 std::filesystem::path(request.outputDirectory_m) / "fields",
                 output::OutputGeometry{grid.cells_m, {0, 0, 0}, grid.spacing_m},
@@ -47,8 +51,11 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         }
 
         /// Reconstruct raw B only at selected states, then serialize all three native arrays.
-        void observe(long long step, E01Solver& state, int finalStep) {
-            if (!enabled_m || !schedule_m.selects(step, finalStep))
+        void observe(long long step, PulseSolver& state, int finalStep) {
+            const bool prescribed =
+                std::find(prescribedSteps_m.begin(), prescribedSteps_m.end(), step)
+                != prescribedSteps_m.end();
+            if (!enabled_m || (!prescribed && !schedule_m.selects(step, finalStep)))
                 return;
             state.computeRawMagneticField(rawMagnetic_m);
             const std::array fields{
@@ -70,6 +77,8 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         /// Record the effective schedule even when snapshots were explicitly disabled.
         void record(output::RunRecordDescription& description) const {
             output::recordObservation(description, "fields", schedule_m, enabled_m);
+            if (!prescribedSteps_m.empty())
+                description.effective_m["field_snapshots/prescribed_steps"].set(prescribedSteps_m);
             if (!enabled_m)
                 return;
             auto node                 = description.effective_m["field_snapshots"];
@@ -80,8 +89,9 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
 
     private:
         simulation::ObservationSchedule schedule_m;
+        std::vector<int> prescribedSteps_m;
         bool enabled_m;
         std::unique_ptr<output::FieldOutput> writer_m;
         EMFieldsType rawMagnetic_m;
     };
-}  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric
+}  // namespace chdr::experiments::e01e02

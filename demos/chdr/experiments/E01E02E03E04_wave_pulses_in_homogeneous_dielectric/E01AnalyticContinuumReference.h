@@ -41,6 +41,9 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             /// The wave speed inside the homogeneous medium, \f$v = 1/\sqrt \epsilon_r\f$
             const double v_m;
 
+            /// Disable periodic wrapping when reusing this reference for E02.
+            const bool periodicZ_m = true;
+
             /// @brief sample the four analytic continuum reference four potential
             KOKKOS_INLINE_FUNCTION double operator()([[maybe_unused]] const double _x,
                                                      [[maybe_unused]] const double _y,
@@ -75,7 +78,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             }
 
             KOKKOS_INLINE_FUNCTION double r(const double s) const {
-                return s - Lz_m * Kokkos::floor(s / Lz_m + 0.5);
+                return periodicZ_m ? s - Lz_m * Kokkos::floor(s / Lz_m + 0.5) : s;
             }
 
             /// @brief Periodic extension of \f$p(s)\f$

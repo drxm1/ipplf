@@ -1,5 +1,5 @@
-/** @file E01Profiles.h
- * @brief Numerical and continuum longitudinal profiles at E01's error observations.
+/** @file E01E02Profiles.h
+ * @brief Native numerical and continuum longitudinal profiles for homogeneous pulses.
  */
 #pragma once
 
@@ -16,15 +16,15 @@
 #include <string>
 #include <vector>
 
-#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Measurements.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Measurements.h"
 
-namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
-    namespace e01ProfileDetail {
+namespace chdr::experiments::e01e02 {
+    namespace pulseProfileDetail {
         /** @brief Select a transverse cell just below the integer midpoint of its domain.
          * @details Returns a zero-based cell offset, not a physical coordinate. For even
          * counts this is the lower of the two central cells. A fixed transverse mesh
          * therefore selects the same line on every longitudinal refinement level.
-         * @pre count is at least two, as required by the E01 input validation.
+         * @pre count is at least two, as required by the pulse input validation.
          */
         inline int lineCell(int count) {
             return count / 2 - 1;
@@ -45,13 +45,13 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             const int ghost = field.getNghost(), firstZ = local[2].first() - global[2].first();
             using ExecutionSpace = typename Field::view_type::execution_space;
             Kokkos::View<double*, typename Field::view_type::device_type> line(
-                "E01 profile samples", global[2].length());
+                "Pulse profile samples", global[2].length());
             if (local[0].first() <= lineX && lineX <= local[0].last() && local[1].first() <= lineY
                 && lineY <= local[1].last()) {
                 const int i = lineX - local[0].first() + ghost;
                 const int j = lineY - local[1].first() + ghost;
                 Kokkos::parallel_for(
-                    "Extract E01 profile",
+                    "Extract Pulse profile",
                     Kokkos::RangePolicy<ExecutionSpace>(0, local[2].length()),
                     KOKKOS_LAMBDA(int k) { line(firstZ + k) = view(i, j, k + ghost)[component]; });
             }
@@ -70,7 +70,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             return global;
         }
 
-        /// Cartesian component of the nonzero E01 reference channel.
+        /// Cartesian component of the nonzero transverse pulse channel.
         inline unsigned component(Quantity quantity) {
             return quantity == Quantity::Magnetic ? 1 : 0;
         }
@@ -81,23 +81,23 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                 return "Ax";
             return quantity == Quantity::Electric ? "Ex" : "By";
         }
-    }  // namespace e01ProfileDetail
+    }  // namespace pulseProfileDetail
 
     /** @brief Write profiles.csv on a native longitudinal line selected from the transverse mesh.
-     * @details lineCell selects the transverse cell indices. On E01's unit box with
+     * @details lineCell selects the transverse cell indices. On the unit transverse box with
      * an even transverse count, the contract places Ax, Ex and By at
      * \f$x=1/2,\ y=(N_y-1)/(2N_y)\f$: \f$y=7/16\f$ for eight cells and
      * \f$y=15/32\f$ for sixteen. Actual coordinates use LevelContract's component offsets
      * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)]. By is half a longitudinal
-     * cell beyond Ax/Ex; its last owned point is at the periodic endpoint, not a ghost.
-     * The caller supplies R2 magneticField() and the same times as the error measurements.
+     * cell beyond Ax/Ex; its last owned point is at the geometric z endpoint, not a ghost.
+     * The caller supplies R2 magneticField() and the selected native profile times.
      * @pre A nonempty output directory has already been prepared collectively. An empty
      * directory disables profiles, preserving the error-only CSV on standard output.
      */
-    class E01ProfileCsv {
+    class PulseProfileCsv {
     public:
-        E01ProfileCsv(const std::string& directory, const E01Reference& reference,
-                      LevelContract contract, MPI_Comm communicator)
+        PulseProfileCsv(const std::string& directory, const E01Reference& reference,
+                        LevelContract contract, MPI_Comm communicator)
             : reference_m(reference)
             , contract_m(contract)
             , enabled_m(!directory.empty()) {
@@ -121,9 +121,9 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                    long long step, double time) {
             if (!enabled_m)
                 return;
-            const unsigned component = e01ProfileDetail::component(quantity);
+            const unsigned component = pulseProfileDetail::component(quantity);
             const unsigned slot      = component + (quantity == Quantity::VectorPotential ? 1 : 0);
-            const auto values        = e01ProfileDetail::gatherLine(field, slot);
+            const auto values        = pulseProfileDetail::gatherLine(field, slot);
             if (rank_m == 0) {
                 writeRows(field, quantity, component, checkpoint, target, step, time, values);
                 file_m.flush();
@@ -145,19 +145,19 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             const auto h = field.get_mesh().getMeshSpacing(), origin = field.get_mesh().getOrigin();
             const auto global = field.getLayout().getDomain();
             const auto offset = contract_m.positionOffset(quantity, component);
-            const int lineX   = global[0].first() + e01ProfileDetail::lineCell(global[0].length());
-            const int lineY   = global[1].first() + e01ProfileDetail::lineCell(global[1].length());
-            const double x    = origin[0] + (lineX + 0.5 + offset[0]) * h[0];
-            const double y    = origin[1] + (lineY + 0.5 + offset[1]) * h[1];
-            const int firstZ  = global[2].first();
+            const int lineX  = global[0].first() + pulseProfileDetail::lineCell(global[0].length());
+            const int lineY  = global[1].first() + pulseProfileDetail::lineCell(global[1].length());
+            const double x   = origin[0] + (lineX + 0.5 + offset[0]) * h[0];
+            const double y   = origin[1] + (lineY + 0.5 + offset[1]) * h[1];
+            const int firstZ = global[2].first();
             for (std::size_t n = 0; n < values.size(); ++n) {
                 const int k        = firstZ + static_cast<int>(n);
                 const double z     = origin[2] + (k + 0.5 + offset[2]) * h[2];
-                const double exact = e01MeasurementDetail::referenceValue(reference_m, quantity, x,
-                                                                          y, z, time, component);
+                const double exact = pulseMeasurementDetail::referenceValue(
+                    reference_m, quantity, x, y, z, time, component);
                 if (!std::isfinite(values[n]) || !std::isfinite(exact))
-                    throw std::runtime_error("E01 profile contains a nonfinite sample");
-                file_m << e01ProfileDetail::name(quantity) << ',' << checkpoint << ',' << target
+                    throw std::runtime_error("Pulse profile contains a nonfinite sample");
+                file_m << pulseProfileDetail::name(quantity) << ',' << checkpoint << ',' << target
                        << ',' << step << ',' << time << ',' << k << ',' << x << ',' << y << ',' << z
                        << ',' << values[n] << ',' << exact << '\n';
             }
@@ -169,4 +169,4 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         int rank_m = 0;
         std::ofstream file_m;
     };
-}  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric
+}  // namespace chdr::experiments::e01e02

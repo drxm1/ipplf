@@ -1,9 +1,11 @@
 # Homogeneous dielectric pulse experiments
 
-The current executable implements E01's longitudinal refinement levels,
-four global error measurements, matching longitudinal profiles and full-domain
-snapshots of E, R2-averaged B and raw B.
-The reference and experiment protocol are in [E01.typ](E01.typ).
+The executable implements E01's periodic propagation study and E02's short Mur-exit study.
+Their protocols are in [E01.typ](E01.typ) and [E02.typ](E02.typ).
+Both use the same pulse, solver setup, native measurements, profiles and field writer.
+E02 additionally saves initial-normalized E/B residuals and the signed electric probe.
+
+The commands and output conventions below describe E01; the E02 section follows.
 
 From the project root, build and run the coarsest level:
 
@@ -173,7 +175,7 @@ The output folder contains:
 ```text
 study.json
 README.md
-analyze_e01.py
+analyze_e01_e02.py
 inputs/              # exact per-run YAML copies
 n32/                 # errors.csv, profiles.csv, fields/, run.json
 n64/
@@ -196,7 +198,7 @@ is retained in `analysis.log`; an analysis failure leaves completed runs intact
 and returns a nonzero process status. Set `run_analysis: false` to analyze later:
 
 ```sh
-python3 build/results/e01-study-2w-n4096/analyze_e01.py
+python3 build/results/e01-study-2w-n4096/analyze_e01_e02.py
 ```
 
 The script locates its data relative to itself, so the completed study folder
@@ -272,3 +274,85 @@ one per Cartesian component, in units of mesh spacing from the cell centre.
 The series uses the potential time; E and R2 B carry their half-step time,
 while raw B carries the integer time. Preserve these individual time labels
 when using the snapshots for comparisons; see the reconstruction convention in E01.typ.
+
+
+## E02: pulse exit through Mur faces
+
+E02 uses a fixed 8 by 8 transverse mesh and a longitudinal length of 6.
+The z faces use the physical dielectric speed; x and y remain periodic.
+The five inputs are `inputs/E02-n32.yaml` through `inputs/E02-n512.yaml`.
+
+| Cells per pulse | Z-cells | Timestep | Full-run steps |
+|---|---:|---|---:|
+| 32 | 96 | 1/32 | 351 |
+| 64 | 192 | 1/64 | 701 |
+| 128 | 384 | 1/128 | 1402 |
+| 256 | 768 | 1/256 | 2803 |
+| 512 | 1536 | 1/512 | 5605 |
+
+The last field sample is nearest to the prescribed target of 7.5 pulse half-widths divided by the wave speed.
+All component times and positions come from the solver's LevelContract.
+E02 requires an output directory.
+Its `run.steps` option can stop early for inspection,
+but partial endpoints are labelled `partial_final` and cannot enter the refinement analysis.
+
+Run the complete study from the project root:
+
+```sh
+OMP_NUM_THREADS=4 OMP_PROC_BIND=false \
+  build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric \
+  --input ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E02-study.yaml
+```
+
+The default study output is `build/results/e02-study`.
+Choose a new or empty directory for each study.
+The ordinary per-level YAML files can also run independently in a chosen working directory,
+as for E01.
+
+`parameters.e01_reference_directory` points to the completed E01 study used for the pre-contact comparison.
+The supplied study input selects `build/results/e01-study-2w-n4096`.
+The study bundles matching archived `run.json` and `profiles.csv` files under `e01-reference/`.
+It does not rerun E01 or evaluate an additional numerical reference.
+The source directory is recorded in `study.json`,
+and the copied data keep the comparison portable.
+
+Each E02 run writes:
+
+- `errors.csv`: the four E01 error definitions at initialization, travel 1w and travel 2w.
+- `profiles.csv`: native Ax, Ex and R2 By at initialization and travel 1w, 2w, 4w, 6w and 7.5w.
+  The reference is the compact unwrapped continuum pulse.
+  Relative errors are not evaluated at the later profile-only checkpoints.
+- `residuals.csv`: final E and R2 B norms against zero,
+  divided by their own initialized numerical norms.
+  The file includes both norms, the ratio, the actual times and the endpoint label.
+- `probe.csv`: signed Ex at every step, including initialization,
+  with native coordinates and cell indices.
+  The probe uses transverse indices (3,3) and the first electric sample right of z=4.
+- `fields/`: E, R2 B and raw B snapshots,
+  by default at initialization and the field samples nearest travel 2w, 4w, 6w and 7.5w.
+  A requested additional cadence adds frames without removing these protocol targets.
+  `fields.enabled: false` disables snapshots.
+- `run.json`: the common run record,
+  separate error/profile schedules, probe position, initial norm denominators and resolved Mur face speeds.
+
+The copied `analyze_e01_e02.py` handles both study cases.
+E02 adds residual convergence, complete probe traces and the archived E01 travel-2w comparison
+to the common error and profile plots.
+The additional tables are `residual_convergence.csv` and `e01_comparison.csv`.
+The E01 comparison uses identical native positions and times on the E02 cell-index range,
+including the final By sample at z=6.
+It compares profiles, not the archived E01 global errors over its larger box.
+
+The residuals include reflection, numerical tails and initialization artifacts.
+They are not isolated reflection coefficients or absorbed-energy fractions.
+No window integration or reference subtraction is performed,
+as specified in E02.typ.
+
+## Code organization
+
+`E01.h` and `E02.h` contain the named experiment protocols.
+Their code lives in `chdr::experiments::e01e02`; the shared files implement E01 and E02 only.
+`E01AnalyticContinuumReference.h` defines E01's analytic reference, reused by E02 with periodic wrapping disabled.
+The `E01E02…` measurement, profile, snapshot, run and study components implement the common path.
+`E02Diagnostics.h` contains only E02's residual and probe observations.
+The entry point dispatches `E01`, `E02`, `E01-study` and `E02-study` explicitly.

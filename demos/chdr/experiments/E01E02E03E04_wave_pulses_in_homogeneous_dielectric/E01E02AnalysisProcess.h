@@ -1,4 +1,4 @@
-/** @file E01AnalysisProcess.h
+/** @file E01E02AnalysisProcess.h
  * @brief Invoke the bundled analysis once, after the application has finalized IPPL.
  */
 #pragma once
@@ -15,16 +15,16 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01Study.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Study.h"
 
 extern char** environ;
 
-namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
-    namespace e01_analysis_process_detail {
+namespace chdr::experiments::e01e02 {
+    namespace pulseAnalysisProcessDetail {
         /// Convert POSIX spawn setup errors, whose error number is the return value.
         inline void requireSuccess(int error) {
             if (error != 0)
-                throw std::runtime_error(std::string("Cannot launch E01 analysis: ")
+                throw std::runtime_error(std::string("Cannot launch Pulse analysis: ")
                                          + std::strerror(error));
         }
 
@@ -54,7 +54,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         };
 
         /// Pass executable and script as separate arguments, without command-string evaluation.
-        inline pid_t start(const E01AnalysisCommand& command) {
+        inline pid_t start(const PulseAnalysisCommand& command) {
             std::string python = command.pythonExecutable_m;
             std::string script = command.script_m.string();
             std::array<char*, 3> arguments{python.data(), script.data(), nullptr};
@@ -70,31 +70,31 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             int status{};
             while (waitpid(child, &status, 0) < 0) {
                 if (errno != EINTR)
-                    throw std::runtime_error(std::string("Cannot wait for E01 analysis: ")
+                    throw std::runtime_error(std::string("Cannot wait for Pulse analysis: ")
                                              + std::strerror(errno));
             }
             if (WIFEXITED(status))
                 return WEXITSTATUS(status);
             return WIFSIGNALED(status) ? 128 + WTERMSIG(status) : 1;
         }
-    }  // namespace e01_analysis_process_detail
+    }  // namespace pulseAnalysisProcessDetail
 
     /** @brief Run Python on the former rank-zero process after IPPL/MPI finalization.
      * @details A failed analysis does not remove completed simulation results. Its output
      * is retained in analysis.log, and a nonzero exit status reaches the calling process.
      * @pre All simulation objects are destroyed and input::runApplication has returned.
      */
-    inline int runE01Analysis(const E01AnalysisCommand& command) {
+    inline int runPulseAnalysis(const PulseAnalysisCommand& command) {
         try {
             const int status =
-                e01_analysis_process_detail::wait(e01_analysis_process_detail::start(command));
-            std::cout << "E01 analysis " << (status == 0 ? "completed" : "failed") << "; see "
+                pulseAnalysisProcessDetail::wait(pulseAnalysisProcessDetail::start(command));
+            std::cout << "Pulse analysis " << (status == 0 ? "completed" : "failed") << "; see "
                       << command.script_m.parent_path() / "analysis.log" << '\n';
             return status;
         } catch (const std::exception& error) {
-            std::cerr << error.what() << "; completed E01 results are retained in "
+            std::cerr << error.what() << "; completed study results are retained in "
                       << command.script_m.parent_path() << '\n';
             return 1;
         }
     }
-}  // namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric
+}  // namespace chdr::experiments::e01e02

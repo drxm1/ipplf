@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Analyze the completed E01 refinement study without invoking the solver.
+"""Analyze the completed E01 or E02 refinement study without invoking the solver.
 
 Run this copied script in its result bundle, or pass --directory PATH.
-Python 3 and Matplotlib are required. Inputs and measured quantities follow E01.typ.
+Python 3 and Matplotlib are required. Inputs and measured quantities follow E01.typ and E02.typ.
 Observed orders follow Salari and Knupp, SAND2000-1444, section 4.2, pp. 29--30
 (library key salari2000CodeVerificationMms). They describe the recorded combined
 longitudinal space/time refinement; no acceptance threshold is inferred here.
@@ -12,7 +12,7 @@ Different meshes retain their recorded nearest times; this script does not inter
 
 import argparse
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import math
@@ -38,6 +38,9 @@ class LevelResults:
     checkpoints: tuple
     errors: dict
     profiles: dict
+    profile_checkpoints: tuple = ()
+    residuals: dict = field(default_factory=dict)
+    probe: list = field(default_factory=list)
 
 
 def require(condition, message):
@@ -61,11 +64,11 @@ def read_json(path):
 def planned_levels(root):
     """Require a contiguous prefix of the supported refinement ladder."""
     study = read_json(root / "study.json")
-    require(study["schema_version"] == 1 and study["case"] == "E01-study", "Not an E01 study")
+    require(study["schema_version"] == 1 and study["case"] in ("E01-study", "E02-study"), "Not a pulse study")
     require(study["status"] == "completed", "The study has not completed")
     entries = study["levels"]
     counts = [entry["cells_per_pulse"] for entry in entries]
-    require(4 <= len(counts) <= len(REFINEMENT_LADDER)
+    require((len(counts) == 5 if study["case"] == "E02-study" else 4 <= len(counts) <= len(REFINEMENT_LADDER))
             and counts == list(REFINEMENT_LADDER[:len(counts)]), "Unexpected refinement ladder")
     paths = [Path(entry["directory"]) for entry in entries]
     require(len(set(paths)) == len(paths), "Repeated level directory")
@@ -75,9 +78,9 @@ def planned_levels(root):
     return entries
 
 
-def checkpoint_names(record):
+def checkpoint_names(record, group="error_observations"):
     """Read named observations; recognize the original four-target records explicitly."""
-    observations = record["effective"]["error_observations"]
+    observations = record["effective"].get(group, record["effective"]["error_observations"])
     names = observations.get("protocol_checkpoint_names", list(ORIGINAL_CHECKPOINTS))
     require(isinstance(names, list) and names
             and all(isinstance(name, str) and name.isidentifier() for name in names),
@@ -99,29 +102,35 @@ def checkpoint_label(level, checkpoint):
     """Display the recorded travel distance when available, preserving its association."""
     if checkpoint == "initial":
         return "initial"
-    observations = level.record["effective"]["error_observations"]
+    observations = level.record["effective"].get("profile_observations", level.record["effective"]["error_observations"])
     distances = observations.get("protocol_travel_distances_in_w")
     if distances is None:
         return checkpoint.replace("_", " ")
-    distance = distances[level.checkpoints.index(checkpoint) - 1]
+    distance = distances[level.profile_checkpoints.index(checkpoint) - 1]
     return f"after {distance:g}w"
 
 
 def validate_record(record, count):
     """Check completion and the selected E01 case before reading its observations."""
-    require(record["status"] == "completed" and record["input"]["case"] == "E01", "Incomplete E01 run")
+    require(record["status"] == "completed" and record["input"]["case"] in ("E01", "E02"), "Incomplete pulse run")
     require(record["input"]["parameters"]["cells_per_pulse"] == count, "Level/input mismatch")
     effective = record["effective"]
     observations = effective["error_observations"]
     require(not observations["partial_final"], "Partial runs cannot enter the refinement study")
-    final_step = max(observations["protocol_potential_steps"] + observations["protocol_field_steps"])
+    final_step = effective.get("protocol_steps", max(observations["protocol_potential_steps"] + observations["protocol_field_steps"]))
     require(effective["completed_solves"] == effective["requested_steps"] == final_step,
             "Run did not reach its prescribed endpoint")
     solver = effective["solver"]
-    require(effective["value_system"] == "normalized", "E01 analysis expects normalized values")
+    require(effective["value_system"] == "normalized", "Pulse analysis expects normalized values")
     require((solver["formulation"], solver["reconstruction"], solver["spatial"], solver["stencil"])
             == ("O1VS", "R2", "staggered", "Standard"), "Unexpected E01 solver settings")
-    require(all(effective["box"]["periodic"]), "E01 requires periodic boundaries")
+    expected_periodic = [True, True, record["input"]["case"] == "E01"]
+    require(effective["box"]["periodic"] == expected_periodic, "Incorrect pulse boundaries")
+    if record["input"]["case"] == "E02":
+        speed = effective["analytic_reference"]["wave_speed"]
+        boundary = effective["boundary"]
+        require(boundary["mur_mask"] == 48 and boundary["kernel_speeds"][4:] == [speed, speed],
+                "E02 requires the physical dielectric speed on both z faces")
 
 
 def validate_resolution(record, count):
@@ -135,7 +144,7 @@ def validate_resolution(record, count):
     hz = finite(box["spacing"][2])
     require(hz > 0 and math.isclose(count * hz, 2 * reference["support_half_width"],
                                     rel_tol=1e-12), "Pulse-cell count does not match its mesh")
-    require(math.isclose(box["cells"][2] * hz, reference["period"], rel_tol=1e-12),
+    require(math.isclose(box["cells"][2] * hz, reference.get("domain_length_z", reference.get("period")), rel_tol=1e-12),
             "Longitudinal mesh length differs from the analytic period")
 
 
@@ -164,9 +173,9 @@ def recorded_sample_time(observations, measurement, checkpoint, checkpoints):
     return finite(times[checkpoints.index(checkpoint)])
 
 
-def validate_observation(row, measurement, checkpoint, record, checkpoints):
+def validate_observation(row, measurement, checkpoint, record, checkpoints, group="error_observations"):
     """Match observations to the run record without reconstructing LevelContract offsets."""
-    observations = record["effective"]["error_observations"]
+    observations = record["effective"].get(group, record["effective"]["error_observations"])
     require(row["actual_time"] == recorded_sample_time(observations, measurement, checkpoint,
                                                        checkpoints),
             "Observation sample time differs from its recorded LevelContract label")
@@ -193,26 +202,27 @@ def load_errors(directory, record, checkpoints):
     return errors
 
 
-def append_profile(profiles, row, errors, checkpoints):
-    """Validate one native profile sample against its matching error observation."""
+def append_profile(profiles, row, record, checkpoints):
+    """Validate native profiles independently of whether that checkpoint has relative errors."""
     key = row["component"], row["checkpoint"]
     require(key[0] in COMPONENTS and key[1] in checkpoints, f"Unexpected profile: {key}")
-    error = errors[COMPONENTS[key[0]], key[1]]
-    require(int(row["step"]) == error["step"] and finite(row["actual_time"]) == error["actual_time"]
-            and finite(row["target_time"]) == error["target_time"], "Profile/error observation mismatch")
+    observation = {"step": int(row["step"]), "actual_time": finite(row["actual_time"]),
+                   "target_time": finite(row["target_time"])}
+    validate_observation(observation, COMPONENTS[key[0]], key[1], record, checkpoints,
+                         "profile_observations")
     xy = finite(row["x"]), finite(row["y"])
-    profile = profiles.setdefault(key, {"z": [], "numerical": [], "analytic": [], "xy": xy})
+    profile = profiles.setdefault(key, {"z": [], "numerical": [], "analytic": [], "xy": xy,
+                                        **observation})
     require(xy == profile["xy"] and int(row["k"]) == len(profile["z"]), "Profile line/index mismatch")
     for column in ("z", "numerical", "analytic"):
         profile[column].append(finite(row[column]))
 
-
-def load_profiles(directory, record, errors, checkpoints):
+def load_profiles(directory, record, checkpoints):
     """Preserve native z coordinates; never interpolate profiles between meshes or times."""
     profiles = {}
     with (directory / "profiles.csv").open(newline="", encoding="utf-8") as stream:
         for row in csv.DictReader(stream):
-            append_profile(profiles, row, errors, checkpoints)
+            append_profile(profiles, row, record, checkpoints)
     require(len(profiles) == len(COMPONENTS) * len(checkpoints), "Missing profiles")
     for profile in profiles.values():
         z = profile["z"]
@@ -235,22 +245,28 @@ def physical_signature(record):
 
 
 def load_level(directory, count):
-    """Resolve one level's observation schedule before reading its numerical data."""
+    """Resolve separate error and profile schedules before reading either experiment."""
     record = read_json(directory / "run.json")
     validate_record(record, count)
     validate_resolution(record, count)
     checkpoints = checkpoint_names(record)
+    profile_checkpoints = checkpoint_names(record, "profile_observations")
     errors = load_errors(directory, record, checkpoints)
-    profiles = load_profiles(directory, record, errors, checkpoints)
-    return LevelResults(count, record, checkpoints, errors, profiles)
-
+    profiles = load_profiles(directory, record, profile_checkpoints)
+    level = LevelResults(count, record, checkpoints, errors, profiles, profile_checkpoints)
+    if record["input"]["case"] == "E02":
+        level.residuals = load_residuals(directory, record)
+        level.probe = load_probe(directory, record)
+    return level
 
 def load_study(root):
     """Load validated completed runs and ensure that they form one physical comparison."""
     levels = [load_level(root / entry["directory"], entry["cells_per_pulse"])
               for entry in planned_levels(root)]
+    expected_case = read_json(root / "study.json")["case"].removesuffix("-study")
+    require(all(level.record["input"]["case"] == expected_case for level in levels), "Mixed study cases")
     for coarse, fine in zip(levels, levels[1:]):
-        require(coarse.checkpoints == fine.checkpoints, "Checkpoint schedule differs between levels")
+        require(coarse.checkpoints == fine.checkpoints and coarse.profile_checkpoints == fine.profile_checkpoints, "Checkpoint schedule differs between levels")
         require(physical_signature(coarse.record) == physical_signature(fine.record),
                 "Physical settings differ between levels")
         for key in ("hz", "dt"):
@@ -306,13 +322,11 @@ def plot_convergence(levels, directory, plt):
                 axis.loglog([row["hz"] for row in positive], [row["relative_error"] for row in positive],
                             "o-", color=f"C{index}", label=checkpoint_label(levels[0], checkpoint))
         spacings = [level.errors[measurement, "initial"]["hz"] for level in levels]
-        axis.set_xticks(spacings, [f"{spacing:.3g}" for spacing in spacings],
-                       rotation=30, ha="right", fontsize="small")
-        axis.minorticks_off()
+        refinement_ticks(axis, spacings)
         axis.set(xlabel=r"$h_z$ (solver units)", ylabel=LABELS[measurement])
         axis.grid(True, which="both", alpha=0.25)
         axis.legend(fontsize="small")
-    figure.suptitle("E01 longitudinal space/time refinement\n"
+    figure.suptitle(f"{levels[0].record['input']['case']} longitudinal space/time refinement\n"
                    "Zero errors are omitted on log axes; values and orders are in convergence.csv")
     save_figure(figure, directory, "convergence", plt)
 
@@ -328,25 +342,25 @@ def plot_error_histories(levels, directory, plt):
         axis.set(xlabel="Actual time (solver units)", ylabel=LABELS[measurement])
         axis.grid(True, alpha=0.25)
         axis.legend(fontsize="small", ncol=2 if len(levels) > 4 else 1)
-    figure.suptitle("E01 sparse error observations")
+    figure.suptitle(f"{levels[0].record['input']['case']} sparse error observations")
     save_figure(figure, directory, "error_histories", plt)
 
 
 def plot_profiles(levels, directory, plt):
     """Pair each numerical profile with its own reference at the same native samples."""
-    for checkpoint in levels[0].checkpoints:
+    for checkpoint in levels[0].profile_checkpoints:
         figure, axes = plt.subplots(3, 1, figsize=(11, 9), layout="constrained")
         for axis, (component, measurement) in zip(axes, COMPONENTS.items()):
             for index, level in enumerate(levels):
                 profile = level.profiles[component, checkpoint]
-                time = level.errors[measurement, checkpoint]["actual_time"]
+                time = profile["actual_time"]
                 label = f"N_pulse={level.cells_per_pulse}, t={time:.8g}"
                 axis.plot(profile["z"], profile["numerical"], color=f"C{index}", label=label)
                 axis.plot(profile["z"], profile["analytic"], "--", color=f"C{index}", linewidth=1)
             axis.set(xlabel="z (solver units)", ylabel=f"{COMPONENT_LABELS[component]} (solver units)")
             axis.grid(True, alpha=0.25)
             axis.legend(fontsize="small", ncol=2)
-        figure.suptitle(f"E01 {checkpoint_label(levels[0], checkpoint)}: numerical (solid), continuum reference (dashed)\n"
+        figure.suptitle(f"{levels[0].record['input']['case']} {checkpoint_label(levels[0], checkpoint)}: numerical (solid), continuum reference (dashed)\n"
                        "Each legend reports the profile's actual time; samples are not interpolated")
         save_figure(figure, directory, f"profiles_{checkpoint}", plt)
 
@@ -368,6 +382,8 @@ def analyze(root):
     plot_convergence(levels, directory, plt)
     plot_error_histories(levels, directory, plt)
     plot_profiles(levels, directory, plt)
+    if levels[0].record["input"]["case"] == "E02":
+        analyze_e02(root, levels, directory, plt)
     write_analysis_record(root, levels, matplotlib.__version__)
 
 
@@ -382,9 +398,182 @@ def write_analysis_record(root, levels, matplotlib_version):
               "empty_orders": "first level or a zero error in an adjacent pair",
               "interpretation": "observed orders only; no automatic convergence verdict",
               "figures": [f"figures/{name}.{suffix}" for name in
-                          ("convergence", "error_histories", *(f"profiles_{key}" for key in levels[0].checkpoints))
+                          ("convergence", "error_histories", *(f"profiles_{key}" for key in levels[0].profile_checkpoints))
                           for suffix in ("png", "pdf")]}
+    if levels[0].record["input"]["case"] == "E02":
+        record["figures"] += [f"figures/{name}.{suffix}" for name in
+                              ("residual_convergence", "probe_traces", "e01_comparison")
+                              for suffix in ("png", "pdf")]
+        record["e01_reference"] = read_json(root / "study.json")["e01_reference"]
     (root / "analysis.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+
+
+def load_residuals(directory, record):
+    """Read E02's final norms against zero and verify their fixed numerical denominators."""
+    rows = {}
+    effective = record["effective"]
+    normalization = effective["residuals"]
+    observations = effective["profile_observations"]
+    with (directory / "residuals.csv").open(newline="", encoding="utf-8") as stream:
+        for row in csv.DictReader(stream):
+            name = row["measurement"]
+            require(name in ("E_L2", "B_L2") and name not in rows, "Invalid residual measurement")
+            values = {key: finite(row[key]) for key in ("target_time", "actual_time", "initial_time",
+                      "initial_l2", "current_l2", "relative_residual")}
+            validate_residual(row, values, effective, observations, normalization)
+            rows[name] = {**values, "hz": effective["box"]["spacing"][2],
+                          "dt": effective["solver"]["time_step"],
+                          "relative_error": values["relative_residual"]}
+    require(len(rows) == 2, "Missing electric or magnetic residual")
+    return rows
+
+
+def validate_residual(row, values, effective, observations, normalization):
+    """Require the prescribed final state, never a shortened-run endpoint."""
+    name = row["measurement"]
+    channel = SAMPLE_TIME_KEYS[name]
+    require(row["checkpoint"] == "final" and int(row["step"]) == effective["protocol_steps"],
+            "Residual is not at the full-run endpoint")
+    require(values["actual_time"] == observations["sample_times"][channel][-1]
+            and values["target_time"] == observations["protocol_target_times"][-1],
+            "Residual time differs from the recorded endpoint")
+    initial = normalization["initial_l2"][0 if name == "E_L2" else 1]
+    require(values["initial_time"] == normalization["initial_time"]
+            and values["initial_l2"] == initial > 0 and values["current_l2"] >= 0,
+            "Invalid fixed residual normalization")
+    require(math.isclose(values["relative_residual"], values["current_l2"] / initial,
+                         rel_tol=1e-12, abs_tol=0), "Residual ratio does not match its norms")
+
+
+def load_probe(directory, record):
+    """Keep the signed consecutive trace and the native position supplied by the executable."""
+    effective = record["effective"]
+    metadata = effective["probe"]
+    initial = effective["residuals"]["initial_time"]
+    dt = effective["solver"]["time_step"]
+    samples = []
+    with (directory / "probe.csv").open(newline="", encoding="utf-8") as stream:
+        for step, row in enumerate(csv.DictReader(stream)):
+            time, value = finite(row["actual_time"]), finite(row["Ex"])
+            require(int(row["step"]) == step and time == initial + step * dt,
+                    "Probe trace is not consecutive at the recorded native times")
+            require([int(row[key]) for key in ("i", "j", "k")] == metadata["global_cell"]
+                    and [finite(row[key]) for key in ("x", "y", "z")] == metadata["position"],
+                    "Probe position changed")
+            samples.append((time, value))
+    require(len(samples) == effective["protocol_steps"] + 1, "Incomplete probe trace")
+    return samples
+
+
+def write_rows(path, rows):
+    """Write a complete numerical comparison table with explicit column names."""
+    with path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def residual_rows(levels):
+    """Keep final norm ratios, normalizations and adjacent-level orders together."""
+    for index, level in enumerate(levels):
+        for name, row in level.residuals.items():
+            coarse = levels[index - 1].residuals[name] if index else None
+            yield {"cells_per_pulse": level.cells_per_pulse, "measurement": name, **row,
+                   "coarser_cells_per_pulse": levels[index - 1].cells_per_pulse if index else "",
+                   "observed_order": observed_order(coarse, row) if coarse else None}
+
+
+def plot_residuals(levels, directory, plt):
+    """Plot the E02 field norm ratios without interpreting them as reflected energy."""
+    figure, axes = plt.subplots(1, 2, figsize=(10, 4), layout="constrained")
+    for axis, name in zip(axes, ("E_L2", "B_L2")):
+        rows = [level.residuals[name] for level in levels if level.residuals[name]["relative_residual"] > 0]
+        axis.loglog([row["hz"] for row in rows], [row["relative_residual"] for row in rows], "o-")
+        symbol = "E" if name == "E_L2" else "B"
+        axis.set(xlabel=r"$h_z$", ylabel=rf"$d_{symbol}$ (final / initial $L^2$ norm)")
+        refinement_ticks(axis, [row["hz"] for row in rows])
+        axis.grid(True, which="both", alpha=0.25)
+    figure.suptitle("E02 residual fields after exit")
+    save_figure(figure, directory, "residual_convergence", plt)
+
+
+def refinement_ticks(axis, spacings):
+    """Label measured spacings only, keeping logarithmic plots readable."""
+    axis.set_xticks(spacings, [f"{spacing:.3g}" for spacing in spacings],
+                   rotation=30, ha="right", fontsize="small")
+    axis.minorticks_off()
+
+
+def plot_probes(levels, directory, plt):
+    """Display the complete signed traces without window selection or reference subtraction."""
+    figure, axis = plt.subplots(figsize=(10, 4), layout="constrained")
+    for level in levels:
+        time, value = zip(*level.probe)
+        axis.plot(time, value, label=f"N_pulse={level.cells_per_pulse}")
+    axis.set(xlabel="Actual R2 time", ylabel=r"$E_x$ (solver units)", title="E02 native electric probe")
+    axis.grid(True, alpha=0.25)
+    axis.legend()
+    save_figure(figure, directory, "probe_traces", plt)
+
+
+def archived_e01_profiles(root, level):
+    """Read the copied E01 data and keep matching owned indices, including the last By sample."""
+    directory = root / "e01-reference" / f"n{level.cells_per_pulse}"
+    record = read_json(directory / "run.json")
+    validate_record(record, level.cells_per_pulse)
+    require(record["input"]["case"] == "E01", "Comparison archive is not E01")
+    for key in ("spacing",):
+        require(record["effective"]["box"][key] == level.record["effective"]["box"][key],
+                "E01 comparison mesh spacing differs")
+    require(record["effective"]["solver"]["time_step"] == level.record["effective"]["solver"]["time_step"],
+            "E01 comparison timestep differs")
+    count = level.record["effective"]["box"]["cells"][2]
+    profiles = {}
+    with (directory / "profiles.csv").open(newline="", encoding="utf-8") as stream:
+        for row in csv.DictReader(stream):
+            if row["checkpoint"] == "travel_2w" and int(row["k"]) < count:
+                append_profile(profiles, row, record, checkpoint_names(record, "profile_observations"))
+    require(len(profiles) == 3 and all(len(p["z"]) == count for p in profiles.values()),
+            "Incomplete E01 travel_2w comparison profiles")
+    return profiles
+
+
+def compare_e01(root, levels, directory, plt):
+    """Compare archived and new native profiles directly, without rerunning E01 or fitting shifts."""
+    figure, axes = plt.subplots(3, 1, figsize=(10, 8), layout="constrained")
+    rows = []
+    for index, level in enumerate(levels):
+        archived = archived_e01_profiles(root, level)
+        for axis, component in zip(axes, COMPONENTS):
+            old, new = archived[component, "travel_2w"], level.profiles[component, "travel_2w"]
+            require(all(old[key] == new[key] for key in ("xy", "z", "step", "actual_time", "target_time")),
+                    "E01/E02 comparison samples or times differ")
+            difference = [a - b for a, b in zip(new["numerical"], old["numerical"])]
+            axis.plot(new["z"], difference, color=f"C{index}", label=f"N_pulse={level.cells_per_pulse}")
+            rows.extend({"cells_per_pulse": level.cells_per_pulse, "component": component,
+                         "k": k, "z": z, "actual_time": new["actual_time"], "E02": a, "E01": b,
+                         "difference": d} for k, (z, a, b, d) in enumerate(
+                             zip(new["z"], new["numerical"], old["numerical"], difference)))
+    finish_comparison_plot(figure, axes, directory, plt)
+    write_rows(root / "e01_comparison.csv", rows)
+
+
+def finish_comparison_plot(figure, axes, directory, plt):
+    """Label differences as common-line samples rather than full-E01-domain error norms."""
+    for axis, component in zip(axes, COMPONENTS):
+        axis.set(xlabel="z (solver units)", ylabel=f"E02 - E01 {COMPONENT_LABELS[component]}")
+        axis.grid(True, alpha=0.25)
+        axis.legend(fontsize="small")
+    figure.suptitle("Pre-contact comparison after 2w of travel, matching native samples")
+    save_figure(figure, directory, "e01_comparison", plt)
+
+
+def analyze_e02(root, levels, directory, plt):
+    """Add only the residual, probe and archived-data comparisons specific to E02."""
+    write_rows(root / "residual_convergence.csv", list(residual_rows(levels)))
+    plot_residuals(levels, directory, plt)
+    plot_probes(levels, directory, plt)
+    compare_e01(root, levels, directory, plt)
 
 
 def main():
@@ -396,8 +585,8 @@ def main():
     try:
         analyze(args.directory)
     except (OSError, ValueError, KeyError, ImportError) as error:
-        parser.exit(1, f"E01 analysis failed: {error}\n")
-    print(f"E01 analysis written to {args.directory / 'convergence.csv'} and figures/")
+        parser.exit(1, f"Pulse analysis failed: {error}\n")
+    print(f"Pulse analysis written to {args.directory / 'convergence.csv'} and figures/")
 
 
 if __name__ == "__main__":
