@@ -1,0 +1,5 @@
+schema_version: 1
+case: E03
+units: {system: normalized}
+parameters: {cells_per_axis: 96, polarization: TEr, write_plane: true}
+output: {directory: n96-TEr}
