@@ -1,25 +1,20 @@
-#import "@preview/physica:0.9.8": *
-#set page(paper: "a4", margin: 22mm, numbering: "1")
-#set text(size: 10.5pt)
-#set par(justify: true)
-#set math.equation(numbering: "(1)")
-#show heading: set block(above: 1.3em, below: 0.6em)
+#import "../../docs/manual/preamble.typ": *
 
-#let chew = link("https://arxiv.org/abs/1406.4780")[Chew, §2, Eqs. (5)–(13)]
-#let ryu = link("https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf")[Ryu et al., Appendix A, Eqs. (19)–(27)]
-#let fallahi = link("https://arxiv.org/abs/2009.13645")[Fallahi, §3.1]
-#let salari = link("https://www.osti.gov/servlets/purl/759450")[Salari and Knupp, §§4.1–4.2]
-#let christlieb = link("https://arxiv.org/abs/2410.18414v1")[Christlieb et al., §3.1, Eqs. (25)–(27)]
+#let chew = [Chew @chew2014generalizedgauge[§2, Eqs. (5)–(13)]]
+#let ryu = [Ryu et al. @ryu2016potentialfdtd[Appendix A, Eqs. (19)–(27)]]
+#let fallahi = [Fallahi @fallahi2020mithra20fullwavesimulation[§3.1]]
+#let salari = [Salari and Knupp @salari2000CodeVerificationMms[§§4.1–4.2]]
+#let christlieb = [Christlieb et al. @christlieb2024GaugeConserving[§3.1, Eqs. (25)–(27)]]
 
-= Experiment E03 detailed specification\*
+= Experiment E03 detailed specification\* <experiment-e03>
 
 E03 measures convergence of a spherical pulse over a radial travel distance $2w$,
 before continuum contact with the periodic boundaries.
 We refine all three cell widths and the time step together.
 The source-free pulse is the field of an electric dipole.
 Its scalar and vector potentials are both nonzero.
-This three-dimensional study complements the longer axial propagation in #link("E01.typ")[E01]
-and supplies the propagation baseline for #link("E04.typ")[E04].
+This three-dimensional study complements the longer axial propagation in #link(<experiment-e01>)[E01]
+and supplies the propagation baseline for #link(<experiment-e04>)[E04].
 
 All quantities use the manual's normalized solver units:
 $c_"vac"=epsilon_0=mu_0=1$.
@@ -548,13 +543,3 @@ Check the zero continuation and both loaded histories separately.
 One small run should confirm the global reductions across an MPI partition.
 Save the input, exact source revision and local modifications, build, ranks, threads,
 machine, elapsed time, peak memory and all error rows with the study.
-
-== Sources
-
-The cited sources are held in the project literature library:
-
-- `chew2014generalizedgauge`: W. C. Chew, _Vector Potential Electromagnetic Theory with Generalized Gauge for Inhomogeneous Anisotropic Media_ (2014). #chew.
-- `ryu2016potentialfdtd`: C. J. Ryu et al., _Finite-Difference Time-Domain Simulation of the Maxwell–Schrödinger System_ (2016). #ryu.
-- `fallahi2020mithra20fullwavesimulation`: A. Fallahi, _MITHRA 2.0: A Full-Wave Simulation Tool for Free Electron Lasers_ (2020). #fallahi.
-- `salari2000CodeVerificationMms`: K. Salari and P. Knupp, _Code Verification by the Method of Manufactured Solutions_, SAND2000-1444 (2000). #salari.
-- `christlieb2024GaugeConserving`: A. J. Christlieb, W. A. Sands and S. R. White, _A Particle-In-Cell Method for Plasmas with a Generalized Momentum Formulation, Part III: A Family of Gauge Conserving Methods_, arXiv v1 (2024). #christlieb.

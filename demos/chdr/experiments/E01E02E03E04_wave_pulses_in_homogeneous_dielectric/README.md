@@ -2,6 +2,10 @@
 
 The executable implements E01's periodic propagation study and E02's short Mur-exit study.
 Their protocols are in [E01.typ](E01.typ) and [E02.typ](E02.typ).
+The four files E01.typ to E04.typ are the sections of the manual chapter "Experiment definitions"
+([experimentDefinitions.typ](../experimentDefinitions.typ)).
+They use the preamble and the bibliography of the manual,
+so they compile only as part of `demos/chdr/manual.typ` and not on their own.
 Both use the same pulse, solver setup, native measurements, profiles and field writer.
 E02 additionally saves initial-normalized E/B residuals and the signed electric probe.
 

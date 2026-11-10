@@ -1,7 +1,6 @@
-#import "@preview/physica:0.9.8": *
-#set math.equation(numbering: "(1)")
+#import "../../docs/manual/preamble.typ": *
 
-= Experiment E01 detailled specs
+= Experiment E01 detailled specs <experiment-e01>
 
 All quantities below use the normalized solver units defined in the manual's
 Units chapter (`docs/manual/Units.typ`): $c_"vac" = epsilon_0 = mu_0 = 1$.
@@ -36,7 +35,7 @@ Since $A_x$ is independent of x, $div vb(A) = 0$, so the homogeneous Lorenz gaug
 We now verify the continuum wave equations for the scalar and vector potentials
 in a homogeneous medium, with zero free charge and current. In the Lorenz
 gauge these are
-#link("https://arxiv.org/pdf/1406.4780v1")[Chew, §2, Eqs. (12)–(13)]:
+Chew @chew2014generalizedgauge[§2, Eqs. (12)–(13)]:
 $
   nabla^2 phi - epsilon_r partial_t^2 phi &= 0, \
   nabla^2 vb(A) - epsilon_r partial_t^2 vb(A) &= vb(0).
@@ -242,7 +241,7 @@ $
   h_t < 1/sqrt(h_x^(-2) + h_y^(-2) + h_z^(-2)),
 $
 on all four meshes
-(#link("https://arxiv.org/pdf/2009.13645v1")[Fallahi, Eq. (3.20)], with $c_"vac"=1$).
+(Fallahi @fallahi2020mithra20fullwavesimulation[Eq. (3.20)], with $c_"vac"=1$).
 
 For the final convergence comparison,
 we select the available sample closest to the target time $T$ separately for $vb(A)$ and for the R2 fields $vb(E), vb(B)$.
@@ -344,8 +343,8 @@ so their backward difference is zero.
 Since $A_y=A_z=phi=0$ in the loaded histories,
 the remaining divergence terms and the scalar time difference also vanish,
 which satisfies the discrete homogeneous Lorenz gauge in exact arithmetic
-(#link("https://arxiv.org/pdf/1406.4780v1")[Chew, Eq. (11)],
-with the staggered divergence of #link("https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf")[Ryu et al., Appendix A, Eq. (23)]).
+(Chew @chew2014generalizedgauge[Eq. (11)],
+with the staggered divergence of Ryu et al. @ryu2016potentialfdtd[Appendix A, Eq. (23)]).
 
 In the code, the components are still stored at integer indices $(i,j,k)$, and `writeSamples` in `core/solver/BoxSetup.h` adds the physical offset before the analytic is evaluated.
 
@@ -400,7 +399,7 @@ For example, $bold(delta)_y^B = 1/2 (bold(e)_x+bold(e)_z)$.
 
 We use the `R2` magnetic output from `solver.magneticField()`,
 which averages the staggered curls of the current and previous vector potentials
-(#link("https://arxiv.org/pdf/2009.13645v1")[MITHRA 2.0, Eqs. (3.50)–(3.52)],
+(MITHRA 2.0 @fallahi2020mithra20fullwavesimulation[Eqs. (3.50)–(3.52)],
 with the spatial curl of Ryu et al., Appendix A, Eq. (24)).
 Its time label is $n-1/2$. The reference $B_(c,bold(i)+bold(delta)_c^B)^("ref",n-1/2)$ is the continuum field at the same component position and $t_(n-1/2) = (n-1/2)h_t$.
 
@@ -412,7 +411,7 @@ $
   ).
 $
 The discrete norm is as in
-#link("https://www.osti.gov/servlets/purl/759450")[Salari and Knupp, §4.1,
+Salari and Knupp @salari2000CodeVerificationMms[§4.1,
 Eq. (15)]. In code, each owned cell must contribute only once across all MPI ranks, and ghost cells must be excluded. E01's reference has only a $y$ component, while numerical
 $B_x$ and $B_z$ also contribute to the error.
 
@@ -433,7 +432,7 @@ $
     / (max_(bold(i) in sans(M),c) abs(E_(c,bold(i)+1/2 bold(e)_c)^("ref",n-1/2))).
 $
 This is the maximum-error norm of
-#link("https://www.osti.gov/servlets/purl/759450")[Salari and Knupp, §4.1,
+Salari and Knupp @salari2000CodeVerificationMms[§4.1,
 Eq. (18)], normalized by the largest sampled reference magnitude. The maxima may occur at different locations.
 
 *Purpose:* measure the largest componentwise field discrepancy anywhere on

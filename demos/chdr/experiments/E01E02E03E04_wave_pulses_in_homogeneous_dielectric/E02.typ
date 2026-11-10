@@ -1,11 +1,9 @@
-#import "@preview/physica:0.9.8": *
-#set math.equation(numbering: "(1)")
-#set page(numbering: "1")
+#import "../../docs/manual/preamble.typ": *
 
-= Experiment E02 detailed specs\*
+= Experiment E02 detailed specs\* <experiment-e02>
 
 E02 measures the return and residual fields when E01's transverse pulse
-leaves through a Mur boundary. Use #link("E01.typ")[E01.typ] for the units,
+leaves through a Mur boundary. Use #link(<experiment-e01>)[E01.typ] for the units,
 material, profile, continuum field definitions, initialization, solver
 configuration and native sampling conventions.
 
@@ -39,7 +37,7 @@ the pulse has left by $5w/v$. These times follow from E01's support and speed.
 Select #raw("MurSpeed::physical(v)") explicitly: the current O1VS
 #raw("MurSpeed::matched()") supplies kernel speed one. Use the existing second
 Mur approximation and face recurrence
-(#link("https://doi.org/10.1109/TEMC.1981.303970")[Mur (1981), Eqs. (12), (16)]).
+(Mur (1981) @mur1981AbsorbingBoundaryFdtd[Eqs. (12), (16)]).
 The continuum normal-incidence pulse satisfies this boundary condition
 without reflection when the speeds match; the discrete return is measured.
 
@@ -53,9 +51,9 @@ $
 for the right recurrence plane in the arrival estimates. Keep the existing
 quadratic ghost extension, including its effect on reconstructed $B_y$.
 These conventions are implemented in
-#link("../../../../src/MaxwellSolvers/FDTDBoundary.h")[FDTDBoundary.h],
-#link("../../../../src/MaxwellSolvers/AbsorbingBC.h")[AbsorbingBC.h] and
-#link("../../../../src/MaxwellSolvers/OpenFaceClosure.h")[OpenFaceClosure.h].
+#link("../../src/MaxwellSolvers/FDTDBoundary.h")[FDTDBoundary.h],
+#link("../../src/MaxwellSolvers/AbsorbingBC.h")[AbsorbingBC.h] and
+#link("../../src/MaxwellSolvers/OpenFaceClosure.h")[OpenFaceClosure.h].
 
 == Continuum comparison and duration
 
@@ -105,8 +103,8 @@ one contribution per owned sample across MPI ranks. Each denominator is
 the corresponding numerical field's initial norm and remains fixed.
 
 This uses E01's discrete $L^2$ convention
-(#link("https://www.osti.gov/servlets/purl/759450")[Salari and Knupp (2000),
-§4.1, Eq. (15)]). The two ratios measure the total field remaining after
+(Salari and Knupp (2000)
+@salari2000CodeVerificationMms[§4.1, Eq. (15)]). The two ratios measure the total field remaining after
 exit, including reflection, numerical tails and initialization artifacts.
 They are not isolated reflection coefficients or absorbed-energy fractions.
 Use the spatial profiles to distinguish a returning pulse from residue
@@ -131,14 +129,14 @@ components in the full fields before interpreting the line as representative.
 
 Compact support is a property of the continuum pulse. Numerical dispersion
 can leave tails after its predicted exit time
-(#link("https://eecs.wsu.edu/~schneidj/ufdtd/ufdtd.pdf")[Schneider, §7.4]).
+(Schneider @schneider2010UnderstandingFdtd[§7.4]).
 The residual norms include these tails and effects from both Mur faces.
 Report what remains; investigate its origin only if the results require it.
 
 Gauss residuals remain sanity checks. For transverse $E_x (z,t)$ and
 $B_y (z,t)$, the corresponding divergences vanish even with reflection
-(deduction from #link("https://arxiv.org/pdf/1406.4780v1")[Chew,
-Eqs. (3)–(4)]). A zero residual does not measure absorption.
+(deduction from Chew
+@chew2014generalizedgauge[Eqs. (3)–(4)]). A zero residual does not measure absorption.
 
 The conclusions apply to this homogeneous, normally incident pulse and
 the stated duration, not to oblique incidence, intersecting open faces,
@@ -165,6 +163,6 @@ For each positive resolved metric $m$, report
 $
   p_"obs"=log_2 (m(h_z)/m(h_z/2))
 $
-(#link("https://www.osti.gov/servlets/purl/759450")[Salari and Knupp, §4.2,
+(Salari and Knupp @salari2000CodeVerificationMms[§4.2,
 Eq. (25)]). Report plateaus, growth, unresolved values and electric/magnetic
 disagreements rather than assuming an order from Mur's local truncation error.

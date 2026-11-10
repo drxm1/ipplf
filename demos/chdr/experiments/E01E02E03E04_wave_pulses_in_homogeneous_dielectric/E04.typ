@@ -1,17 +1,12 @@
-#import "@preview/physica:0.9.8": *
-#set page(paper: "a4", margin: 22mm, numbering: "1")
-#set text(size: 10.5pt)
-#set par(justify: true)
-#set math.equation(numbering: "(1)")
-#show heading: set block(above: 1.3em, below: 0.6em)
+#import "../../docs/manual/preamble.typ": *
 
-#let mur = link("https://doi.org/10.1109/TEMC.1981.303970")[Mur (1981), §§III–V]
-#let chew = link("https://arxiv.org/abs/1406.4780")[Chew, §2, Eqs. (1)–(13)]
-#let ellingson = link("https://doi.org/10.21061/electromagnetics-vol-2")[Ellingson, §§3.1–3.2]
-#let e03 = link("E03.typ")[E03]
-#let bamberger = link("https://inria.hal.science/inria-00075909")[Bamberger et al., §II, Eqs. (2.10)–(2.11)]
+#let mur = [Mur (1981) @mur1981AbsorbingBoundaryFdtd[§§III–V]]
+#let chew = [Chew @chew2014generalizedgauge[§2, Eqs. (1)–(13)]]
+#let ellingson = [Ellingson @ellingson2020ElectromagneticsVol2[§§3.1–3.2]]
+#let e03 = link(<experiment-e03>)[E03]
+#let bamberger = [Bamberger et al. @bamberger1987SecondOrderCorner[§II, Eqs. (2.10)–(2.11)]]
 
-= Experiment E04 detailed specification\*
+= Experiment E04 detailed specification\* <experiment-e04>
 
 E04 measures energy returning to an interior region, energy remaining in the box,
 and Gauss/gauge defects when the spherical pulse of #e03 meets an all-Mur boundary.
@@ -321,12 +316,3 @@ E04 supplies an absorption and constraint study for this pulse, dielectric, box 
 It does not establish a universal Mur reflection coefficient,
 all-angle accuracy, a rigorous energy balance or long-time stability.
 Those claims require additional experiments selected from the actual findings.
-
-== Sources
-
-The exact pulse, derivation, staggered sampling, norm conventions and full Chew reference are in #e03.
-The additional primary sources are held in the project literature library:
-
-- `mur1981AbsorbingBoundaryFdtd`: G. Mur, _Absorbing Boundary Conditions for the Finite-Difference Approximation of the Time-Domain Electromagnetic-Field Equations_, IEEE Transactions on Electromagnetic Compatibility 23 (1981), 377–382. #mur.
-- `ellingson2020ElectromagneticsVol2`: S. W. Ellingson, _Electromagnetics, Vol. 2_ (2020). Energy density and Poynting flux: #ellingson.
-- `bamberger1987SecondOrderCorner`: A. Bamberger, P. Joly and J. E. Roberts, _Second Order Absorbing Boundary Conditions for the Wave Equation: A Solution for the Corner Problem_, INRIA RR-0644 (1987). #bamberger.

@@ -8,6 +8,7 @@
 #import "./core/base/levelContract.typ" as theLevelContract
 #import "./core/solver/formulation/formulations.typ" as formulations
 #import "./opt-in/diagnostics/diagnostics.typ" as diagnostics
+#import "./experiments/experimentDefinitions.typ" as experimentDefinitions
 
 #manual[
   _Note: Parts of this manual were written with the help of ai agents._
@@ -19,4 +20,5 @@
   #theLevelContract.chapter
   #formulations.chapter
   #diagnostics.chapter
+  #experimentDefinitions.chapter
 ]
