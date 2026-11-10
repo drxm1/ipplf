@@ -14,15 +14,17 @@
 = Experiment E04 detailed specification\*
 
 E04 measures energy returning to an interior region, energy remaining in the box,
-and Gauss/gauge defects when the spherical pulses of #e03 meet an all-Mur boundary.
+and Gauss/gauge defects when the spherical pulse of #e03 meets an all-Mur boundary.
 These observations distinguish interior contamination from energy left near the outer boundary.
 
 == Reference and solver configuration
 
-Retain E03's TE\_r and TM\_r potentials, medium, direct-history initialization,
+Retain E03's dipole pulse, medium, direct-history initialization,
 O1VS/Standard/R2 configuration, cubic mesh and timestep.
 The continuum reference is the single outgoing pulse in unbounded material, restricted to the box.
 It is not periodically repeated after boundary contact.
+The input parameter `profile_sharpness` selects the radial profile, as in #e03.
+The study uses the same value as the E03 study, which is 8.
 
 #table(
   columns: (1fr, 2fr), inset: 5pt, align: left + top, stroke: 0.4pt,
@@ -98,7 +100,6 @@ $ <e04-energy-normalization>
 Count each owned native sample once across MPI ranks, without ghosts.
 Components are squared at their own locations.
 Record $U_(0,h)$ once and check its refinement trend.
-E03's duality gives equal continuum energies, but finite-grid quadratures may differ.
 
 #block(breakable: false)[
 @e04-energy-normalization is a discrete approximation to
@@ -245,8 +246,7 @@ Use the numerical startup residual as the baseline, not a separately sampled ana
 Measure the selected states below first.
 Add denser samples, maximum locations or signed maps when they are needed to locate an observed defect.
 
-*Purpose:* identify loss of charge-free Gauss consistency or Lorenz-gauge compatibility,
-especially in TM\_r where the scalar contribution matters.
+*Purpose:* identify loss of charge-free Gauss consistency or Lorenz-gauge compatibility.
 A reflected Maxwell wave can satisfy both constraints.
 Conversely, a large constraint defect can exist even when little energy remains.
 
@@ -268,12 +268,12 @@ There is no separate late scalar-potential target or relative potential error af
 
 Advance through $ceil(T_4/h_t+1/2)$ to bracket the final R2 endpoint:
 375, 561, 842 and 1262 steps on the four meshes.
-Run $N=96,144$ for both cases with the diagnostics enabled before selecting further refinement.
+Run $N=96,144$ with the diagnostics enabled before selecting further refinement.
 Preserve unresolved return traces as well as resolved ones.
 Use the pilot to assess whether higher resolution will separate interior return from numerical contamination,
 and to estimate memory and runtime.
 #block(breakable: false)[
-At $N=324$, each case requires about $4.29 times 10^10$ owned cell advances by this schedule.
+At $N=324$, the run requires about $4.29 times 10^10$ owned cell advances by this schedule.
 Keep the physical geometry and duration fixed, and report any incomplete ladder.
 ]
 
@@ -286,7 +286,7 @@ Use E03's run-record checklist, adding the Mur speed and potential-ghost closure
 
 == Analysis and interpretation
 
-For each polarization and mesh, tabulate:
+For each mesh, tabulate:
 
 - the E03 pre-contact control errors and Mur–periodic differences;
 - $F_"in"$, its per-face contributions and the precursor/return normalized-power traces;
