@@ -1,16 +1,14 @@
 /** @file E01E02Study.h
- * @brief Run a named pulse refinement ladder and collect a portable analysis bundle.
+ * @brief Run a named pulse refinement ladder and collect its inputs and records in one folder.
  */
 #pragma once
 
-#include <array>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
 #include <mpi.h>
 #include <nlohmann/json.hpp>
-#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -23,15 +21,6 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Run.h"
 
 namespace chdr::experiments::e01e02 {
-    /** @brief Plain host-side command retained until the application has finalized IPPL.
-     * @details Only rank zero receives a command. The caller launches the executable
-     * with the script path as a separate argument, after simulation/MPI teardown.
-     */
-    struct PulseAnalysisCommand {
-        std::string pythonExecutable_m;
-        std::filesystem::path script_m;
-    };
-
     namespace pulseStudyDetail {
         using Json = nlohmann::json;
 
@@ -46,8 +35,6 @@ namespace chdr::experiments::e01e02 {
         struct StudyPlan {
             std::filesystem::path directory_m;
             std::vector<StudyLevel> levels_m;
-            bool runAnalysis_m;
-            std::string pythonExecutable_m;
             PulseProtocol protocol_m;
             std::filesystem::path e01Reference_m;
         };
@@ -72,18 +59,8 @@ namespace chdr::experiments::e01e02 {
         /// Reserve the bundle's own files and require an immediate child output directory.
         inline void validateLevelDirectory(const std::string& name) {
             const std::filesystem::path path(name);
-            const std::set<std::string> reserved{"inputs",
-                                                 "figures",
-                                                 "README.md",
-                                                 "study.json",
-                                                 "analyze_e01_e02.py",
-                                                 "analysis.json",
-                                                 "analysis.log",
-                                                 "convergence.csv",
-                                                 "study.json.tmp",
-                                                 "e01-reference",
-                                                 "residual_convergence.csv",
-                                                 "e01_comparison.csv"};
+            const std::set<std::string> reserved{"inputs", "README.md", "study.json",
+                                                 "study.json.tmp", "e01-reference"};
             if (name.empty() || path.is_absolute() || path.has_parent_path() || name == "."
                 || name == ".." || reserved.contains(name))
                 throw std::invalid_argument(
@@ -133,18 +110,6 @@ namespace chdr::experiments::e01e02 {
             return result;
         }
 
-        /// A Python executable is one argv entry, not a command string interpreted by a shell.
-        inline std::string pythonExecutable(const input::ChdrYamlRunInput& request) {
-            if (!request.parameters_m.has_path("python_executable"))
-                return "python3";
-            const auto node = request.parameters_m["python_executable"];
-            if (!node.dtype().is_string() || node.as_string().empty()
-                || node.as_string().find('\0') != std::string::npos)
-                throw std::invalid_argument(
-                    "Pulse study python_executable must be a nonempty executable name or path");
-            return node.as_string();
-        }
-
         /// E02 comparisons use an existing completed E01 study, never a new control run.
         inline std::filesystem::path e01ReferenceDirectory(const input::ChdrYamlRunInput& request,
                                                            const PulseProtocol& protocol) {
@@ -171,20 +136,12 @@ namespace chdr::experiments::e01e02 {
                 throw std::invalid_argument(
                     "Pulse study requires output.directory and full runs without run limits");
             if (protocol.periodicZ_m)
-                input::validateParameters(request,
-                                          {"input_files", "run_analysis", "python_executable"});
+                input::validateParameters(request, {"input_files"});
             else
-                input::validateParameters(request,
-                                          {"input_files", "run_analysis", "python_executable",
-                                           "e01_reference_directory"});
+                input::validateParameters(request, {"input_files", "e01_reference_directory"});
             input::validateObservationNames(request, {});
-            if (!request.parameters_m.has_path("run_analysis"))
-                throw std::invalid_argument("Pulse study requires parameters.run_analysis");
             return {std::filesystem::absolute(request.outputDirectory_m).lexically_normal(),
-                    studyLevels(request, protocol),
-                    input::booleanParameter(request, "run_analysis", false),
-                    pythonExecutable(request),
-                    protocol,
+                    studyLevels(request, protocol), protocol,
                     e01ReferenceDirectory(request, protocol)};
         }
 
@@ -229,9 +186,6 @@ namespace chdr::experiments::e01e02 {
             Json manifest{{"schema_version", 1},
                           {"case", request.caseName_m},
                           {"status", "running"},
-                          {"run_analysis", plan.runAnalysis_m},
-                          {"python_executable", plan.pythonExecutable_m},
-                          {"analysis_script", "analyze_e01_e02.py"},
                           {"levels", Json::array()},
                           {"input", Json::parse(input::runInputRecord(request).to_json())}};
             if (!plan.e01Reference_m.empty())
@@ -247,7 +201,7 @@ namespace chdr::experiments::e01e02 {
             return manifest;
         }
 
-        /// The copied analysis locates its data relative to its own file, independent of cwd.
+        /// The manifest and the level records use relative paths, so the folder can be moved.
         inline constexpr const char* StudyReadme = R"(# Homogeneous pulse refinement study
 
 `study.json` records the requested levels and their completion status.
@@ -257,20 +211,11 @@ contains exact copies of the individual YAML inputs used by those runs.
 Each input was read with the ordinary YAML parser and executed unchanged,
 with this study directory as its working directory.
 
-To repeat the analysis from this directory, run:
-
-```sh
-python3 analyze_e01_e02.py
-```
-
-The script requires Python 3 and matplotlib. It reads only completed study
-levels and writes `convergence.csv`, `analysis.json` and figures under `figures/`.
-The script also accepts `--directory PATH` to analyze another study directory.
-Use the Python executable recorded in `study.json` if it differs from python3.
-The data and copied script can be moved together; their internal paths are relative.
+The folder contains measured data and run records only. Paths in `study.json`
+are relative, so the folder can be moved as a whole.
 )";
 
-        /// Copy archived data unchanged; the analysis checks their mesh and native sample times.
+        /// Copy archived data unchanged; `run.json` keeps their mesh and native sample times.
         inline void copyReferenceLevel(const StudyPlan& plan, const Json& study, int resolution) {
             for (const auto& entry : study.at("levels")) {
                 if (entry.at("cells_per_pulse") != resolution || entry.at("status") != "completed")
@@ -298,12 +243,10 @@ The data and copied script can be moved together; their internal paths are relat
                 copyReferenceLevel(plan, study, level.cellsPerPulse_m);
         }
 
-        /// Copy the reviewed analysis source before the first run; never generate Python code.
+        /// Write the bundle's own files (input copies, references, manifest) before the first run.
         inline void prepareBundle(const StudyPlan& plan, const Json& manifest, int rank) {
             output::prepareRunDirectory(plan.directory_m.string(), MPI_COMM_WORLD);
             onRoot(rank, [&] {
-                std::filesystem::copy_file(CHDR_E01_E02_ANALYSIS_SOURCE,
-                                           plan.directory_m / "analyze_e01_e02.py");
                 std::filesystem::create_directory(plan.directory_m / "inputs");
                 for (const auto& level : plan.levels_m)
                     std::filesystem::copy_file(level.sourceInput_m,
@@ -380,19 +323,17 @@ The data and copied script can be moved together; their internal paths are relat
         };
     }  // namespace pulseStudyDetail
 
-    /** @brief Run the selected experiment levels on every rank and return optional post-finalize
-     * analysis.
+    /** @brief Run the selected experiment levels in sequence on every rank.
      * @param runLevel Named single-level execution function; called identically on all
      * ranks.
      * @details IPPL is initialized once by runApplication. Each level owns and releases its
      * simulation before the next level begins. Every level is read from its own copied
      * YAML through readRunInput and passed unchanged to runLevel. Only the parent study
      * directory is prepared here; each child remains new/empty for ordinary pulse output.
-     * No Python process is launched while this function or its MPI collectives are active.
+     * The study writes measured data and run records; it produces no plots or derived tables.
      */
-    inline std::optional<PulseAnalysisCommand> runPulseStudy(
-        const input::ChdrYamlRunInput& request, const PulseProtocol& protocol,
-        void (*runLevel)(const input::ChdrYamlRunInput&)) {
+    inline void runPulseStudy(const input::ChdrYamlRunInput& request, const PulseProtocol& protocol,
+                              void (*runLevel)(const input::ChdrYamlRunInput&)) {
         if (!runLevel)
             throw std::invalid_argument("Pulse study requires a single-level execution function");
         const auto plan = pulseStudyDetail::studyPlan(request, protocol);
@@ -403,9 +344,5 @@ The data and copied script can be moved together; their internal paths are relat
         pulseStudyDetail::WorkingDirectory directory(plan.directory_m);
         pulseStudyDetail::runLevels(plan, manifest, rank, runLevel);
         directory.restore();
-        if (rank != 0 || !plan.runAnalysis_m)
-            return std::nullopt;
-        return PulseAnalysisCommand{plan.pythonExecutable_m,
-                                    plan.directory_m / "analyze_e01_e02.py"};
     }
 }  // namespace chdr::experiments::e01e02

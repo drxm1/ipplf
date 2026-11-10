@@ -1,8 +1,6 @@
-#include <optional>
-
 #include "core/input/Application.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01.h"
-#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02AnalysisProcess.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Study.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E02.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04.h"
@@ -22,15 +20,12 @@ namespace chdr::experiments::e01e02 {
 namespace {
     namespace experiment = chdr::experiments::e01e02;
 
-    // Only host data crosses the IPPL lifetime boundary; Python starts after MPI finalization.
-    std::optional<experiment::PulseAnalysisCommand> pendingAnalysis;
-
     /// Keep experiment and study selection visible at the application's entry point.
     void runConfigured(const chdr::input::ChdrYamlRunInput& input) {
         if (input.caseName_m == "E01-study")
-            pendingAnalysis = experiment::runPulseStudy(input, experiment::E01, experiment::runE01);
+            experiment::runPulseStudy(input, experiment::E01, experiment::runE01);
         else if (input.caseName_m == "E02-study")
-            pendingAnalysis = experiment::runPulseStudy(input, experiment::E02, experiment::runE02);
+            experiment::runPulseStudy(input, experiment::E02, experiment::runE02);
         else if (input.caseName_m == "E01")
             experiment::runE01(input);
         else if (input.caseName_m == "E02")
@@ -46,8 +41,5 @@ namespace {
 }  // namespace
 
 int main(int argc, char** argv) {
-    const int status = chdr::input::runApplication(argc, argv, runConfigured);
-    if (status != 0 || !pendingAnalysis)
-        return status;
-    return experiment::runPulseAnalysis(*pendingAnalysis);
+    return chdr::input::runApplication(argc, argv, runConfigured);
 }
