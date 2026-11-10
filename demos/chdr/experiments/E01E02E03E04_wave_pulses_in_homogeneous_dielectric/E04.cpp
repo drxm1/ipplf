@@ -234,16 +234,17 @@ namespace chdr::experiments::e04 {
 
         void recordE04(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state, int steps,
-                       int protocolSteps, double U0h, int controlStep) {
+                       int protocolSteps, double U0h, int controlStep, double sharpness) {
             auto record =
                 output::describeRun("experiments-wave-pulses-in-homogeneous-dielectric", grid,
                                     state, steps, "E04 spherical pulse with all-face Mur");
-            auto& node                               = record.effective_m;
-            node["protocol_steps"]                   = protocolSteps;
-            node["material/relative_permittivity"]   = E03Epsilon;
-            node["boundary/mur_mask"]                = state.boundary().murMask();
-            node["boundary/kernel_speed"]            = state.boundary().speed[0];
-            node["boundary/potential_ghost_closure"] = "Quadratic extrapolation";
+            auto& node                                   = record.effective_m;
+            node["protocol_steps"]                       = protocolSteps;
+            node["material/relative_permittivity"]       = E03Epsilon;
+            node["analytic_reference/profile_sharpness"] = sharpness;
+            node["boundary/mur_mask"]                    = state.boundary().murMask();
+            node["boundary/kernel_speed"]                = state.boundary().speed[0];
+            node["boundary/potential_ghost_closure"]     = "Quadratic extrapolation";
             recordMurLayers(node["boundary/potential_layers_centred"], state, grid.spacing_m[0]);
             node["initial_reference_energy"]           = U0h;
             node["periodic_control/target_eta"]        = 2.0;
@@ -299,15 +300,15 @@ namespace chdr::experiments::e04 {
                 observeTargets(solver, ref, control, csv, initial, points, step);
             });
             csv.finish();
-            recordE04(request, grid, state, steps, fullSteps, U0h, controlStep);
+            recordE04(request, grid, state, steps, fullSteps, U0h, controlStep, ref.sharpness_m);
         }
     }  // namespace
 
     void runE04(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request, {"cells_per_axis", "polarization"});
+        input::validateParameters(request, {"cells_per_axis", "profile_sharpness"});
         e03::validateSphericalRun(request);
         const auto grid = e03::sphericalGrid(e03::sphericalCells(request), false);
-        const auto ref  = e03::sphericalReference(e03::sphericalPolarization(request));
+        const auto ref  = e03::sphericalReference(e03::sphericalSharpness(request));
         auto run        = e03::makeSphericalSimulation(grid, ref);
         run.load(ref);
         evolveE04(run, request, grid, ref);

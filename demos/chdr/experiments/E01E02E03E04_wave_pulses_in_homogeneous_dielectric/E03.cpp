@@ -47,10 +47,8 @@ namespace chdr::experiments::e03 {
          */
         class E03MeasurementsCsv {
         public:
-            E03MeasurementsCsv(const input::ChdrYamlRunInput& request, MPI_Comm comm, int cells,
-                               std::string_view polarization)
-                : cells_m(cells)
-                , polarization_m(polarization) {
+            E03MeasurementsCsv(const input::ChdrYamlRunInput& request, MPI_Comm comm, int cells)
+                : cells_m(cells) {
                 int rank;
                 MPI_Comm_rank(comm, &rank);
                 if (rank != 0)
@@ -58,7 +56,7 @@ namespace chdr::experiments::e03 {
                 file_m.exceptions(std::ios::failbit | std::ios::badbit);
                 file_m.open(std::filesystem::path(request.outputDirectory_m) / "measurements.csv");
                 file_m << std::setprecision(std::numeric_limits<double>::max_digits10)
-                       << "measurement,quantity,cells_per_axis,polarization,target_time,step,"
+                       << "measurement,quantity,cells_per_axis,target_time,step,"
                           "actual_time,value,reference_scale,samples\n";
             }
 
@@ -66,9 +64,9 @@ namespace chdr::experiments::e03 {
                      long long step, double time, double value, double scale,
                      std::uint64_t samples = 0) {
                 if (file_m.is_open())
-                    file_m << measurement << ',' << quantity << ',' << cells_m << ','
-                           << polarization_m << ',' << target << ',' << step << ',' << time << ','
-                           << value << ',' << scale << ',' << samples << '\n';
+                    file_m << measurement << ',' << quantity << ',' << cells_m << ',' << target
+                           << ',' << step << ',' << time << ',' << value << ',' << scale << ','
+                           << samples << '\n';
             }
 
             void finish() {
@@ -78,7 +76,6 @@ namespace chdr::experiments::e03 {
 
         private:
             int cells_m;
-            std::string_view polarization_m;
             std::ofstream file_m;
         };
 
@@ -156,14 +153,15 @@ namespace chdr::experiments::e03 {
         /// Publish provenance only when the requested schedule and output have finished.
         void recordE03(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state, int steps,
-                       int protocolSteps, bool plane) {
+                       int protocolSteps, bool plane, double sharpness) {
             auto record = output::describeRun("experiments-wave-pulses-in-homogeneous-dielectric",
                                               grid, state, steps, "E03 periodic spherical pulse");
             record.effective_m["protocol_steps"]                                = protocolSteps;
             record.effective_m["material/relative_permittivity"]                = E03Epsilon;
             record.effective_m["analytic_reference/centre_in_mesh_coordinates"] = E03BoxCentre;
-            record.effective_m["analytic_reference/speed"] = 1 / std::sqrt(E03Epsilon);
-            record.effective_m["measurements/file"]        = "measurements.csv";
+            record.effective_m["analytic_reference/speed"]             = 1 / std::sqrt(E03Epsilon);
+            record.effective_m["analytic_reference/profile_sharpness"] = sharpness;
+            record.effective_m["measurements/file"]                    = "measurements.csv";
             if (plane)
                 record.effective_m["plane/file"] = "plane-z0.csv";
             output::writeRunRecord(request.outputDirectory_m, request, record,
@@ -173,7 +171,7 @@ namespace chdr::experiments::e03 {
         /// Route each state to the observations whose native clocks select it.
         void observeE03(Solver& state, const E03Reference& ref, E03MeasurementsCsv& csv,
                         const ConstraintScales& scales, const std::array<Checkpoint, 4>& points,
-                        bool tm, long long step) {
+                        long long step) {
             if (step == 0) {
                 observeFields(state, ref, csv, scales, 0, 0);
                 observeVectorPotential(state, ref, csv, scales, 0, 0);
@@ -183,51 +181,45 @@ namespace chdr::experiments::e03 {
                     observeFields(state, ref, csv, scales, step, point.target_m);
                 if (step == point.aStep_m)
                     observeVectorPotential(state, ref, csv, scales, step, point.target_m);
-                if (tm && step == point.phiStep_m)
+                if (step == point.phiStep_m)
                     observeScalarPotential(state, ref, csv, step, point.target_m);
             }
         }
 
         /// Drive the manager once, sampling only the state indices selected by each clock.
         void evolveE03(Simulation& run, const input::ChdrYamlRunInput& request,
-                       const simulation::ChdrCartesianGridSettings& grid, const E03Reference& ref,
-                       std::string_view polarizationName) {
+                       const simulation::ChdrCartesianGridSettings& grid, const E03Reference& ref) {
             auto& state         = run.solver();
             const auto points   = e03Checkpoints(state, ref.v_m);
             const auto last     = points.back();
-            const bool tm       = polarizationName == "TMr";
-            const int fullSteps = std::max({last.aStep_m, last.ebStep_m, tm ? last.phiStep_m : 0});
+            const int fullSteps = std::max({last.aStep_m, last.ebStep_m, last.phiStep_m});
             const int steps     = request.steps_m.value_or(fullSteps);
             if (steps < 0 || steps > fullSteps)
                 throw std::invalid_argument("E03 run.steps must fit the prescribed interval");
             const bool plane = input::booleanParameter(request, "write_plane", false);
             const auto comm  = state.A_n.getLayout().comm;
             output::prepareRunDirectory(request.outputDirectory_m, comm);
-            E03MeasurementsCsv csv(request, comm, grid.cells_m[0], polarizationName);
+            E03MeasurementsCsv csv(request, comm, grid.cells_m[0]);
             const auto scales = constraintScales(state, ref);
             if (request.steps_m)
                 checkLoadedHistory(state, ref);
             run.advance(steps, [&](long long step, Solver& solver, const auto&) {
-                observeE03(solver, ref, csv, scales, points, tm, step);
+                observeE03(solver, ref, csv, scales, points, step);
                 if (plane && (step == 0 || step == last.ebStep_m))
                     writeE03Plane(solver, ref, request.outputDirectory_m, step);
             });
-            if (request.steps_m && !tm
-                && norms(state, state.A_n, ref, Quantity::Phi, steps).errorLinf_m != 0)
-                throw std::runtime_error("E03 TE scalar potential did not remain zero");
             csv.finish();
-            recordE03(request, grid, state, steps, fullSteps, plane);
+            recordE03(request, grid, state, steps, fullSteps, plane, ref.sharpness_m);
         }
     }  // namespace
 
     void runE03(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request, {"cells_per_axis", "polarization", "write_plane"});
+        input::validateParameters(request, {"cells_per_axis", "write_plane", "profile_sharpness"});
         validateSphericalRun(request);
-        const auto name = sphericalPolarization(request);
         const auto grid = sphericalGrid(sphericalCells(request), true);
-        const auto ref  = sphericalReference(name);
+        const auto ref  = sphericalReference(sphericalSharpness(request));
         auto run        = makeSphericalSimulation(grid, ref);
         run.load(ref);
-        evolveE03(run, request, grid, ref, name);
+        evolveE03(run, request, grid, ref);
     }
 }  // namespace chdr::experiments::e03

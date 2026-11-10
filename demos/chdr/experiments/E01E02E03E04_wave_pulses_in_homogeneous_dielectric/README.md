@@ -175,7 +175,6 @@ The output folder contains:
 ```text
 study.json
 README.md
-analyze_e01_e02.py
 inputs/              # exact per-run YAML copies
 n32/                 # errors.csv, profiles.csv, fields/, run.json
 n64/
@@ -190,28 +189,18 @@ n4096/
 `study.json` records which runs have completed. Each run releases its simulation
 storage before the next begins. All MPI ranks execute the same sequence.
 
-The Python analysis is a normal source file copied into the result folder.
-It needs Python 3 and Matplotlib. With `parameters.run_analysis: true`,
-the former rank-zero process invokes it once after IPPL/MPI has finalized,
-using `parameters.python_executable` (default `python3`). Its console output
-is retained in `analysis.log`; an analysis failure leaves completed runs intact
-and returns a nonzero process status. Set `run_analysis: false` to analyze later:
+The study writes measured data and run records only.
+It produces no plots, convergence tables or observed orders,
+and this directory contains no analysis program for the pulse studies.
+The paths in `study.json` are relative, so the completed study folder can be moved as a whole.
 
-```sh
-python3 build/results/e01-study-2w-n4096/analyze_e01_e02.py
-```
-
-The script locates its data relative to itself, so the completed study folder
-can be moved without rewriting paths. It writes `convergence.csv`, `analysis.json`
-and PNG/PDF figures under `figures/`: convergence, sparse error histories and
-numerical/reference longitudinal profiles. Actual recorded sample times and
-positions are retained. Orders with zero errors remain undefined.
-Recorded native times come from `run.json`'s `error_observations.sample_times`,
-which the executable obtains from its actual `LevelContract`.
-The script rejects incomplete or incompatible runs and does not assign an
-accuracy pass/fail threshold.
-Its plots and tables follow the named schedule in each run record, including
-the `travel_2w` checkpoint. The original five-observation studies remain readable.
+A later analysis needs only the saved files.
+Each level's `run.json` names the observation schedule (`protocol_checkpoint_names`,
+travel distances, selected step indices), including the `travel_2w` checkpoint.
+Its `error_observations.sample_times` are the native comparison times,
+which the executable obtains from its actual `LevelContract`;
+an analysis can use them without repeating the solver's time-label rules.
+`errors.csv` and `profiles.csv` carry the same actual times and the native sample positions.
 
 ## Longitudinal profiles
 
@@ -336,13 +325,11 @@ Each E02 run writes:
 - `run.json`: the common run record,
   separate error/profile schedules, probe position, initial norm denominators and resolved Mur face speeds.
 
-The copied `analyze_e01_e02.py` handles both study cases.
-E02 adds residual convergence, complete probe traces and the archived E01 travel-2w comparison
-to the common error and profile plots.
-The additional tables are `residual_convergence.csv` and `e01_comparison.csv`.
-The E01 comparison uses identical native positions and times on the E02 cell-index range,
+As for E01, the study writes these data and records only; it produces no plots or derived tables.
+The bundled `e01-reference/` profiles permit the pre-contact comparison after travel 2w.
+They have identical native positions and times on the E02 cell-index range,
 including the final By sample at z=6.
-It compares profiles, not the archived E01 global errors over its larger box.
+Such a comparison uses profiles, not the archived E01 global errors over its larger box.
 
 The residuals include reflection, numerical tails and initialization artifacts.
 They are not isolated reflection coefficients or absorbed-energy fractions.
@@ -351,39 +338,63 @@ as specified in E02.typ.
 
 ## E03 spherical pulse study
 
-`E03.typ` defines the two spherical reference fields, the cubic mesh ladder and
-the E03.meas01–06 observations. The executable accepts `case: E03`,
-`cells_per_axis` and `polarization` (`TEr` or `TMr`). `write_plane: true`
-adds the initial and final central sections. `inputs/E03-n96-TEr.yaml` is a
+`E03.typ` defines the spherical reference field, the cubic mesh ladder and
+the E03.meas01–06 observations. The executable accepts `case: E03` and
+`cells_per_axis`. `write_plane: true`
+adds the initial and final central sections. `inputs/E03-n96.yaml` is a
 single-run example.
 
-Run the two pilot levels from the project root with Open MPI, GNU time and
-Python with NumPy and Matplotlib available:
+E03 runs one pulse: the pulse of an electric dipole (a TM_r field in the multipole terminology).
+Its scalar and vector potentials are both nonzero.
+The first study also ran the dual pulse of a magnetic dipole (TE_r),
+which has zero scalar potential and the same fields with E and B exchanged.
+That pulse exercises no code that the dipole pulse does not,
+and its errors differed from those of the dipole pulse by less than one percent.
+It is no longer implemented and there is no `polarization` parameter.
+
+The optional `profile_sharpness` (a positive number, default 1) selects the radial profile
+`p(s) = A0 exp(beta (1 - 1/(1 - (s/w)^2)))` on the same compact support.
+The default is the E01 profile and reproduces the first E03 study.
+A larger value gives a pulse with a narrower spectrum, which the cubic meshes resolve better:
+the first study (sharpness 1) stays far outside the asymptotic range on all four meshes,
+and the refined study uses sharpness 8.
+E04 accepts the same parameter. `run.json` records the value under `analytic_reference`.
+
+Run the two pilot levels from the project root with Open MPI, GNU time and Python 3:
 
 ```sh
 python3 ippl/demos/chdr/experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/run_e03_study.py \
   --executable build/ippl-cpu/bin/experiments-wave-pulses-in-homogeneous-dielectric \
-  --output build/results/e03-study --ranks 4 --threads 4
+  --output build/results/e03-study --ranks 4 --threads 4 --profile-sharpness 8
 ```
 
 The study pins the executable in its output directory. To continue the same
-study, use that executable and add `--levels 216 324`. The run logs and raw
-measurement files stay in the per-case directories. `convergence.csv` adds
-normalized norms and successive orders. Memory records contain per-rank peak
+study, use that executable and the same sharpness, and add `--levels 216 324`.
+The run logs and raw measurement files stay in the per-case directories.
+`run_e03_study.py` only launches the cases and records their status:
+it computes no orders and draws no figures.
+Each `measurements.csv` row holds a raw norm and its reference scale;
+their ratio is the normalized value of E03.typ.
+Memory records contain per-rank peak
 RSS and their sum, which is an upper bound on the sum of rank RSS at one time.
 
 ## E04 spherical pulse exit
 
-`E04.typ` uses the same inputs without `write_plane` and selects `case: E04`.
+`E04.typ` uses the same inputs without `write_plane` and selects `case: E04`
+(`inputs/E04-n96.yaml`). It uses the same single dipole pulse as E03.
 The periodic replay compares the initial and pre-contact fields on the same
 native grid. The matched-speed Mur run saves E04.meas01 energy, E04.meas02
 per-face powers and E04.meas03 constraint norms in separate CSV traces.
 
 Run `run_e04_study.py` with the E03 study command's arguments and a distinct
-output directory. It starts at 96 and 144 cells per axis. `results.csv`
-contains the late-energy targets, inward crossing integrals, precursor rates
-and every-other-sample integral. `checkpoints.csv` retains the native
-observation times and residual sample counts.
+output directory. It starts at 96 and 144 cells per axis.
+The launcher writes measured data and run records only.
+Each run directory holds `data/energy.csv` (remaining energy fraction at every step),
+`data/monitor.csv` (inward and outward power on each monitor face from the precursor interval on)
+and `data/measurements.csv` (control, field-error and constraint rows with their native
+observation times, reference scales and sample counts).
+The late-energy targets and the crossing integrals of E04.typ are evaluated from these traces afterwards.
+The launcher does not integrate them and draws no figures.
 
 ## Code organization
 

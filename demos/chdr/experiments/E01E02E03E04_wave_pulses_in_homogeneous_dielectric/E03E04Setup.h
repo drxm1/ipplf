@@ -27,29 +27,31 @@ namespace chdr::experiments::e03 {
         throw std::invalid_argument("cells_per_axis must be 96, 144, 216 or 324");
     }
 
-    /// Both polarizations use the same grid and their respective native histories.
-    inline std::string sphericalPolarization(const input::ChdrYamlRunInput& request) {
-        if (request.parameters_m.has_path("polarization")) {
-            const auto node = request.parameters_m["polarization"];
-            if (node.dtype().is_string()) {
-                const auto name = node.as_string();
-                if (name == "TEr" || name == "TMr")
-                    return name;
-            }
-        }
-        throw std::invalid_argument("polarization must be TEr or TMr");
-    }
-
     /// Represent the centered physical cube on the manager's translated mesh.
     inline simulation::ChdrCartesianGridSettings sphericalGrid(int n, bool periodic) {
         const double h = 2 * E03BoxCentre / n;
         return {{n, n, n}, {h, h, h}, 0, {periodic, periodic, periodic}, 2};
     }
 
-    inline E03Reference sphericalReference(const std::string& name) {
-        return {1 / std::sqrt(E03Epsilon),
-                name == "TEr" ? reference::Polarization::TEr : reference::Polarization::TMr,
-                E03BoxCentre};
+    /** @brief Read the optional sharpness \f$\beta\f$ of the compact radial profile.
+     * @details The default \f$\beta=1\f$ is the profile of E01. A larger value gives a pulse
+     * with a narrower spectrum inside the same support; see the reference sampler.
+     */
+    inline double sphericalSharpness(const input::ChdrYamlRunInput& request) {
+        if (!request.parameters_m.has_path("profile_sharpness"))
+            return 1;
+        const auto node = request.parameters_m["profile_sharpness"];
+        if (node.dtype().is_number() && node.number_of_elements() == 1) {
+            const double sharpness = node.to_float64();
+            if (std::isfinite(sharpness) && sharpness > 0)
+                return sharpness;
+        }
+        throw std::invalid_argument("profile_sharpness must be a positive number");
+    }
+
+    /// The dipole pulse of E03.typ, centred in the translated mesh coordinates.
+    inline E03Reference sphericalReference(double sharpness = 1) {
+        return {1 / std::sqrt(E03Epsilon), E03BoxCentre, sharpness};
     }
 
     /** @brief Select the same bulk update for periodic propagation and Mur exit.

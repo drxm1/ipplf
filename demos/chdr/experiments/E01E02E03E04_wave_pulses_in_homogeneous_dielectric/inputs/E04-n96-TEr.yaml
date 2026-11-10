@@ -1,5 +1,0 @@
-schema_version: 1
-case: E04
-units: {system: normalized}
-parameters: {cells_per_axis: 96, polarization: TEr}
-output: {directory: n96-TEr}
