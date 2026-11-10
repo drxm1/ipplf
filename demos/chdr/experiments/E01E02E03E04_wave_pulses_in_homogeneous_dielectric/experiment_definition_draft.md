@@ -39,24 +39,20 @@ Additionaly we perform the following study:
 See `E02.typ` for draft specs.
 
 ## Experiment 03 (E03)
-A circular (TODO: and/or spherical) wave pulse is initialized such that it then propagates towards the outer faces of the mesh domain.
-Again it is initialized from a known analytic continuum reference, and again we have the exact continuum reference solution vs time.
-That wave is propagated with the O1-VS solver.
-We have periodic boundary conditions at each domain-boundary face.
-The wave is propagated until it is close to the domain boundaries.
-
-Cases: (TODO: if there is also a TE/TM destinction here, cover them otherwise ignore).
-Study: Again an error convergence study.
+An exact spherical pulse propagates with O1-VS in a homogeneous dielectric,
+with periodic boundaries and refinement in all three directions.
+The radial TE and TM cases include a nonzero scalar potential in the TM case.
+Compare the evolved fields and potentials with the continuum solution before boundary contact,
+and measure the startup and evolved Gauss/gauge residuals.
 
 See `E03.typ` for draft specs.
 
 ## Experiment 04 (E04)
-Exactly the same setup as E03, but with all-mur epsilon=2.13 absorbing domain-boundary faces.
-We do the same cases and study as in E01 again to verify that the results are not affected by the Mur conditions as long as the wave does not reach the domain-boundary.
-
-Additionally we perform the following study:
-1. Let the wave propagate for even longer such that it passes the Mur boundary at the domain face(s).
-2. Measure the reflection that is due to Mur and probably also the error in Gauss's law. Also in an error convergence study.
+Use E03's two cases with dielectric-speed Mur on all six faces,
+first comparing with E03 before contact, then continuing through exit and return.
+Measure energy returning through an interior cube, remaining electromagnetic energy,
+and Gauss/gauge residuals in the interior and accessible boundary region.
+The all-face dielectric-speed implementation prerequisite is specified in E04.typ.
 
 See `E04.typ` for draft specs.
 

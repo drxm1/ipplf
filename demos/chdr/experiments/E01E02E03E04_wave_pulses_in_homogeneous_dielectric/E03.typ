@@ -9,21 +9,17 @@
 #let ryu = link("https://wcchew.ece.illinois.edu/chew/qem_papers/ryu_chris052216.pdf")[Ryu et al., Appendix A, Eqs. (19)–(27)]
 #let fallahi = link("https://arxiv.org/abs/2009.13645")[Fallahi, §3.1]
 #let salari = link("https://www.osti.gov/servlets/purl/759450")[Salari and Knupp, §§4.1–4.2]
+#let christlieb = link("https://arxiv.org/abs/2410.18414v1")[Christlieb et al., §3.1, Eqs. (25)–(27)]
 
 = Experiment E03 detailed specification\*
 
-E03 measures convergence of a spherical electromagnetic pulse in a homogeneous dielectric,
-before it reaches the periodic domain boundaries.
-The fields vary in all three spatial directions.
+E03 measures convergence of a spherical pulse over a radial travel distance $2w$,
+before continuum contact with the periodic boundaries.
 We refine all three cell widths and the time step together.
-This complements the long axial propagation in #link("E01.typ")[E01];
-it does not repeat E01's long travel distance.
-
-We use two exact source-free solutions, with electric or magnetic field transverse to the radial direction.
-Their potentials and fields are given explicitly below.
-The second case has a nonzero scalar potential and therefore also tests its time placement and contribution to the electric field.
-These are specifications for implementation and measurement, not simulation results.
-The corresponding open-boundary experiment is #link("E04.typ")[E04].
+The two source-free cases have electric or magnetic field transverse to the radial direction.
+The second also exercises a nonzero scalar potential.
+This three-dimensional study complements the longer axial propagation in #link("E01.typ")[E01]
+and supplies the propagation baseline for #link("E04.typ")[E04].
 
 All quantities use the manual's normalized solver units:
 $c_"vac"=epsilon_0=mu_0=1$.
@@ -51,7 +47,6 @@ $
   f(s)=w^2 p(s), quad psi(r,t)=f(r-R_0-v t)/r.
 $ <e03-generator>
 The factor $w^2$ makes $psi$ have the dimension of vector potential times length.
-It is a normalization choice; it does not change the wave equation.
 
 We define $psi$ and all its derivatives to be zero outside $abs(s)<w$,
 including at $r=0$.
@@ -69,8 +64,6 @@ $
 Thus $nabla^2 psi-epsilon partial_t^2 psi=0$.
 The zero continuation across the support boundaries also solves this equation,
 since all derivatives of the compact profile vanish there.
-This is an outgoing pulse with spherical support and a dipole angular pattern;
-its electromagnetic amplitude is not spherically symmetric.
 
 For an implementation without numerical differentiation,
 set $u=s/w$ and $q=1-u^2$ inside the support.
@@ -81,8 +74,6 @@ $
 $ <e03-profile-derivatives>
 Multiply these expressions by $w^2$ to obtain $f'$ and $f''$.
 Test the support condition before evaluating $1/r$, $vb(n)$ or any inverse power of $q$.
-Near $abs(u)=1$, evaluate the exponential times the rational factors in a numerically safe order,
-or in logarithmic form; do not form an overflowing factor and multiply it by an underflowed zero.
 
 #block(breakable: false)[
 === Two electromagnetic cases
@@ -92,8 +83,8 @@ $
   vb(d)=frac(lr((1,2,3)),sqrt(14)).
 $
 ]
-This avoids aligning the dipole with a mesh axis or body diagonal.
-It exercises all Cartesian components without adding an orientation sweep.
+This dipole direction exercises all Cartesian components.
+The pulse has spherical support and a dipole angular pattern, not a spherically symmetric field amplitude.
 Introduce the following scalar derivatives of @e03-generator:
 $
   a=psi_r=f'/r-f/r^2, quad
@@ -156,8 +147,7 @@ The radial terms proportional to $1/r^2$ and $1/r^3$ must be retained.
 
 The dual relations in @e03-tm-fields give equal continuum electromagnetic energies for the two cases,
 since $epsilon v^2=1$ (use the energy definition and Ellingson source in #link("E04.typ")[E04]).
-They provide a useful independent algebraic check of the evaluator;
-equal numerical errors are not required, because the two initializations use different potential histories.
+This is a normalization identity, not an independent check if the TM\_r evaluator uses the dual relations themselves.
 
 == Solver configuration, domain and refinement
 
@@ -176,22 +166,17 @@ equal numerical errors are not required, because the two initializations use dif
 
 Initially the support is $w<r<3w$.
 At $T_3$, it is $3w<r<5w$, leaving a distance $w$ from the nearest domain face.
-The pulse travels one full support width.
-The purpose is to test three-dimensional propagation, curvature, reconstruction and constraints over this fixed distance.
-E01 remains the longer propagation study.
 
 The periodic continuum reference is the sum of translated copies of the potentials over the lattice $(12w)ZZ^3$.
 During E03's observation interval, only the central copy contributes anywhere in the domain,
 because its support radius is below $6w$ and the neighbouring copies have not arrived.
 Thus the formulas above are also the exact periodic reference on this interval.
 Check this support condition at the actual selected times, including the scalar-potential time.
-Periodic numerical tails can still reach a boundary earlier than the continuum support;
-the measured field errors include any such contribution.
+Periodic numerical tails can still reach a boundary earlier than the continuum support.
+The measured field errors include any such contribution.
 
 Let $N=N_x=N_y=N_z$ and $h=h_x=h_y=h_z=12w/N$.
 We choose equal cell counts because the physical box is cubic and the pulse varies in every direction.
-For a rectangular box, equal cell widths would instead require cell counts proportional to its side lengths.
-Keeping one transverse direction fixed, as in E01, is unsuitable for this field.
 
 #align(center)[
   #table(
@@ -205,8 +190,6 @@ Keeping one transverse direction fixed, as in E01, is unsuitable for this field.
 ]
 The refinement ratio is $3/2$ in every spatial direction and in time.
 The physical box, pulse and target duration stay fixed.
-Four levels give three successive order estimates.
-The coarsest level is a baseline, not an assumed asymptotic resolution.
 
 The time step satisfies the solver's vacuum Standard bound
 $
@@ -214,24 +197,19 @@ $
 $
 which is stricter than the homogeneous-dielectric bound here
 (#fallahi, Eq. (3.20)).
-This is a combined spatial and temporal convergence study;
-it does not separately identify either order.
+This combined refinement does not separately identify spatial and temporal orders.
 
-The finest level is substantial: one scalar double array occupies about 260 MiB before halos.
-Measure peak memory and time per step on the first two levels,
-then account for the actual live arrays and output buffers before running 324 cubed.
-For fixed physical duration, the nominal cell-update count grows by $(3/2)^4$ per level.
-This is an operation-count estimate, not a measured runtime.
-If the last two orders have not stabilized, consider $N=486$ only after estimating its cost.
-An incomplete or unresolved ladder must be reported as such;
-do not reduce one axis or shorten only the finest run to obtain a favourable trend.
+Start with $N=96,144$ for both cases.
+Measure errors, peak memory and time per step before selecting the remaining planned levels.
+At $N=324$, one scalar double array occupies about 260 MiB before halos,
+and the final field target requires 158 advances, or $5.37 times 10^9$ owned cell advances per case.
+These counts follow from the table and schedule below, not from a runtime measurement.
+Retain the geometry and duration when refining.
+If the pilot or available resources do not support the remaining levels, report the achieved range and unresolved trend.
 
 == Initialization and sample positions
 
-We retain initialization option A of #link("experiment_definition_draft.md")[the experiment draft]:
-sample the exact continuum potential histories directly.
-Do not replace the continuum dispersion relation or project the sampled histories onto a discrete constraint.
-Such a projection would define a different initialization experiment.
+Sample the exact continuum potential histories directly at their native positions and times.
 
 The R2 time convention in `core/base/LevelContract.h` distinguishes scalar and vector histories.
 At completed step $n$, the current vector slot represents $n h_t$,
@@ -246,9 +224,10 @@ $ <e03-initialization>
 The superscripts here name storage levels, not a common time for all four components.
 For TE\_r the scalar histories are zero.
 For TM\_r, loading both scalar and vector slots at integer times would be an error.
-The spatial staggering follows #ryu;
-the R2 temporal interpretation uses `LevelContract` and #fallahi, Eqs. (3.50)–(3.55).
-The experiment uses the actual `LevelContract` to obtain every offset and time.
+The spatial staggering follows #ryu.
+The storage times are defined by `LevelContract` and `StaggeredReconstruction.h`,
+using the centred temporal formulation of #christlieb after relabelling the history indices.
+Obtain every offset and time from the constructed `LevelContract`.
 
 With cell centre $vb(x)_bold(i)$ and Cartesian unit vector $vb(e)_c$,
 the O1VS component positions and R2 output times are
@@ -262,16 +241,15 @@ the O1VS component positions and R2 output times are
 )
 The magnetic output is the average of the curls of the current and previous vector histories,
 as returned by `solver.magneticField()`.
-Raw magnetic output has integer time and is a separate quantity
-(#fallahi, Eqs. (3.50)–(3.52), with the spatial curl of #ryu).
+The two-curl average follows #fallahi, Eqs. (3.50)–(3.52), with the spatial curl of #ryu.
 Every analytic comparison uses the numerical component's own position and time.
 
 Smooth continuum histories do not generally satisfy the discrete Lorenz constraint exactly.
 For these curved fields, separately sampling the continuum derivatives does not reproduce a discrete curl identity.
-The initial field and constraint errors must therefore be measured.
-E01's exact cancellation for a transversely uniform pulse does not carry over.
-Second-order startup errors are expected from Taylor expansion of the centred staggered differences in #ryu;
-their magnitude and observed order remain measurements.
+Measure the reconstructed fields and constraints at state zero as startup measurements.
+Second-order startup errors are expected from Taylor expansion of the centred staggered differences in #ryu.
+The loaded potentials instead agree with the reference sampler by construction.
+Check both loaded histories and their time labels on a small mesh, without assigning an order to zero loading errors.
 
 == Measurements and observation times
 
@@ -293,16 +271,17 @@ $
   e_(E,infinity)=norm(vb(E)_"num"-vb(E)_"ref")_(infinity,h)/norm(vb(E)_"ref")_(infinity,h).
 $
 Sum or maximize over all owned samples exactly once across MPI ranks, excluding ghosts.
-These norms follow #salari, Eqs. (15), (18).
-They combine phase, amplitude and shape errors; none alone identifies the cause.
+The discrete norms follow #salari, Eqs. (15), (18), with reference normalization defined here.
+They combine phase, amplitude and shape errors.
+Use the potential error for evolved states and the field errors for startup and evolution.
 
 === E03.meas05: scalar-potential error
 
-For TM\_r, also save the relative scalar $L^2$ error $e_(phi,2)$,
+For evolved TM\_r states, also save the relative scalar $L^2$ error $e_(phi,2)$,
 using the scalar version of the preceding norm at #box[$(n+1/2)h_t$].
-For TE\_r, save the absolute maximum $max abs(phi_"num")$ instead;
-its exact reference is zero, so a relative scalar error is undefined.
-This checks the extra history that distinguishes the two cases.
+For TE\_r, check zero loading and preservation of $phi$ in the small implementation run.
+The homogeneous scalar recurrence preserves zero histories with zero source.
+A relative error or convergence order for this zero solution is undefined.
 
 === E03.meas06: Gauss and Lorenz-gauge residuals
 
@@ -315,10 +294,24 @@ $
   G_h^n=D_h^- dot vb(A)^n+epsilon (phi^n-phi^(n-1))/h_t.
 $ <e03-constraints>
 The scalar difference in $G_h^n$ is centred at $n h_t$ by @e03-initialization.
-These are physical constraint residuals, not residuals of a rearranged update identity.
-The difference operators are those of #ryu, evaluated on the actual histories.
+Here $Q_h$ is the electric Gauss-law residual and $G_h$ the Lorenz-gauge residual.
+Evaluate them on the numerical state with the operators of #ryu.
+Synchronize reconstructed E halos before taking its divergence.
+`reconstructStaggered` writes owned fields and leaves their halos zero.
 
-Save the dimensional $L^2$ and maximum norms and the following dimensionless values:
+For $n>=1$, the homogeneous scalar bulk update and R2 reconstruction imply
+$
+  D_h^- dot D_h^+ phi^(n-1)
+  =epsilon (phi^n-2phi^(n-1)+phi^(n-2))/h_t^2,
+  quad Q_h^(n-1/2)=-epsilon (G_h^n-G_h^(n-1))/h_t.
+$
+The second identity follows by substituting the first into the divergence of
+$vb(E)^(n-1/2)=-(vb(A)^n-vb(A)^(n-1))/h_t-D_h^+ phi^(n-1)$
+(deduction from #christlieb and the compatible spatial operators in #ryu).
+It need not hold for the directly loaded state $n=0$ or where Mur replaces the scalar bulk update.
+Keep both startup and selected evolved residuals, without treating them as independent bulk constraints.
+
+Save each dimensional $L^2$ and maximum norm once, with the fixed scales needed to compute
 $
   q_2=w norm(Q_h)_(2,h)/(epsilon norm(vb(E)_"ref" (-h_t/2))_(2,h)),
   quad
@@ -327,8 +320,9 @@ $
 Use the corresponding initial reference maximum norms for $q_infinity$ and $g_infinity$.
 All denominators are fixed for one run, positive for both cases, and recorded.
 They do not contain an extra factor of the cell width.
-These normalizations are definitions for this experiment.
-Measure the initial residual separately; do not subtract it from subsequent residual norms.
+Plot the normalized values without duplicating the raw-norm plots.
+Do not subtract startup residual norms from evolved ones.
+Separately sampling exact fields and applying the stencil is a different, optional truncation check.
 The existing vacuum-only `Monitors` interface does not implement these dielectric diagnostics.
 
 === Schedule and comparison times
@@ -340,9 +334,9 @@ $
   n_(E B)=floor(tau/h_t+1), quad
   n_phi=floor(tau/h_t).
 $
-Evaluate $G_h$ at $n_A$, $Q_h$ at $n_(E B)$ and $e_(phi,2)$ at $n_phi$.
-At initialization use storage state $n=0$ for every quantity,
-with its distinct time label from the table above.
+Evaluate $G_h$ at $n_A$, $Q_h$ at $n_(E B)$ and the TM\_r $e_(phi,2)$ at $n_phi$.
+Startup field and constraint rows use storage state $n=0$,
+with their distinct time labels from the table above.
 Advance through the largest required index and retain each observation at its own step.
 Save target time, actual time, index, mesh and case with every row.
 No analytic reference is evaluated at a rounded target when the numerical sample has a different time.
@@ -354,19 +348,13 @@ using bracketing native samples and applying the same rule on every mesh.
 
 === Spatial output
 
-At the initial state and the four target checkpoints,
-save central-plane sections of every electric and magnetic component and their reference errors.
-Use $x=0$, $y=0$ and $z=0$ sections to see face-axis and diagonal propagation.
-For plots only, interpolate each native component to the declared plotting points with trilinear interpolation,
-and evaluate the reference there at the actual field time.
-State this interpolation on the plots; global error norms use native samples without interpolation.
-
-Save full-domain E, R2 B and optional raw B snapshots at these checkpoints when storage permits.
-The last two meshes need not retain all full-volume snapshots:
-keep the norms and plane sections at every level,
-and record which volume frames were omitted.
-Record each array's position and time metadata through `LevelContract`.
-Do not interpret fields with different native offsets as colocated vectors in a visualization without interpolation.
+On one documented mesh per case, save a $z=0$ section of E and R2 B at initialization and the final field target.
+This plane shows axial and face-diagonal directions, not a body diagonal.
+Declare the plotting grid and trilinearly interpolate each component from its native positions.
+For error plots, interpolate the native difference $F_"num"-F_"ref"$.
+Subtracting the continuum at the plotting points after interpolating $F_"num"$ would also include interpolation error.
+Global norms remain uninterpolated.
+Add other sections or volume output only when a discrepancy needs localization.
 
 #block(breakable: false)[
 == Analysis and evidence required
@@ -377,10 +365,9 @@ $
 $
 ]
 This is the usual observed-order estimate (#salari, §4.2).
-Plot the four errors, the TM\_r scalar error and both constraint residuals against $h$,
-showing initialization and final-time values separately.
-Tabulate the three orders for each case.
-An error at roundoff or exactly zero has no useful logarithmic order; report its magnitude instead.
+Plot startup field/constraint errors and evolved field/potential/constraint errors against $h$.
+Tabulate the available successive orders for each case.
+An error at roundoff or exactly zero has no useful logarithmic order.
 
 For the smooth solution and stable centred scheme,
 second-order combined convergence is the expectation from the staggered differences and leapfrog update (#ryu).
@@ -389,24 +376,19 @@ A finest-pair order far from two, increasing errors, or a residual that does not
 initialization, time labels and resolution before making an accuracy claim.
 Do not assign an arbitrary percentage tolerance or discard a coarse result to force the expected slope.
 
-The experiment is useful when it provides a resolved error trend for genuinely three-dimensional fields,
-including the nonzero scalar-potential case,
-and a measured startup/propagation baseline for E04.
-It does not establish interface accuracy, absorption, long-time stability or independent spatial and temporal orders.
-
-Before the full ladder, check the analytic evaluator against independent differentiation at several interior points,
-the zero continuation, the dual relations and the loaded scalar times.
+Before refinement, independently differentiate each potential pair at generic interior points and compare with its field evaluator.
+Check the zero continuation and both loaded histories separately.
+Reapplying the dual relations used to implement TM\_r would not independently verify its signs.
 One small run should confirm the global reductions across an MPI partition.
-These are focused implementation checks, not a request for a new large regression suite.
 Save the input, exact source revision and local modifications, build, ranks, threads,
 machine, elapsed time, peak memory and all error rows with the study.
 
 == Sources
 
-The equations above are either cited continuum/discrete relations or explicit deductions and measurement definitions.
-The cited sources are held in the project literature library under these keys:
+The cited sources are held in the project literature library:
 
 - `chew2014generalizedgauge`: W. C. Chew, _Vector Potential Electromagnetic Theory with Generalized Gauge for Inhomogeneous Anisotropic Media_ (2014). #chew.
 - `ryu2016potentialfdtd`: C. J. Ryu et al., _Finite-Difference Time-Domain Simulation of the Maxwell–Schrödinger System_ (2016). #ryu.
 - `fallahi2020mithra20fullwavesimulation`: A. Fallahi, _MITHRA 2.0: A Full-Wave Simulation Tool for Free Electron Lasers_ (2020). #fallahi.
 - `salari2000CodeVerificationMms`: K. Salari and P. Knupp, _Code Verification by the Method of Manufactured Solutions_, SAND2000-1444 (2000). #salari.
+- `christlieb2024GaugeConserving`: A. J. Christlieb, W. A. Sands and S. R. White, _A Particle-In-Cell Method for Plasmas with a Generalized Momentum Formulation, Part III: A Family of Gauge Conserving Methods_, arXiv v1 (2024). #christlieb.
