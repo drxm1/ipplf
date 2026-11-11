@@ -11,7 +11,8 @@
 #import "./docs/manual/application.typ" as application
 
 #manual(contents: true)[
-  _\*Note: Parts of this manual were written with the help of ai agents._
+  Manual Version: 0.0.1. Authors: D. Rosser, codex, claude.
+
   #unitsChap.chapter
   #simplifyingAssumptions.chapter
   #maxwellsEqsForOurMaterialModel.chapter
