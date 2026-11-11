@@ -22,7 +22,7 @@
   ]
   where we could only move $epsilon_r$ outside of $partial_t$ because the material is assumet to be stationary, so $partial_t epsilon_r = 0$. Note however that $epsilon_r$ is allowed to vary in space, which is why we keep $epsilon_r$ inside the divergence in @eq-MW4-gauss-in-our-mat-model.
 
-  The quantities $rho_f$ and $vb(J)_f$ are the _free_ charge and current densities. The polarization response is already represented by @constitutive-D and @constitutive-H /*TODO: See Haus-Melcher 6.2 pp. 7-9: Setting the free sources to zero still allows waves from initial data and a polarized dielectric*/.
+  The quantities $rho_f$ and $vb(J)_f$ are the _free_ charge and current densities. The polarization response is already represented by @constitutive-D and @constitutive-H.
 
   == Charge continuity
   Taking the divergence of Ampère's law (see @eq-MW2-ampere-in-our-mat-model) and inserting Gauss's law (@eq-MW4-gauss-in-our-mat-model) we get the charge continuity equation
