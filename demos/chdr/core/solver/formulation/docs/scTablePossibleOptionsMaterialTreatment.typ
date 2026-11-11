@@ -1,6 +1,6 @@
 #import "../../../../docs/manual/preamble.typ": *
 
-== Our table of possible options for the material/interface treatment
+== Our table of possible options for the material/interface treatment <sec-material-treatment-options>
 With no free surface sources: $[E_t] = 0, thick [epsilon E_n] = 0, thick [vb(B)] = 0, thick epsilon_2 E_(n,2) = epsilon_1 E_(n,1)$ (TODO: Write a section where we derive these). We have some options:
 #v(5pt)
 
@@ -57,7 +57,7 @@ With no free surface sources: $[E_t] = 0, thick [epsilon E_n] = 0, thick [vb(B)]
   [Update $vb(E), vb(B)$ directly./* staggered both in space and time, with $epsilon$ at the same locations as $vb(E)$.*/],
 )// END TABLE
 
-*O0* extends the homogeneous Lorez equations across the interface. See @chew2014generalizedgauge[Eqs. (12)-(13)], with $mu=1$ (TODO:VerifySource).
+*O0* extends the homogeneous Lorez equations across the interface. See @chew2014generalizedgauge[Eqs. (12)-(13)], with $mu=1$.
 That option is successful for source-free TE / normal-incidence cases, while it failes for oblique incidence TM cases. This was shown in a python benchmark (TODO:DocumentThisLater). It fails to represent the discontinuous jump in TODO.
 
 *O4* TODO: See my 3w pres source file, haus1989Polarization and the py bench document paragraph on this option.

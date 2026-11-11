@@ -30,7 +30,7 @@ $ <E01-analytic-EB>
 @E01-analytic-potentials and @E01-analytic-EB hold for all $t$, including the negative time that is used to initialize the previous potential `A_nm1`. We call $a$ a _potential profile_.
 
 === Proof: The potential family solves the homogeneous equations
-Since $A_x$ is independent of x, $div vb(A) = 0$, so the homogeneous Lorenz gauge $div vb(A) = -epsilon_r partial_t phi$ TODO:chew[Eq. (11)] is satisfied.
+Since $A_x$ is independent of x, $div vb(A) = 0$, so the homogeneous Lorenz gauge $div vb(A) = -epsilon_r partial_t phi$ @chew2014generalizedgauge[Eq. (11)] is satisfied.
 
 We now verify the continuum wave equations for the scalar and vector potentials
 in a homogeneous medium, with zero free charge and current. In the Lorenz

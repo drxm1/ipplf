@@ -2,13 +2,13 @@
 
 #import "../../../../docs/manual/preamble.typ": *
 
-== The O1-VS implementation
-This section describes the implemented option O1 (Chew's gauge) on the virtually staggered (staggered spatial convention, see TODO) spatial convention and the R2 time-convention (see TODO).
+== The O1-VS implementation <sec-O1VS-implementation>
+This section describes the implemented option O1 (Chew's gauge) on the virtually staggered (staggered spatial convention, see @sec-spatial-placement) spatial convention and the R2 time-convention (see @sec-time-placement).
 
 The following calculation concerns the interior stencil on a uniform Cartesian mesh.
 `O1VSUpdate::advance` excludes the outermost layers owned by the Mur conditions because their boundary updates are separately handled.
 
-=== Spatial locations and difference operators
+=== Spatial locations and difference operators <sec-O1VS-operators>
 
 We use the spatial indices defined in @sec-spatial-placement.
 Here we specify the locations and differences needed for the O1-VS equations.
@@ -221,7 +221,10 @@ The manual uses $T$ and $T_h$ with the same sign in the continuous and discrete 
 `O1VSOperator::inverseMass` (TODO:unfortunateNaming?) uses $1/epsilon_d$ in the vector update.
 
 === Time discretization and implemented update
-The following update equations are used when TODO:CodeOfExactSolverConfiguration is selected. They assume TODO.
+The following update equations are used when `MaterialFormulation::O1VS` is selected together with `Stencil::Standard`, `SpatialDiscretization::Staggered` and `EBReconstructionConvention::R2`.
+`validateMaterialUpdate` rejects every other combination with `O1VS`.
+They assume a finite $epsilon >= 1$ in every cell and $alpha = 1$, so that $chi = epsilon^2$.
+The code accepts $alpha > 1$ only when every direction is periodic, and then uses $chi = alpha epsilon^2$.
 Here the upper index on $vb(A)$ and on $phi$ denotes the actual time level TODO:(In contradiction to the notation I used in other sections?, I should standardize the notation), e.g. an on $phi$ the upper index $n + 3/2$ denotes that after the step $n$, the new stored $phi$ value is at $t_(n + 3/2)$.
 Spatial indices are suppressed in these operator expressions.
 The vector update is evaluated at $bold(i) + 1/2 bold(e)_d$, and the scalar update at $bold(i)$.

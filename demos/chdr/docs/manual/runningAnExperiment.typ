@@ -1,10 +1,10 @@
 #import "./preamble.typ": *
 
-#let chapter = [
+#let section = [
   #revision[
     #set raw(theme: none)
 
-    = Running an experiment <running-an-experiment>
+    == Running an experiment <running-an-experiment>
     The executables `chdr-vacuum-wave`, `planar-interface` and `interface-movies` require `--input FILE`.
     They use the same YAML schema.
     The required keys are `schema_version: 1`, `case` and `units`.
@@ -45,7 +45,7 @@
     in particular, the `plane` case retains its prescribed duration and Fourier gates.
     The SI scales give the physical interpretation described in @units-si-input-energy.
 
-    == Observations and output <experiment-observations-output>
+    === Observations and output <experiment-observations-output>
     Observation indices count completed advances. State zero is the initialized state, and a run with zero advances can still observe it. Each observation accepts `enabled`, `first`, `every`, `last` and `include_final`. The interval from `first` to `last` is inclusive; `last: -1` leaves its upper end open. The cadence starts at `first`, with positive spacing `every`. `include_final: true` additionally selects the final run state if it lies inside this interval. A final state already on the cadence is sampled once. For example, `first: 1`, `every: 3`, `last: 8` and `include_final: true` select states 1, 4, 7 and 8 in a run of eight advances.
 
     `fields` controls field output independently of the other measurements. Some measurements require every state: vacuum diagnostics must remain enabled from state zero through the final state, and the `plane` Fourier observation must retain `first: 0`, `every: 1` and `last: -1`. Its own gate selects the accumulation interval. Incompatible overrides are rejected. Changing an observation schedule changes when a measurement is called; it does not change the measurement's definition.
@@ -66,7 +66,7 @@
       [`component_offsets`], [When present, component positions as dimensionless fractions of the mesh spacing.],
     )
 
-    == Run records <experiment-run-records>
+    === Run records <experiment-run-records>
     A run with an output directory writes `run.json` after the simulation and output have completed successfully. An existing record is not replaced. Runs without an output directory have no record. The entries describe the supplied input, the settings actually used and the execution environment:
 
     #table(
