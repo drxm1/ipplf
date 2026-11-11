@@ -6,7 +6,7 @@
 #let e03 = link(<experiment-e03>)[E03]
 #let bamberger = [Bamberger et al. @bamberger1987SecondOrderCorner[§II, Eqs. (2.10)–(2.11)]]
 
-= Experiment E04 detailed specification\* <experiment-e04>
+= Experiment E04 detailed specification <experiment-e04>
 
 E04 measures energy returning to an interior region, energy remaining in the box,
 and Gauss/gauge defects when the spherical pulse of #e03 meets an all-Mur boundary.
@@ -90,10 +90,10 @@ Let $t_0=-h_t/2$ be the initial reconstructed-field time.
 Define the reference energy quadrature
 $
   U_(0,h)=h^3/2 sum_(bold(i) in cal(M),c)
-  (epsilon abs(E_(c,bold(i))^"ref" (t_0))^2+abs(B_(c,bold(i))^"ref" (t_0))^2).
+  (epsilon abs(E_(c,bold(i)+bold(delta)_c^E)^"ref" (t_0))^2+abs(B_(c,bold(i)+bold(delta)_c^B)^"ref" (t_0))^2).
 $ <e04-energy-normalization>
 Count each owned native sample once across MPI ranks, without ghosts.
-Components are squared at their own locations.
+Components are squared at their own locations, with the index offsets $bold(delta)_c^E$ and $bold(delta)_c^B$ of @sec-spatial-placement.
 Record $U_(0,h)$ once and check its refinement trend.
 
 #block(breakable: false)[
@@ -109,12 +109,18 @@ which can be small even when the startup field error is substantial.
 
 == E04.meas01: continuum discrepancy and energy left in the box
 
-At each field observation, define an energy-weighted field error
+At each field observation, let
+$
+  Delta E_(c,bold(i)+bold(delta)_c^E) (t)
+  =E_(c,bold(i)+bold(delta)_c^E)^"num" (t)-E_(c,bold(i)+bold(delta)_c^E)^"ref" (t)
+$
+be the difference between the numerical and the reference sample, and define $Delta B_(c,bold(i)+bold(delta)_c^B) (t)$ in the same way.
+Define an energy-weighted field error
 $
   e_"field" (t)=sqrt(
   (h^3/(2U_(0,h))) sum_(bold(i) in cal(M),c)
-  (epsilon abs(E_(c,bold(i))^"num" (t)-E_(c,bold(i))^"ref" (t))^2
-  +abs(B_(c,bold(i))^"num" (t)-B_(c,bold(i))^"ref" (t))^2)).
+  (epsilon abs(Delta E_(c,bold(i)+bold(delta)_c^E) (t))^2
+  +abs(Delta B_(c,bold(i)+bold(delta)_c^B) (t))^2)).
 $ <e04-field-error>
 Subtract fields before squaring.
 This error includes initialization, propagation and boundary effects at finite resolution.
@@ -123,7 +129,7 @@ Separate electric/magnetic contributions are optional diagnostics.
 Define the numerical electromagnetic energy and save its remaining fraction
 $
   U_h (t)=h^3/2 sum_(bold(i) in cal(M),c)
-  (epsilon abs(E_(c,bold(i))^"num" (t))^2+abs(B_(c,bold(i))^"num" (t))^2),
+  (epsilon abs(E_(c,bold(i)+bold(delta)_c^E)^"num" (t))^2+abs(B_(c,bold(i)+bold(delta)_c^B)^"num" (t))^2),
   quad F_"remain" (t)=(U_h (t))/U_(0,h).
 $ <e04-remaining-energy>
 Use R2-averaged B.
@@ -212,10 +218,10 @@ Inspect the trace for a late tail at the gate's end.
 Use E03's material-aware residuals
 $
   Q_h^(n-1/2)=D_h^- dot (epsilon vb(E)^(n-1/2)),
-  quad G_h^n=D_h^- dot vb(A)^n+epsilon (phi^n-phi^(n-1))/h_t.
+  quad G_h^n=D_h^- dot vb(A)^n+epsilon (phi^(n+1/2)-phi^(n-1/2))/h_t.
 $
 Their continuum values are zero (#chew).
-The scalar slots remain at $(n+1/2)h_t$ and $(n-1/2)h_t$.
+The two scalar samples are those of the current and the previous slot, at $(n+1/2)h_t$ and $(n-1/2)h_t$.
 The gauge residual is labelled at $n h_t$.
 Save each raw $L^2$ and maximum norm once, with E03's fixed reference scales.
 Normalize subset norms with the same full-domain denominators.

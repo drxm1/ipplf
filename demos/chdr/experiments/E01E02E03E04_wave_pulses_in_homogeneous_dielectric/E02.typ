@@ -1,6 +1,6 @@
 #import "../../docs/manual/preamble.typ": *
 
-= Experiment E02 detailed specs\* <experiment-e02>
+= Experiment E02 detailed specs <experiment-e02>
 
 E02 measures the return and residual fields when E01's transverse pulse
 leaves through a Mur boundary. Use #link(<experiment-e01>)[E01.typ] for the units,
@@ -92,13 +92,13 @@ Compare the final fields with zero. For $F in {E,B}$, define
 $
   d_F=sqrt(
     (sum_(bold(i) in sans(M),c)
-      abs(F_(c,bold(i))^"E02" (t_"end"))^2)
+      abs(F_(c,bold(i)+bold(delta)_c^F)^"E02" (t_"end"))^2)
     /(sum_(bold(i) in sans(M),c)
-      abs(F_(c,bold(i))^"E02" (-h_t/2))^2)
+      abs(F_(c,bold(i)+bold(delta)_c^F)^"E02" (-h_t/2))^2)
   ).
 $
 Here $sans(M)$ contains all owned E02 cells, including boundary rows.
-Use every vector component at its native offset, R2 $B$, no ghosts and
+Use every vector component at its native offset $bold(delta)_c^F$ (see @sec-spatial-placement), R2 $B$, no ghosts and
 one contribution per owned sample across MPI ranks. Each denominator is
 the corresponding numerical field's initial norm and remains fixed.
 
@@ -118,7 +118,7 @@ $
 $
 on the transverse line $(i,j)=(3,3)$, at every R2 step from initialization
 through $n_"end"$. Save the signed value, step, actual position and time
-$t_n=(n-1/2)h_t$, using #raw("LevelContract").
+$t_(n-1/2)=(n-1/2)h_t$, using #raw("LevelContract").
 
 The trace records the incident and returning signals for inspection or
 later analysis. No window integration, reflection ratio or reference

@@ -6,7 +6,7 @@
 #let salari = [Salari and Knupp @salari2000CodeVerificationMms[§§4.1–4.2]]
 #let christlieb = [Christlieb et al. @christlieb2024GaugeConserving[§3.1, Eqs. (25)–(27)]]
 
-= Experiment E03 detailed specification\* <experiment-e03>
+= Experiment E03 detailed specification <experiment-e03>
 
 E03 measures convergence of a spherical pulse over a radial travel distance $2w$,
 before continuum contact with the periodic boundaries.
@@ -385,9 +385,10 @@ $
   vb(A)^0=vb(A)_"ref" (0), quad vb(A)^(-1)=vb(A)_"ref" (-h_t),
 $
 $
-  phi^0=phi_"ref" (h_t/2), quad phi^(-1)=phi_"ref" (-h_t/2).
+  phi^(1/2)=phi_"ref" (h_t/2), quad phi^(-1/2)=phi_"ref" (-h_t/2).
 $ <e03-initialization>
-The superscripts here name storage levels, not a common time for all four components.
+The superscripts are the actual time levels (see @sec-time-placement).
+The current slot therefore holds $vb(A)^0$ and $phi^(1/2)$, and the previous slot holds $vb(A)^(-1)$ and $phi^(-1/2)$.
 Loading both scalar and vector slots at integer times would be an error.
 The spatial staggering follows #ryu.
 The storage times are defined by `LevelContract` and `StaggeredReconstruction.h`,
@@ -425,10 +426,10 @@ relative global $L^2$ errors for $vb(E)$, R2 $vb(B)$ and $vb(A)$,
 and relative global componentwise $L^infinity$ error for $vb(E)$.
 For clarity, for a vector quantity $vb(F)$ define
 $
-  norm(vb(F))_(2,h)^2=h^3 sum_(bold(i) in cal(M),c) abs(F_(c,bold(i)))^2,
-  quad norm(vb(F))_(infinity,h)=max_(bold(i) in cal(M),c) abs(F_(c,bold(i))).
+  norm(vb(F))_(2,h)^2=h^3 sum_(bold(i) in cal(M),c) abs(F_(c,bold(i)+bold(delta)_c^F))^2,
+  quad norm(vb(F))_(infinity,h)=max_(bold(i) in cal(M),c) abs(F_(c,bold(i)+bold(delta)_c^F)).
 $
-Each component in this notation is sampled at its own native location.
+Here $bold(delta)_c^F$ is the index offset of component $c$ (see @sec-spatial-placement), so each component is sampled at its own native location.
 The relative errors are
 $
   e_(F,2)=norm(vb(F)_"num"-vb(F)_"ref")_(2,h)/norm(vb(F)_"ref")_(2,h),
@@ -453,9 +454,9 @@ Using the solver's backward staggered divergence $D_h^-$, record
 $
   Q_h^(n-1/2)=D_h^- dot (epsilon vb(E)^(n-1/2)),
   quad
-  G_h^n=D_h^- dot vb(A)^n+epsilon (phi^n-phi^(n-1))/h_t.
+  G_h^n=D_h^- dot vb(A)^n+epsilon (phi^(n+1/2)-phi^(n-1/2))/h_t.
 $ <e03-constraints>
-The scalar difference in $G_h^n$ is centred at $n h_t$ by @e03-initialization.
+The scalar difference in $G_h^n$ uses the current and the previous scalar slot and is centred at $n h_t$, the time level of $vb(A)^n$.
 Here $Q_h$ is the electric Gauss-law residual and $G_h$ the Lorenz-gauge residual.
 Evaluate them on the numerical state with the operators of #ryu.
 Synchronize reconstructed E halos before taking its divergence.
@@ -463,12 +464,12 @@ Synchronize reconstructed E halos before taking its divergence.
 
 For $n>=1$, the homogeneous scalar bulk update and R2 reconstruction imply
 $
-  D_h^- dot D_h^+ phi^(n-1)
-  =epsilon (phi^n-2phi^(n-1)+phi^(n-2))/h_t^2,
+  D_h^- dot D_h^+ phi^(n-1/2)
+  =epsilon (phi^(n+1/2)-2phi^(n-1/2)+phi^(n-3/2))/h_t^2,
   quad Q_h^(n-1/2)=-epsilon (G_h^n-G_h^(n-1))/h_t.
 $
 The second identity follows by substituting the first into the divergence of
-$vb(E)^(n-1/2)=-(vb(A)^n-vb(A)^(n-1))/h_t-D_h^+ phi^(n-1)$
+$vb(E)^(n-1/2)=-(vb(A)^n-vb(A)^(n-1))/h_t-D_h^+ phi^(n-1/2)$
 (deduction from #christlieb and the compatible spatial operators in #ryu).
 It need not hold for the directly loaded state $n=0$ or where Mur replaces the scalar bulk update.
 Keep both startup and selected evolved residuals, without treating them as independent bulk constraints.

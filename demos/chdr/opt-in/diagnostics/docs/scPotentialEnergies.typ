@@ -13,7 +13,7 @@ $
   a_(d,bold(i)+1/2 bold(e)_d) = A_(d,bold(i)+1/2 bold(e)_d)^n,
   quad b_(d,bold(i)+1/2 bold(e)_d) = A_(d,bold(i)+1/2 bold(e)_d)^(n-1).
 $
-They represent $t_n$ and $t_(n-1)$, with $t_n=n Delta t$. The scalar entries in the same current and previous slots are denoted by $phi_bold(i)$ and $psi_bold(i)$. In R2 they represent $t_(n+1/2)$ and $t_(n-1/2)$, respectively. Thus sharing a storage slot does not imply sharing a sample time. This is the convention assigned by `LevelContract`; the relative half-step shift agrees with the potential updates in @ryu2016potentialfdtd[Appendix A, Eqs. (26)-(27)], after shifting the time origin to our vector-potential levels. The cell volume is $Delta V=h_x h_y h_z$. The harmonic face coefficients are defined in @eq-O1VS-epsd, and $chi_bold(i)=alpha epsilon_bold(i)^2$, with generalized-gauge parameter $alpha$ @chew2014generalizedgauge[Eq. (18)].
+They represent $t_n$ and $t_(n-1)$, with $t_n=n h_t$. In R2 the scalar entries in the same current and previous slots are $phi_bold(i)^(n+1/2)$ and $phi_bold(i)^(n-1/2)$, at $t_(n+1/2)$ and $t_(n-1/2)$ (see @sec-time-placement). In the sums below we abbreviate them by $phi_bold(i)$ and $psi_bold(i)$, respectively. Thus sharing a storage slot does not imply sharing a sample time. This is the convention assigned by `LevelContract`; the relative half-step shift agrees with the potential updates in @ryu2016potentialfdtd[Appendix A, Eqs. (26)-(27)], after shifting the time origin to our vector-potential levels. The cell volume is $Delta V=h_x h_y h_z$. The harmonic face coefficients are defined in @eq-O1VS-epsd, and $chi_bold(i)=alpha epsilon_bold(i)^2$, with generalized-gauge parameter $alpha$ @chew2014generalizedgauge[Eq. (18)].
 
 The weighted divergence is located at the cell centre. Expanding @eq-O1VS-g with the staggered differences of @ryu2016potentialfdtd[Appendix A, Eq. (23)] gives
 $
@@ -33,7 +33,7 @@ Let $cal(I)_"owned"$ contain the owned cell indices across all MPI ranks, exclud
 $
   W_A &= (Delta V)/2 sum_(bold(i) in cal(I)_"owned") sum_d
   epsilon_(d,bold(i)+1/2 bold(e)_d)
-  ((a_(d,bold(i)+1/2 bold(e)_d)-b_(d,bold(i)+1/2 bold(e)_d))/(Delta t))^2 #<equate:revoke> \
+  ((a_(d,bold(i)+1/2 bold(e)_d)-b_(d,bold(i)+1/2 bold(e)_d))/h_t)^2 #<equate:revoke> \
   &quad + (Delta V)/2 sum_(bold(i) in cal(I)_"owned") sum_d
   B_(a,d,bold(i)+1/2 bold(e)_p+1/2 bold(e)_q)
   B_(b,d,bold(i)+1/2 bold(e)_p+1/2 bold(e)_q) #<equate:revoke> \
@@ -50,7 +50,7 @@ $
 and similarly for $psi$. The scalar counterpart of the same leapfrog energy is
 $
   W_phi & = (Delta V)/2 sum_(bold(i) in cal(I)_"owned")
-          chi_bold(i) ((phi_bold(i)-psi_bold(i))/(Delta t))^2 #<equate:revoke> \
+          chi_bold(i) ((phi_bold(i)-psi_bold(i))/h_t)^2 #<equate:revoke> \
         & quad + (Delta V)/2 sum_(bold(i) in cal(I)_"owned") sum_d
           epsilon_(d,bold(i)+1/2 bold(e)_d)
           (D_d^+ phi)_(bold(i)+1/2 bold(e)_d)

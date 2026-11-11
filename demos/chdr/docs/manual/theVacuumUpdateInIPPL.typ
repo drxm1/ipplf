@@ -32,7 +32,11 @@
   $
     cal(A)^(n+1) = 2 cal(A)^n - cal(A)^(n-1) + h_t^2 (L_vb(h)[cal(A)^n] + cal(S)^n).
   $
-  where $n$ is a step label, $cal(A) := (phi, vb(A))$, $cal(S) := (rho, vb(J))$ and
+  where $cal(A) := (phi, vb(A))$, $cal(S) := (rho, vb(J))$ and the superscript $n$ is the
+  time level $t_n = n h_t$ of all four components.
+  This is the R1 time convention of @sec-time-placement.
+  In the R2 convention the same kernel advances the scalar component between the
+  half levels, from $phi^(n+1/2)$ to $phi^(n+3/2)$.
   $(i,j,k)$ in the kernel stencils below are integer array indices.
   When these kernels are used for staggered components, as in O1-VS,
   the spatial locations follow @sec-spatial-placement.

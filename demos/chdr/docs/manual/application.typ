@@ -4,7 +4,7 @@
 #import "./runningAnExperiment.typ" as runningAnExperiment
 
 #let chapter = [
-  = Application\* <application>
+  = Application <application>
 
   #siInputAndEnergy.section
   #runningAnExperiment.section

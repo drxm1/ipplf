@@ -30,5 +30,45 @@ $A_(d,bold(i)+1/2 bold(e)_d)$, where $bold(i) = (i,j,k)$.
 The face coefficient stored at that same array index is
 $epsilon_(d,bold(i)+1/2 bold(e)_d)$.
 Expressions without spatial subscripts denote the corresponding fields
-and operators. Superscripts continue to specify time levels or update
-slots as stated in the time-placement discussion.
+and operators. Superscripts specify the actual time level, as defined in
+@sec-time-placement.
+
+A sample is therefore written with its location and its time level,
+for example $A_(d,bold(i)+1/2 bold(e)_d)^n$.
+For a vector quantity $F$ we write $bold(delta)_d^F$ for the index offset of
+its component $d$, so that this component is $F_(d,bold(i)+bold(delta)_d^F)$:
+$
+  bold(delta)_d^A = bold(delta)_d^J = bold(delta)_d^E = 1/2 bold(e)_d,
+  quad
+  bold(delta)_d^B = 1/2 sum_(q != d) bold(e)_q.
+$
+The following table lists the samples of the staggered placement in the R2
+time convention after $n$ completed solves.
+These locations and time levels are the ones returned by
+`LevelContract::positionOffset` and `LevelContract::halfStepLabel`.
+#table(
+  columns: (auto, auto, 1fr, auto),
+  inset: 5pt,
+  stroke: 0.4pt,
+  table.header([*Quantity*], [*Sample*], [*Location*], [*Time*]),
+  [Scalar potential, charge density],
+  [$phi_bold(i)^(n+1/2)$, $rho_bold(i)^(n+1/2)$],
+  [$vb(x)_bold(i)$],
+  [$t_(n+1/2)$],
+  [Vector potential, current density],
+  [$A_(d,bold(i)+1/2 bold(e)_d)^n$, $J_(d,bold(i)+1/2 bold(e)_d)^n$],
+  [$vb(x)_bold(i) + (h_d/2) vb(e)_d$],
+  [$t_n$],
+  [Electric field],
+  [$E_(d,bold(i)+1/2 bold(e)_d)^(n-1/2)$],
+  [$vb(x)_bold(i) + (h_d/2) vb(e)_d$],
+  [$t_(n-1/2)$],
+  [Magnetic field, averaged over both slots],
+  [$B_(d,bold(i)+bold(delta)_d^B)^(n-1/2)$],
+  [$vb(x)_bold(i) + 1/2 sum_(q != d) h_q vb(e)_q$],
+  [$t_(n-1/2)$],
+  [Raw magnetic field of the current slot],
+  [$B_(d,bold(i)+bold(delta)_d^B)^("raw",n)$],
+  [$vb(x)_bold(i) + 1/2 sum_(q != d) h_q vb(e)_q$],
+  [$t_n$],
+)
