@@ -11,7 +11,7 @@
 #import "./docs/manual/application.typ" as application
 
 #manual(contents: true)[
-  Manual Version: 0.0.1. Authors: D. Rosser, codex, claude.
+  Manual Version: 0.0.1.
 
   #unitsChap.chapter
   #simplifyingAssumptions.chapter
