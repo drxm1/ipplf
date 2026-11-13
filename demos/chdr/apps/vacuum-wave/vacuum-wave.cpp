@@ -1,10 +1,10 @@
+#include <array>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #include "VacuumChecks.h"
 #include "VacuumDiagnostics.h"
@@ -17,8 +17,7 @@
 #include "core/simulation/ObservationSchedule.h"
 
 namespace {
-    chdr::input::RunInput parseOptions(const std::vector<std::string>& arguments);
-    void runConfigured(const chdr::input::RunInput& input);
+    void runConfigured(const chdr::input::ChdrYamlRunInput& input);
 }  // namespace
 
 /** @brief Run the demo and finalize IPPL after simulation objects are destroyed.
@@ -27,53 +26,14 @@ namespace {
  * @return Status from the shared application lifecycle and this case's checks.
  */
 int main(int argc, char* argv[]) {
-    return chdr::input::runApplication(argc, argv, parseOptions, runConfigured);
+    return chdr::input::runApplication(argc, argv, runConfigured);
 }
 
 namespace {
     using namespace chdr::apps::vacuumWave;
 
-    /// @brief Read a required next CLI value or throw before field construction.
-    std::string argumentValue(std::size_t& index, const std::vector<std::string>& arguments) {
-        if (index + 1 >= arguments.size())
-            throw std::invalid_argument("Missing value after " + arguments[index]);
-        return arguments[++index];
-    }
-
-    /// @brief Parse a nonnegative step count with no ignored suffix.
-    int parseSteps(const std::string& text) {
-        std::size_t consumed = 0;
-        const int steps      = std::stoi(text, &consumed);
-        if (consumed != text.size() || steps < 0)
-            throw std::invalid_argument("--steps needs a nonnegative integer");
-        return steps;
-    }
-
-    /// Translate one legacy option into the common run description.
-    void parseArgument(chdr::input::RunInput& input, std::size_t& index,
-                       const std::vector<std::string>& arguments) {
-        const auto& arg = arguments[index];
-        if (arg == "--fine")
-            input.caseName_m = "fine";
-        else if (arg == "--steps")
-            input.steps_m = parseSteps(argumentValue(index, arguments));
-        else if (arg == "--output")
-            input.outputDirectory_m = argumentValue(index, arguments);
-        else
-            throw std::invalid_argument("Unknown argument: " + arg);
-    }
-
-    /// @brief Parse identical per-rank options; output must be new/empty when supplied.
-    chdr::input::RunInput parseOptions(const std::vector<std::string>& arguments) {
-        chdr::input::RunInput input;
-        input.caseName_m = "coarse";
-        for (std::size_t index = 0; index < arguments.size(); ++index)
-            parseArgument(input, index, arguments);
-        return input;
-    }
-
     /// Select an existing benchmark grid; its fixed acceptance checks require these cases.
-    int selectedResolution(const chdr::input::RunInput& input) {
+    int selectedResolution(const chdr::input::ChdrYamlRunInput& input) {
         chdr::input::validateParameters(input, {});
         chdr::input::validateObservationNames(input, {"diagnostics", "fields"});
         if (input.outputDirectory_m.empty() && input.observations_m.contains("fields")
@@ -98,8 +58,8 @@ namespace {
     }
 
     /// @brief Create optional collective output after all simulation storage exists.
-    std::unique_ptr<chdr::output::FieldOutput> makeOutput(Fields& fields,
-                                                          const chdr::input::RunInput& input) {
+    std::unique_ptr<chdr::output::FieldOutput> makeOutput(
+        Fields& fields, const chdr::input::ChdrYamlRunInput& input) {
         if (input.outputDirectory_m.empty())
             return nullptr;
         if (!chdr::input::observationEnabled(input, "fields", true)) {
@@ -109,15 +69,15 @@ namespace {
         }
         return std::make_unique<chdr::output::FieldOutput>(
             input.outputDirectory_m, outputGeometry(fields), fields.getFL().comm.getCommunicator(),
-            false, chdr::output::fieldOutputScales(input.units_m));
+            "wave", false, chdr::output::fieldOutputScales(input.units_m));
     }
 
     /// @brief Bound a requested partial run by the one-period benchmark duration.
-    int numberOfSteps(const chdr::input::RunInput& input, double dt) {
+    int numberOfSteps(const chdr::input::ChdrYamlRunInput& input, double dt) {
         const int periodSteps = static_cast<int>(std::llround(1.0 / dt));
         const int steps       = chdr::input::resolvedSteps(input, dt, periodSteps);
         if (steps > periodSteps)
-            throw std::invalid_argument("--steps exceeds the one-period benchmark");
+            throw std::invalid_argument("Requested run exceeds the one-period benchmark");
         return steps;
     }
 
@@ -145,7 +105,7 @@ namespace {
                   << d.phaseImag_m << ',';
     }
 
-    /// Label SI publication without changing the legacy normalized CSV header or values.
+    /// Label SI publication without changing the normalized CSV header or values.
     void printCsvHeader(const chdr::input::UnitSystem& units) {
         if (units.isSI())
             std::cout << std::setprecision(17)
@@ -178,11 +138,16 @@ namespace {
             throw std::runtime_error("Failed to write diagnostics");
     }
 
-    /// @brief Publish measured array times and update the series after a complete frame.
-    void writeCheckpoint(chdr::output::FieldOutput& output, Fields& fields,
-                         const chdr::apps::vacuumWave::Diagnostics& d) {
-        const chdr::output::FrameRecord frame{d.step_m, d.timeA_m, d.timeE_m, d.timeB_m, d.dt_m};
-        output.writeFrame(fields.getE(), fields.getB(), frame);
+    /// Publish contract-labelled fields; this benchmark's scalar potential is identically zero.
+    void writeCheckpoint(chdr::output::FieldOutput& output, VacuumSimulation& run,
+                         const Diagnostics& d, const chdr::input::UnitSystem& units) {
+        const chdr::output::FrameRecord frame{d.step_m, d.timeA_m, d.dt_m};
+        const std::array snapshots{
+            chdr::output::VectorFieldSnapshot{"E_raw", run.fields().getE(),
+                                              chdr::Quantity::Electric, units.electricFactor()},
+            chdr::output::VectorFieldSnapshot{"B_raw", run.fields().getB(),
+                                              chdr::Quantity::RawMagnetic, units.magneticFactor()}};
+        output.writeFrame(frame, run.solver().levelContract(), snapshots, /*phiIsZero=*/true);
         output.writeSeries();
     }
 
@@ -190,7 +155,7 @@ namespace {
      * @details Output cadence is independent. Skipping diagnostic states would change the
      * phase-increment checks and cease to run the existing benchmark protocol.
      */
-    void validateDiagnostics(const chdr::input::RunInput& input, int lastStep) {
+    void validateDiagnostics(const chdr::input::ChdrYamlRunInput& input, int lastStep) {
         const auto schedule = chdr::input::observationSchedule(input, "diagnostics", {});
         if (!chdr::input::observationEnabled(input, "diagnostics", true) || schedule.every_m != 1
             || schedule.first_m != 0 || (schedule.last_m >= 0 && schedule.last_m < lastStep))
@@ -199,7 +164,7 @@ namespace {
 
     /// Measure, print and check the existing diagnostics without changing their arithmetic.
     Diagnostics observeState(int step, VacuumSimulation& run, PhaseTracker& tracker, int lastStep,
-                             const chdr::input::RunInput& input) {
+                             const chdr::input::ChdrYamlRunInput& input) {
         const auto diagnostic = measure(run.solver(), run.fields(), step);
         const auto energy     = measureEnergy(run.solver(), run.fields());
         const auto phase      = tracker.update(diagnostic);
@@ -209,8 +174,8 @@ namespace {
         return diagnostic;
     }
 
-    /// Resolve the legacy quarter-period cadence and any requested field-output overrides.
-    chdr::simulation::ObservationSchedule fieldSchedule(const chdr::input::RunInput& input,
+    /// Resolve the default quarter-period cadence and any requested field-output overrides.
+    chdr::simulation::ObservationSchedule fieldSchedule(const chdr::input::ChdrYamlRunInput& input,
                                                         double dt) {
         const chdr::simulation::ObservationSchedule fallback{
             .every_m = static_cast<int>(std::llround(0.25 / dt)), .includeFinal_m = true};
@@ -221,7 +186,7 @@ namespace {
      * @details Diagnostics run before field output and retain the existing benchmark checks.
      * Each completed frame publishes its series; no separate finalizer is required.
      */
-    void evolve(VacuumSimulation& run, const chdr::input::RunInput& input, int lastStep,
+    void evolve(VacuumSimulation& run, const chdr::input::ChdrYamlRunInput& input, int lastStep,
                 chdr::simulation::ObservationSchedule schedule) {
         auto output = makeOutput(run.fields(), input);
         PhaseTracker tracker;
@@ -229,7 +194,7 @@ namespace {
             const auto diagnostic =
                 observeState(static_cast<int>(step), run, tracker, lastStep, input);
             if (output && schedule.selects(step, lastStep))
-                writeCheckpoint(*output, run.fields(), diagnostic);
+                writeCheckpoint(*output, run, diagnostic, input.units_m);
         });
     }
 
@@ -249,8 +214,8 @@ namespace {
     }
 
     /// Record the actual schedules and distinguish normalized mode coefficients from fields.
-    void recordRun(VacuumSimulation& run, const chdr::simulation::RunBox& box,
-                   const chdr::input::RunInput& input, int steps,
+    void recordRun(VacuumSimulation& run, const chdr::simulation::ChdrCartesianGridSettings& box,
+                   const chdr::input::ChdrYamlRunInput& input, int steps,
                    chdr::simulation::ObservationSchedule schedule) {
         auto description = chdr::output::describeRun(
             "chdr-vacuum-wave", box, run.solver(), steps,
@@ -268,7 +233,7 @@ namespace {
     }
 
     /// @brief Own one complete benchmark run; field lifetime encloses the solver's lifetime.
-    void runConfigured(const chdr::input::RunInput& input) {
+    void runConfigured(const chdr::input::ChdrYamlRunInput& input) {
         const auto box = vacuumBox(selectedResolution(input));
         VacuumSimulation run(box, VacuumMaterial{}, vacuumSettings(box));
         run.load(VacuumPotential{});

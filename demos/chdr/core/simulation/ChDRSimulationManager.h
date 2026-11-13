@@ -32,20 +32,22 @@ namespace chdr::simulation {
         using Observer = std::function<void(long long, Solver&, const material::MaterialOwner&)>;
 
         /** @brief Allocate the problem and select its timestep before loading initial histories.
+         * @tparam Sampler Material sampler satisfying material::PermittivitySampler.
          * @details Validate local extents collectively after repartitioning and before allocation.
          * Material and field storage share one mesh and layout. The solver constructor
          * binds these fields and selects its update; initialize() clears the potential histories
          * and solve count. The explicit safety factor then sets the step used by load().
          */
-        template <class Map>
-        ChDRSimulationManager(RunBox box, Map map, SolverSettings settings = {})
+        template <material::PermittivitySampler Sampler>
+        ChDRSimulationManager(ChdrCartesianGridSettings box, Sampler samplePermittivity,
+                              ChdrSolverSettings settings = {})
             : fields_m(solver::makeBoxFieldContainer(box.cells_m, box.lengths(), box.splitAxis_m,
                                                      box.periodic_m)) {
             applyPartitionSeam(box);
             checkLocalDomain(fields_m.getFL());
             initializeFieldStorage(fields_m);
-            owner_m  = std::make_unique<material::MaterialOwner>(fields_m.getMesh(),
-                                                                 fields_m.getFL(), map);
+            owner_m = std::make_unique<material::MaterialOwner>(
+                fields_m.getMesh(), fields_m.getFL(), samplePermittivity);
             solver_m = makeSolver(settings);
             solver_m->initialize();
             configureTimeStep(settings);
@@ -60,9 +62,9 @@ namespace chdr::simulation {
          * @details The device-callable sampler follows solver::loadHistory. Observations are
          * separate so the caller can create writers and probes after the fields are initialized.
          */
-        template <class Sampler>
-        void load(Sampler sample) {
-            solver::loadHistory(*solver_m, sample);
+        template <solver::FieldComponentSampler InitialFourPotentialASampler>
+        void load(InitialFourPotentialASampler sampleFourPotentialA) {
+            solver::loadHistory(*solver_m, sampleFourPotentialA);
             solver_m->evaluateInitialFields();
         }
 
@@ -119,7 +121,7 @@ namespace chdr::simulation {
          * The bound and Standard/NonStandard endpoint policy belong to ChdrSolver; no new
          * stability formula is introduced here. Selection precedes history initialization.
          */
-        void configureTimeStep(const SolverSettings& settings) {
+        void configureTimeStep(const ChdrSolverSettings& settings) {
             if (!settings.timeStep_m) {
                 solver_m->setSafetyFactor(settings.safetyFactor_m);
                 return;
@@ -136,7 +138,7 @@ namespace chdr::simulation {
          * already validated by makeBoxFieldContainer. All field allocations subsequently use
          * this same partition, including the material distribution.
          */
-        void applyPartitionSeam(const RunBox& box) {
+        void applyPartitionSeam(const ChdrCartesianGridSettings& box) {
             if (!box.seam_m)
                 return;
             int size = 1;
@@ -153,7 +155,7 @@ namespace chdr::simulation {
 
         /// Construct the selected material update or the explicitly requested unit-permittivity
         /// path.
-        std::unique_ptr<Solver> makeSolver(const SolverSettings& settings) {
+        std::unique_ptr<Solver> makeSolver(const ChdrSolverSettings& settings) {
             if (settings.formulation_m)
                 return std::make_unique<Solver>(
                     fields_m.getJ(), fields_m.getE(), fields_m.getB(), settings.reconstruction_m,

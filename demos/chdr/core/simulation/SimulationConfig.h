@@ -14,7 +14,7 @@ namespace chdr::simulation {
      * a positive seam is a global cell boundary along splitAxis_m and requires two ranks.
      * Periodicity is passed to the shared layout used by fields and material.
      */
-    struct RunBox {
+    struct ChdrCartesianGridSettings {
         std::array<int, 3> cells_m;
         std::array<double, 3> spacing_m;
         int seam_m = 0;
@@ -34,7 +34,7 @@ namespace chdr::simulation {
      * formulation selects the owner-free vacuum update and requires unit permittivity.
      * safetyFactor_m is passed to ChdrSolver::setSafetyFactor before histories are loaded.
      */
-    struct SolverSettings {
+    struct ChdrSolverSettings {
         double safetyFactor_m                       = 0.9;
         EBReconstructionConvention reconstruction_m = EBReconstructionConvention::R2;
         SpatialDiscretization spatial_m             = SpatialDiscretization::Staggered;

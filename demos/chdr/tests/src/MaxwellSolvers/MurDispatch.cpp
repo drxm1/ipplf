@@ -24,43 +24,43 @@ namespace {
      * its row, while MurSpeed checks the primitive's weights separately.
      */
     template <class Visit>
-    void faces(Visit visit, ippl::Vector<double, 3> h, double dt) {
-        visit(1u, second_order_abc_face<double, 0, 1, 2>(h, dt, 1));
-        visit(2u, second_order_abc_face<double, 0, 1, 2>(h, dt, -1));
-        visit(4u, second_order_abc_face<double, 1, 0, 2>(h, dt, 1));
-        visit(8u, second_order_abc_face<double, 1, 0, 2>(h, dt, -1));
-        visit(16u, second_order_abc_face<double, 2, 0, 1>(h, dt, 1));
-        visit(32u, second_order_abc_face<double, 2, 0, 1>(h, dt, -1));
+    void faces(Visit visit, ippl::Vector<double, 3> h, double dt, double speed) {
+        visit(1u, second_order_abc_face<double, 0, 1, 2>(h, dt, 1, speed));
+        visit(2u, second_order_abc_face<double, 0, 1, 2>(h, dt, -1, speed));
+        visit(4u, second_order_abc_face<double, 1, 0, 2>(h, dt, 1, speed));
+        visit(8u, second_order_abc_face<double, 1, 0, 2>(h, dt, -1, speed));
+        visit(16u, second_order_abc_face<double, 2, 0, 1>(h, dt, 1, speed));
+        visit(32u, second_order_abc_face<double, 2, 0, 1>(h, dt, -1, speed));
     }
 
     /// Edge masks pair the two inward normals; the remaining axis runs along the edge.
     template <class Visit>
-    void edges(Visit visit, ippl::Vector<double, 3> h, double dt) {
-        visit(4u | 16u, second_order_abc_edge<double, 0, 1, 2, true, true>(h, dt));
-        visit(4u | 32u, second_order_abc_edge<double, 0, 1, 2, true, false>(h, dt));
-        visit(8u | 16u, second_order_abc_edge<double, 0, 1, 2, false, true>(h, dt));
-        visit(8u | 32u, second_order_abc_edge<double, 0, 1, 2, false, false>(h, dt));
-        visit(16u | 1u, second_order_abc_edge<double, 1, 2, 0, true, true>(h, dt));
-        visit(16u | 2u, second_order_abc_edge<double, 1, 2, 0, true, false>(h, dt));
-        visit(32u | 1u, second_order_abc_edge<double, 1, 2, 0, false, true>(h, dt));
-        visit(32u | 2u, second_order_abc_edge<double, 1, 2, 0, false, false>(h, dt));
-        visit(1u | 4u, second_order_abc_edge<double, 2, 0, 1, true, true>(h, dt));
-        visit(1u | 8u, second_order_abc_edge<double, 2, 0, 1, true, false>(h, dt));
-        visit(2u | 4u, second_order_abc_edge<double, 2, 0, 1, false, true>(h, dt));
-        visit(2u | 8u, second_order_abc_edge<double, 2, 0, 1, false, false>(h, dt));
+    void edges(Visit visit, ippl::Vector<double, 3> h, double dt, double speed) {
+        visit(4u | 16u, second_order_abc_edge<double, 0, 1, 2, true, true>(h, dt, speed));
+        visit(4u | 32u, second_order_abc_edge<double, 0, 1, 2, true, false>(h, dt, speed));
+        visit(8u | 16u, second_order_abc_edge<double, 0, 1, 2, false, true>(h, dt, speed));
+        visit(8u | 32u, second_order_abc_edge<double, 0, 1, 2, false, false>(h, dt, speed));
+        visit(16u | 1u, second_order_abc_edge<double, 1, 2, 0, true, true>(h, dt, speed));
+        visit(16u | 2u, second_order_abc_edge<double, 1, 2, 0, true, false>(h, dt, speed));
+        visit(32u | 1u, second_order_abc_edge<double, 1, 2, 0, false, true>(h, dt, speed));
+        visit(32u | 2u, second_order_abc_edge<double, 1, 2, 0, false, false>(h, dt, speed));
+        visit(1u | 4u, second_order_abc_edge<double, 2, 0, 1, true, true>(h, dt, speed));
+        visit(1u | 8u, second_order_abc_edge<double, 2, 0, 1, true, false>(h, dt, speed));
+        visit(2u | 4u, second_order_abc_edge<double, 2, 0, 1, false, true>(h, dt, speed));
+        visit(2u | 8u, second_order_abc_edge<double, 2, 0, 1, false, false>(h, dt, speed));
     }
 
     /// Each corner row selects the inward sign of all three axes.
     template <class Visit>
-    void corners(Visit visit, ippl::Vector<double, 3> h, double dt) {
-        visit(1u | 4u | 16u, second_order_abc_corner<double, true, true, true>(h, dt));
-        visit(2u | 4u | 16u, second_order_abc_corner<double, false, true, true>(h, dt));
-        visit(1u | 8u | 16u, second_order_abc_corner<double, true, false, true>(h, dt));
-        visit(2u | 8u | 16u, second_order_abc_corner<double, false, false, true>(h, dt));
-        visit(1u | 4u | 32u, second_order_abc_corner<double, true, true, false>(h, dt));
-        visit(2u | 4u | 32u, second_order_abc_corner<double, false, true, false>(h, dt));
-        visit(1u | 8u | 32u, second_order_abc_corner<double, true, false, false>(h, dt));
-        visit(2u | 8u | 32u, second_order_abc_corner<double, false, false, false>(h, dt));
+    void corners(Visit visit, ippl::Vector<double, 3> h, double dt, double speed) {
+        visit(1u | 4u | 16u, second_order_abc_corner<double, true, true, true>(h, dt, speed));
+        visit(2u | 4u | 16u, second_order_abc_corner<double, false, true, true>(h, dt, speed));
+        visit(1u | 8u | 16u, second_order_abc_corner<double, true, false, true>(h, dt, speed));
+        visit(2u | 8u | 16u, second_order_abc_corner<double, false, false, true>(h, dt, speed));
+        visit(1u | 4u | 32u, second_order_abc_corner<double, true, true, false>(h, dt, speed));
+        visit(2u | 4u | 32u, second_order_abc_corner<double, false, true, false>(h, dt, speed));
+        visit(1u | 8u | 32u, second_order_abc_corner<double, true, false, false>(h, dt, speed));
+        visit(2u | 8u | 32u, second_order_abc_corner<double, false, false, false>(h, dt, speed));
     }
 
     struct Solver : fdtd_test::Standard<ippl::configured> {
@@ -73,11 +73,14 @@ namespace {
      * The negative control executes the dispatcher with all faces open. Mixed
      * layouts must expose both changed periodic samples and wrong open-face values.
      */
-    void checkDispatch(unsigned pattern, bool raw = false) {
+    void checkDispatch(unsigned pattern, bool raw = false, double speed = 1) {
         const std::array<bool, 3> periodic{bool(pattern & 1), bool(pattern & 2), bool(pattern & 4)};
         fdtd_test::Fields fields({6, 5, 4}, {1, 1.25, .5}, periodic);
-        Solver solver(fields.source, fields.electric, fields.magnetic,
-                      ippl::FDTDBoundary::fromLayout(fields.layout));
+        auto boundary = ippl::FDTDBoundary::fromLayout(fields.layout, speed);
+        for (unsigned axis = 0; axis < 3; ++axis)
+            if (periodic[axis])
+                boundary.speed[2 * axis] = boundary.speed[2 * axis + 1] = -1;
+        Solver solver(fields.source, fields.electric, fields.magnetic, boundary);
         for (auto* field : {&solver.A_n, &solver.A_nm1, &solver.A_np1}) {
             fdtd_test::load(*field, [](int i, int j, int k, unsigned q) {
                 return 1 + i * i + 3 * j * j + 5 * k * k + q * (i + j + k);
@@ -118,9 +121,9 @@ namespace {
                     }
                 }
             };
-            faces(check, fields.mesh.getMeshSpacing(), solver.getDt());
-            edges(check, fields.mesh.getMeshSpacing(), solver.getDt());
-            corners(check, fields.mesh.getMeshSpacing(), solver.getDt());
+            faces(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
+            edges(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
+            corners(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
         });
         unsigned globalErrors[2]{};
         MPI_Allreduce(errors, globalErrors, 2, MPI_UNSIGNED, MPI_SUM,
@@ -141,6 +144,8 @@ TEST(MurDispatch, EveryOpenFaceEdgeAndCorner) {
     for (unsigned pattern = 0; pattern < 8; ++pattern) {
         SCOPED_TRACE(pattern);
         checkDispatch(pattern);
+        if (pattern == 0 || pattern == 1 || pattern == 2 || pattern == 4)
+            checkDispatch(pattern, false, .8);
         if (pattern != 0 && pattern != 7) {
             checkDispatch(pattern, true);
         }

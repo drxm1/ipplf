@@ -5,7 +5,7 @@
 
 === Why a regular lorenz gauge is not enough
 The problem with a regular lorenz gauge is the following:
-When $epsilon(vb(x)) eq.not "const"$, in the gauge $div vb(A) = - epsilon partial_t phi$, Ampere's and Gauss's laws (cf. TODO) stay coupled:
+When $epsilon(vb(x)) eq.not "const"$, in the gauge $div vb(A) = - epsilon partial_t phi$, Ampere's and Gauss's laws (cf. @eq-MW2-ampere-inOurMatModel-writtenWithPotentials and @eq-MW4-gauss-inOurMatModel-writtenWithPotentials) stay coupled:
 $
   "scalar:"& quad quad quad &epsilon^2 partial_t^2 phi - partial_t vb(A) dot grad epsilon &= epsilon nabla^2 phi + grad epsilon dot grad phi + rho #<eq-local-lorenz-scalar>\
   "vector:"& quad quad quad &epsilon partial_t^2 vb(A)
@@ -68,7 +68,7 @@ $
   quad div (epsilon vb(A)) = -chi partial_t phi, quad quad "with" quad chi = epsilon^2.
 $
 \
-Inserting that gauge into Ampere & Gauss (cf. TODO), we obtain
+Inserting that gauge into Ampere & Gauss (cf. @eq-MW2-ampere-inOurMatModel-writtenWithPotentials and @eq-MW4-gauss-inOurMatModel-writtenWithPotentials), we obtain
 @chew2014generalizedgauge[Eqs. (16)-(17)]:
 $
   "vector:" quad epsilon partial_t^2 vb(A) &= - curl curl vb(A) + epsilon grad (epsilon^(-2) div (epsilon vb(A))) + vb(J) #<eq-Chew-vector>\
@@ -83,5 +83,6 @@ $
 $
 $vb(T(A))$ is zero where $epsilon="const"$.
 
-Similarly, we can rewrite the scalar equation (TODO:IncludeDerivation) to the following form:
+Similarly, we can rewrite the scalar equation (@eq-Chew-scalar).
+Writing $epsilon = 1 + (epsilon - 1)$ inside the divergence gives $div (epsilon grad phi) = nabla^2 phi + div ((epsilon - 1) grad phi)$, and with $chi = epsilon^2$ we obtain the following form:
 $ chi partial_t^2 phi = nabla^2 phi + div ((epsilon - 1) grad phi) + rho $

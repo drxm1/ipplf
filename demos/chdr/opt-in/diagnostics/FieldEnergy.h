@@ -98,10 +98,11 @@ namespace chdr::diagnostics {
                            cb = staggeredCurl(b, i, j, k, h, 1);
                 term(sums, region,
                      current_m.g(i, j, k) * previous_m.g(i, j, k)
-                         * current_m.inverseMass(0, i, j, k));
+                         * current_m.inverseTimeDerivativeCoefficient(0, i, j, k));
                 const double scalarVelocity = (a(i, j, k)[0] - b(i, j, k)[0]) / dt_m;
                 term(sums, 2 + region,
-                     scalarVelocity * scalarVelocity / current_m.inverseMass(0, i, j, k));
+                     scalarVelocity * scalarVelocity
+                         / current_m.inverseTimeDerivativeCoefficient(0, i, j, k));
                 for (unsigned d = 0; d < 3; ++d) {
                     material::CellIndex p(i, j, k);
                     ++p[d];

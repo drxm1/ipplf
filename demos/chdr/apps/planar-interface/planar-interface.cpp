@@ -6,7 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <sstream>
-#include <vector>
+#include <string>
 
 #include "apps/planar-interface/InterfaceRun.h"
 #include "apps/planar-interface/PacketCase.h"
@@ -17,25 +17,6 @@
 #include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::apps::planarInterface {
-    /// Translate the existing command line into the same input used by YAML runs.
-    input::RunInput legacyInput(const std::vector<std::string>& arguments) {
-        if (arguments.empty())
-            throw std::invalid_argument("Use CASE [--smoke] [--output DIRECTORY]");
-        input::RunInput result;
-        result.caseName_m = arguments.front();
-        for (std::size_t i = 1; i < arguments.size(); ++i) {
-            if (arguments[i] == "--smoke")
-                result.parameters_m["smoke"] = "true";
-            else if (arguments[i] == "--output" && i + 1 < arguments.size())
-                result.outputDirectory_m = arguments[++i];
-            else
-                throw std::invalid_argument("Use CASE [--smoke] [--output DIRECTORY]");
-        }
-        if (result.caseName_m == "plane" && arguments.size() != 1)
-            throw std::invalid_argument("The legacy plane command accepts no additional options");
-        return result;
-    }
-
     /// Preserve renderer metadata and explicitly identify the existing packet's effective data.
     std::string packetMetadata(const PacketCase& selected) {
         const auto& box    = selected.box_m;
@@ -55,8 +36,9 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Save actual solver settings and resolved measurement schedules after successful output.
-    void recordPacket(const input::RunInput& request, const PacketCase& selected, InterfaceRun& run,
-                      const std::string& metadata, const output::FieldRunSettings& observations) {
+    void recordPacket(const input::ChdrYamlRunInput& request, const PacketCase& selected,
+                      InterfaceRun& run, const std::string& metadata,
+                      const output::FieldRunSettings& observations) {
         auto description = output::describeRun("planar-interface", selected.box_m, run.solver(),
                                                selected.steps_m, metadata);
         output::recordFieldRunOutput(description, request, observations);
@@ -65,7 +47,7 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Keep output sampling in the manager callback and complete files after successful evolution.
-    void runPacketOutput(const input::RunInput& request, const PacketCase& selected,
+    void runPacketOutput(const input::ChdrYamlRunInput& request, const PacketCase& selected,
                          InterfaceRun& run) {
         if (request.outputDirectory_m.empty()) {
             run.advance(selected.steps_m, InterfaceRun::Observer{});
@@ -83,7 +65,7 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Execute a packet preset without introducing a second initialization or stepping path.
-    void runPacket(const input::RunInput& request) {
+    void runPacket(const input::ChdrYamlRunInput& request) {
         auto selected =
             packetCase(request.caseName_m, input::booleanParameter(request, "smoke", false));
         InterfaceRun run(selected.box_m, material::TwoMaterialMap{selected.slab_m, 2.13, 1.0},
@@ -94,7 +76,7 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Preserve the fixed probe gates and reference case while accepting its full duration in SI.
-    int checkPlaneInput(const input::RunInput& request, const NormalPlane& p) {
+    int checkPlaneInput(const input::ChdrYamlRunInput& request, const NormalPlane& p) {
         input::validateObservationNames(request, {"fourier", "diagnostics"});
         if (input::booleanParameter(request, "smoke", false)
             || input::resolvedSteps(request, p.dt_m, p.steps_m) != p.steps_m)
@@ -131,7 +113,7 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Save existing complex amplitudes; only their frequency coordinate has physical units.
-    void writePlaneResult(const input::RunInput& request, const PlaneResult& result) {
+    void writePlaneResult(const input::ChdrYamlRunInput& request, const PlaneResult& result) {
         if (request.outputDirectory_m.empty() || ippl::Comm->rank() != 0)
             return;
         std::ofstream file(request.outputDirectory_m + "/spectra.csv");
@@ -149,8 +131,10 @@ namespace chdr::apps::planarInterface {
 
     /// Describe the measured case while its manager still owns the solver and its layout.
     output::RunRecordDescription describePlane(const NormalPlane& p, InterfaceSolver& solver,
-                                               const input::RunInput& request, int cadence) {
-        const simulation::RunBox box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m}, p.h_m};
+                                               const input::ChdrYamlRunInput& request,
+                                               int cadence) {
+        const simulation::ChdrCartesianGridSettings box{{p.cellsX_m, p.cellsY_m, p.cellsZ_m},
+                                                        p.h_m};
         auto result = output::describeRun("planar-interface", box, solver, p.steps_m,
                                           "case=plane polarization=TE epsilon=2.13");
         output::recordObservation(result, "fourier", {});
@@ -163,7 +147,7 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Run the existing plane measurement and save its result through the common record writer.
-    void runPlane(const input::RunInput& request) {
+    void runPlane(const input::ChdrYamlRunInput& request) {
         const NormalPlane p;
         const int cadence = checkPlaneInput(request, p);
         output::prepareRunDirectory(request.outputDirectory_m, ippl::Comm->getCommunicator());
@@ -178,7 +162,7 @@ namespace chdr::apps::planarInterface {
     }
 
     /// Validate case-specific keys before constructing any distributed field state.
-    void runConfigured(const input::RunInput& request) {
+    void runConfigured(const input::ChdrYamlRunInput& request) {
         input::validateParameters(request, {"smoke"});
         if (request.caseName_m == "plane")
             return runPlane(request);
@@ -193,6 +177,5 @@ namespace chdr::apps::planarInterface {
 }  // namespace chdr::apps::planarInterface
 
 int main(int argc, char** argv) {
-    return chdr::input::runApplication(argc, argv, chdr::apps::planarInterface::legacyInput,
-                                       chdr::apps::planarInterface::runConfigured);
+    return chdr::input::runApplication(argc, argv, chdr::apps::planarInterface::runConfigured);
 }

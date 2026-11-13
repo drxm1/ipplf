@@ -5,7 +5,6 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
-#include <vector>
 
 #include "apps/interface-movies/MovieCases.h"
 #include "apps/interface-movies/MovieFaceSolver.h"
@@ -16,35 +15,6 @@
 #include "opt-in/output/FieldRunOutput.h"
 
 namespace chdr::apps::interfaceMovies {
-    /// Parse a complete nonnegative count; compatibility options use the same typed run input.
-    int parseSteps(const std::string& value) {
-        std::size_t used = 0;
-        const int result = std::stoi(value, &used);
-        if (used != value.size() || result < 0)
-            throw std::invalid_argument("--steps requires a nonnegative integer");
-        return result;
-    }
-
-    /// Translate the existing command line; new YAML runs bypass this compatibility parser.
-    input::RunInput legacyInput(const std::vector<std::string>& arguments) {
-        if (arguments.empty())
-            throw std::invalid_argument("Use CASE --output DIRECTORY [--smoke] [--steps N]");
-        input::RunInput result;
-        result.caseName_m = arguments.front();
-        for (std::size_t i = 1; i < arguments.size(); ++i) {
-            const auto& arg = arguments[i];
-            if (arg == "--smoke")
-                result.parameters_m["smoke"] = "true";
-            else if (arg == "--output" && i + 1 < arguments.size())
-                result.outputDirectory_m = arguments[++i];
-            else if (arg == "--steps" && i + 1 < arguments.size())
-                result.steps_m = parseSteps(arguments[++i]);
-            else
-                throw std::invalid_argument("Use CASE --output DIRECTORY [--smoke] [--steps N]");
-        }
-        return result;
-    }
-
     /// Use the same face speeds for solver configuration and recorded case settings.
     ippl::Vector<double, 6> movieFaceSpeeds(const MovieCase& selected) {
         const double speed = selected.diagonal_m ? 1 / std::sqrt(selected.epsilon_m) : 1;
@@ -70,7 +40,7 @@ namespace chdr::apps::interfaceMovies {
         return text.str() + " edge_speed=1";
     }
 
-    /// Preserve the effective initial-data parameters independently of the input syntax.
+    /// Record the effective initial-data parameters in the field metadata.
     std::string moviePulseMetadata(const MovieCase& selected) {
         const auto& p = selected.start_m;
         std::ostringstream text;
@@ -88,7 +58,8 @@ namespace chdr::apps::interfaceMovies {
     }
 
     /// Keep the existing CSV metadata while the common run record stores structured settings.
-    std::string movieMetadata(const MovieCase& selected, const simulation::SolverSettings& settings,
+    std::string movieMetadata(const MovieCase& selected,
+                              const simulation::ChdrSolverSettings& settings,
                               const output::FieldRunSettings& observations) {
         std::ostringstream text;
         text << std::setprecision(17) << "case=" << selected.name_m << movieBoxMetadata(selected)
@@ -111,7 +82,7 @@ namespace chdr::apps::interfaceMovies {
 
     /// Save the completed solver state and the same schedules used by the output callback.
     template <class Solver>
-    void recordMovie(const input::RunInput& request, const MovieCase& selected,
+    void recordMovie(const input::ChdrYamlRunInput& request, const MovieCase& selected,
                      simulation::ChDRSimulationManager<Solver>& run, const std::string& metadata,
                      const output::FieldRunSettings& observations) {
         auto description = output::describeRun("interface-movies", selected.box_m, run.solver(),
@@ -123,8 +94,8 @@ namespace chdr::apps::interfaceMovies {
 
     /// Execute one existing case through the shared lifecycle and write its completed run record.
     template <class Solver, class Region>
-    void runMovieCase(const input::RunInput& request, MovieCase selected, Region region) {
-        const simulation::SolverSettings settings;
+    void runMovieCase(const input::ChdrYamlRunInput& request, MovieCase selected, Region region) {
+        const simulation::ChdrSolverSettings settings;
         simulation::ChDRSimulationManager<Solver> run(
             selected.box_m, material::TwoMaterialMap{region, selected.epsilon_m, 1.0}, settings);
         selected.steps_m = input::resolvedSteps(request, run.solver().getDt(), selected.steps_m);
@@ -141,7 +112,7 @@ namespace chdr::apps::interfaceMovies {
     }
 
     /// Resolve the selected preset; YAML and compatibility arguments enter the same run path.
-    void runConfigured(const input::RunInput& request) {
+    void runConfigured(const input::ChdrYamlRunInput& request) {
         input::validateParameters(request, {"smoke"});
         input::validateObservationNames(request, {"fields", "diagnostics"});
         if (request.outputDirectory_m.empty())
@@ -157,6 +128,5 @@ namespace chdr::apps::interfaceMovies {
 }  // namespace chdr::apps::interfaceMovies
 
 int main(int argc, char** argv) {
-    return chdr::input::runApplication(argc, argv, chdr::apps::interfaceMovies::legacyInput,
-                                       chdr::apps::interfaceMovies::runConfigured);
+    return chdr::input::runApplication(argc, argv, chdr::apps::interfaceMovies::runConfigured);
 }

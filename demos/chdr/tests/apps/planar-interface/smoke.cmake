@@ -10,6 +10,23 @@ string(JSON count LENGTH "${series}" files)
 if(NOT count EQUAL 3)
   message(FATAL_ERROR "Expected field frames at states 0, 2 and 4")
 endif()
+foreach(index RANGE 0 2)
+  math(EXPR step "2 * ${index}")
+  string(
+    JSON
+    name
+    GET
+    "${series}"
+    files
+    ${index}
+    name)
+  if(NOT name STREQUAL "wave-${step}.pvti")
+    message(FATAL_ERROR "Unexpected field frame at series index ${index}: ${name}")
+  endif()
+  if(NOT EXISTS "${OUTPUT}/${name}" OR NOT EXISTS "${OUTPUT}/wave-${step}-rank-0.vti")
+    message(FATAL_ERROR "Field frame at state ${step} is incomplete")
+  endif()
+endforeach()
 file(STRINGS "${OUTPUT}/energy.csv" rows REGEX "^[0-9]+,")
 list(LENGTH rows count)
 if(NOT count EQUAL 3)
@@ -24,21 +41,3 @@ string(JSON count GET "${record}" effective completed_solves)
 if(NOT count EQUAL 4)
   message(FATAL_ERROR "Completed run record is missing the four solver steps")
 endif()
-
-# The historical command runs the same four-step case with its original output cadence.
-set(legacy "${OUTPUT}-legacy")
-file(REMOVE_RECURSE "${legacy}")
-execute_process(COMMAND "${PROGRAM}" half-space --smoke --output "${legacy}" COMMAND_ERROR_IS_FATAL
-                        ANY)
-file(READ "${legacy}/run.json" legacy_record)
-foreach(key solver box completed_solves)
-  string(JSON settings GET "${record}" effective "${key}")
-  string(JSON legacy_settings GET "${legacy_record}" effective "${key}")
-  if(NOT "${settings}" STREQUAL "${legacy_settings}")
-    message(FATAL_ERROR "Legacy and YAML packet settings differ: ${key}")
-  endif()
-endforeach()
-foreach(step 0 4)
-  execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files "${OUTPUT}/wave-${step}-rank-0.vti"
-                          "${legacy}/wave-${step}-rank-0.vti" COMMAND_ERROR_IS_FATAL ANY)
-endforeach()

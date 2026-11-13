@@ -2,8 +2,8 @@
  * @brief Check strict common input and one independently evaluated SI normalization.
  * @details readRunInput() reads temporary YAML files. It must throw std::invalid_argument for
  * 8 malformed run or observation entries and for 7 invalid unit declarations, and
- * booleanParameter() must throw for 3 non-boolean values. applicationInput() must reject 3
- * incomplete or mixed command-line selectors, and a missing file and unclosed YAML must throw.
+ * booleanParameter() must throw for 3 non-boolean values. The YAML-only selector rejects
+ * missing, positional and mixed arguments. A missing file and unclosed YAML must throw.
  * The valid input checks partial schedule overrides. For \f$L_0 = 1\f$ mm and
  * \f$\rho_0 = 8.8541878188\times10^{-9}\ \mathrm{C\,m^{-3}}\f$, the SI factors must equal fixed
  * values (EXPECT_DOUBLE_EQ, or absolute tolerances such as \f$10^{-26}\f$ s on
@@ -26,8 +26,9 @@
 namespace {
     using namespace chdr::input;
 
-    /// Exercise the actual file reader and remove its temporary input on either outcome.
-    RunInput parseYaml(const std::string& text) {
+    /// Exercise a reader or input selector and remove its temporary file on either outcome.
+    ChdrYamlRunInput parseYaml(const std::string& text,
+                               ChdrYamlRunInput (*readInput)(const std::string&) = readRunInput) {
         auto path = (std::filesystem::temp_directory_path() / "chdr-input-XXXXXX").string();
         const int descriptor = mkstemp(path.data());
         if (descriptor < 0)
@@ -37,7 +38,7 @@ namespace {
             std::ofstream output(path);
             output << text;
             output.close();
-            auto result = readRunInput(path);
+            auto result = readInput(path);
             std::filesystem::remove(path);
             return result;
         } catch (...) {
@@ -85,18 +86,18 @@ namespace {
         }
     }
 
-    /// Reject incomplete or mixed selectors before accessing a file or the legacy parser.
+    /// Require exactly --input FILE and read a valid file through the YAML-only selector.
     void checkInputSelection() {
-        const auto legacy = [](const std::vector<std::string>&) {
-            RunInput input;
-            input.caseName_m = "legacy";
-            return input;
-        };
-        EXPECT_EQ(applicationInput({"coarse"}, legacy).caseName_m, "legacy");
-        for (const std::vector<std::string>& args : {std::vector<std::string>{"--input"},
+        const auto input = parseYaml(normalizedInput(), [](const std::string& path) {
+            return applicationInput({"--input", path});
+        });
+        EXPECT_EQ(input.caseName_m, "coarse");
+        for (const std::vector<std::string>& args : {std::vector<std::string>{},
+                                                     {"coarse"},
+                                                     {"--input"},
                                                      {"--input", "file.yaml", "--steps", "1"},
                                                      {"coarse", "--input", "file.yaml"}})
-            EXPECT_THROW(applicationInput(args, legacy), std::invalid_argument);
+            EXPECT_THROW(applicationInput(args), std::invalid_argument);
     }
 
     /// Exercise missing files and parser syntax failures without launching an application.
@@ -111,7 +112,7 @@ namespace {
     }
 
     /// Valid input with partial overrides, 8 malformed entries, 3 non-boolean parameter values,
-    /// 3 invalid selector lists, a missing file and unclosed YAML.
+    /// YAML-only input selection, a missing file and unclosed YAML.
     TEST(RunInput, StrictSchemaAndOverrides) {
         checkValidInput();
         checkInvalidInput();

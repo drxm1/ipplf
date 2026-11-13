@@ -1,6 +1,6 @@
 ## @file run_output_fixture.py
-# @brief Launcher of chdr.vacuum.output.serial, chdr.vacuum.output.mpi2 and the four
-# chdr.vacuum.output.failure entries.
+# @brief Launcher of chdr.vacuum.output.serial, chdr.vacuum.output.mpi2,
+# chdr.vacuum.output.single and the four chdr.vacuum.output.failure entries.
 # @details In a fresh directory it runs the writer output_fixture.cpp (one or two ranks,
 # one case), then pvpython read_output_fixture.py if the writer exits with status 0. Each
 # command is limited to 90 s. The test passes only if both commands exit with status 0.
@@ -26,6 +26,8 @@ def arguments():
     parser.add_argument("--output-parent", type=Path, required=True)
     parser.add_argument("--ranks", type=int, choices=(1, 2), required=True)
     parser.add_argument("--case", choices=("valid", "piece", "wrapper", "series", "nonfinite"), required=True)
+    parser.add_argument("--encoding", choices=("ascii", "binary", "binary32"), default=None,
+                        help="default: ascii on one rank, binary on two")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     options = parser.parse_args()
     if options.command[:1] == ["--"]:
@@ -68,15 +70,17 @@ def run_case(options, directory):
     """Run the real writer first, then require VTK/ParaView readback to succeed."""
     environment = test_environment(directory)
     data = directory / "data"
-    command = options.command + [str(data)]
-    if options.case != "valid":
-        command.append(options.case)
+    encoding = options.encoding or ("ascii" if options.ranks == 1 else "binary")
+    command = options.command + [str(data), options.case, encoding]
     results = [execute(command, directory, environment, "writer")]
     if results[-1]["exit_code"] == 0:
         mode = str(options.ranks) if options.case == "valid" else options.case
+        precision = "float" if encoding == "binary32" else "double"
         reader = [options.reader, "--disable-registry", str(HERE / "read_output_fixture.py")]
-        results.append(execute(reader + [str(data), mode], directory, environment, "reader"))
-    record = {"case": options.case, "ranks": options.ranks, "sources": source_hashes(),
+        results.append(execute(reader + [str(data), mode, precision], directory, environment,
+                               "reader"))
+    record = {"case": options.case, "ranks": options.ranks, "encoding": encoding,
+              "sources": source_hashes(),
               "commands": results, "omp_threads": 1, "gui_walkthrough": False}
     (directory / "record.json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Evidence: {directory / 'record.json'}", flush=True)

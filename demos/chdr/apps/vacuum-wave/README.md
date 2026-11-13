@@ -17,8 +17,6 @@ root, replace `build` with your build directory:
 cmake -S . -B build -DIPPL_ENABLE_CHDR=ON -DIPPL_ENABLE_UNIT_TESTS=ON \
   -DIPPL_ENABLE_FFT=ON -DIPPL_USE_STANDARD_FOLDERS=ON
 cmake --build build --target chdr-vacuum-wave test-chdr-vacuum test-chdr-vacuum-output --parallel 2
-OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave > coarse.csv
-OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave --fine > fine.csv
 ctest --test-dir build -R '^chdr\.vacuum\.' --no-tests=error --output-on-failure
 ```
 
@@ -29,20 +27,35 @@ CHDR also configures the mesh example's Catalyst/Conduit dependency.
 With `IPPL_USE_STANDARD_FOLDERS=OFF`, the executable is under
 `build/demos/chdr/apps/vacuum-wave/` instead of `build/bin/`.
 
-| Option | Meaning |
-| --- | --- |
-| Default | 8 × 8 × 64 cells; 128 steps to newest-potential time 1 |
-| `--fine` | 16 × 16 × 128 cells; 256 steps to newest-potential time 1 |
-| `--steps N` | Partial run with 0 ≤ N ≤ the chosen grid's full-period step count |
-| `--output DIRECTORY` | Save owned E/B fields at quarter periods and the final state |
-| `--input FILE` | Read the common strict YAML schema; cannot be combined with the legacy case options |
+The program requires `--input FILE`. To run one full period, save this as
+`wave.yaml`:
 
-`--steps 0` measures initialization; `--steps 1` checks one update.
+```yaml
+schema_version: 1
+case: coarse
+units: {system: normalized}
+```
+
+```sh
+OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave --input wave.yaml > wave.csv
+```
+
+Select `case: fine` in the input for the refined run. All case, duration and
+output settings belong in YAML.
+
+| YAML setting | Meaning |
+| --- | --- |
+| `case: coarse` | 8 × 8 × 64 cells; 128 steps to newest-potential time 1 |
+| `case: fine` | 16 × 16 × 128 cells; 256 steps to newest-potential time 1 |
+| `run: {steps: N}` | Partial run with 0 ≤ N ≤ the chosen grid's full-period step count |
+| `output: {directory: DIRECTORY}` | Save owned E/B fields at quarter periods and the final state |
+
+`run: {steps: 0}` measures initialization; `run: {steps: 1}` checks one update.
 The case selects the original `min(spacing)/2` timestep explicitly; the manager
 checks it against the Standard bound. There is no adjustable CFL option.
 
-The legacy arguments and YAML input configure the same run routine. For example,
-[`coarse.yaml`](coarse.yaml) selects a one-step coarse run with normalized output:
+The supplied [`coarse.yaml`](coarse.yaml) selects a one-step coarse run with
+normalized output:
 
 ```sh
 build/bin/chdr-vacuum-wave --input demos/chdr/apps/vacuum-wave/coarse.yaml > wave.csv
@@ -83,10 +96,15 @@ The raw electric and magnetic energies still belong to different times.
 
 Without an output directory, the run writes CSV to stdout. Field output requires
 a new or empty directory, shared by all MPI ranks and supplied identically on
-each rank. For example:
+each rank. To save fields, add the following to `wave.yaml`:
+
+```yaml
+output:
+  directory: wave-run
+```
 
 ```sh
-OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave --output wave-run > wave.csv
+OMP_NUM_THREADS=1 OMP_PROC_BIND=false build/bin/chdr-vacuum-wave --input wave.yaml > wave.csv
 ```
 
 A successful run with an output directory also writes `run.json`, including the
@@ -98,8 +116,8 @@ empty and is checked before time stepping. An existing `run.json` is not overwri
 Open `wave-run/wave.pvti.series` in ParaView; [ViewingGuide.org](ViewingGuide.org)
 explains array selection, timestamps, camera orientation and the optional headless
 rendering script. With the default field schedule, a full run saves five frames,
-`--steps 0` saves initialization and `--steps 1` saves initialization and the final
-one-step state.
+`run: {steps: 0}` saves initialization and `run: {steps: 1}` saves initialization
+and the final one-step state.
 
 IPPL processes its options first. Its current initialization can exit with status
 zero before the benchmark runs, including for help/version and some invalid option
@@ -186,11 +204,13 @@ their explicit potential times. `E_raw` and `B_raw` are three-component Cell Dat
 halos are excluded and tuples are serialized with x varying fastest. Geometry
 uses the fields' actual global origin, spacing and owned extents.
 
-Field Data records `potential_time`, `E_time`, `B_time`, `dt`, `step` and
+Field Data records `series_time`, `E_raw_time`, `B_raw_time`, `dt`, `step` and
 `normalization`. Code 1 denotes the dimensionless convention above, with no SI
 scale assigned. Code 0 denotes SI output: geometry in metres, times in seconds,
 E in volts per metre and B in tesla. ASCII doubles use round-trip precision and
-the classic locale.
+the classic locale. The series time is the potential time in this application.
+Array times and component positions are derived from the solver's `LevelContract`,
+with the zero scalar potential declared explicitly for its R1 reconstruction.
 These choices follow [VTK XML formats](https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html),
 [VTK time metadata](https://docs.vtk.org/en/latest/design_documents/IOXMLTimeInFieldData.html)
 and [ParaView temporal series](https://docs.paraview.org/en/latest/UsersGuide/dataIngestion.html#handling-temporal-file-series).
@@ -234,7 +254,8 @@ the test target explicitly enables them.
 
 The CLI test includes a one-step run of `chdr-vacuum-wave`. The propagation test runs coarse serial,
 fine serial and coarse MPI2 through a full period, checking every CSV row with
-an independent scalar recurrence. The CLI test covers bounded/invalid arguments.
+an independent scalar recurrence. The CLI test covers YAML selection, invalid run
+settings and IPPL's own options.
 Python3 and an MPI launcher are needed for these integration checks. Actual-reader
 tests additionally need `pvpython`; CMake discovers it or accepts
 `-DCHDR_VACUUM_PVPYTHON=/path/to/pvpython`. `chdr-vacuum-wave` itself does not link VTK
@@ -264,8 +285,17 @@ references and numerical assumptions.
 
 ## Writer extensions
 
-`FieldOutput` retains ASCII output by default; its optional `binary` constructor
-argument selects appended Float64 vectors with UInt64 byte counts. When the caller
-supplies component offsets, `component_offsets` records E then B locations in cell
-units; absent metadata makes no claim about staggering. `writeMaterial` also writes
-the immutable cell array `epsilon_r` once as `material.pvti`.
+`FieldOutput` accepts a collection of named vector fields and the solver's
+`LevelContract`. Each array has its own time, conversion factor and component
+positions. For this application, `E_raw_component_offsets` and
+`B_raw_component_offsets` each contain three Cartesian displacement vectors,
+in mesh-spacing units relative to a cell centre. The vacuum case is collocated,
+so these displacements are zero.
+
+The writer retains ASCII output by default; its optional `binary` constructor
+argument selects appended Float64 vectors with UInt64 byte counts.
+With binary output, the optional `singlePrecision` argument stores the vectors as Float32,
+which halves the size of a frame and is meant for visualization.
+The caller selects the filename basename; this application retains `wave`.
+The separate `writeMaterial` operation writes the immutable cell array
+`epsilon_r` once as `material.pvti`; field-position metadata does not depend on it.

@@ -145,6 +145,13 @@ optional `contents: true` enables an outline. Generated manual and legacy chapte
 PDFs are ignored by explicit paths in `.gitignore`, so PDF figures remain
 trackable.
 
+The chapter "Experiment definitions"
+([experiments/experimentDefinitions.typ](experiments/experimentDefinitions.typ))
+includes the experiment specifications from their experiment directories.
+Each specification starts with its own level-one heading,
+and the chapter shifts all its headings by one level with `#set heading(offset: 1)`.
+A specification cites the manual's bibliography and does not compile on its own.
+
 `doxygen Doxyfile` in this directory writes the HTML reference of `core/`,
 `opt-in/`, `apps/` and `testing/`, with this file and the READMEs as pages, to
 `docs/html/index.html`. It needs Doxygen, Graphviz, and LaTeX with Ghostscript

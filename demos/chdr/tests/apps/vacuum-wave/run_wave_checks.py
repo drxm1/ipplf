@@ -3,7 +3,7 @@
 # @brief CTest entry chdr.vacuum.propagation: three full-period runs of chdr-vacuum-wave
 # and the checks of their CSV output.
 # @details The runs are coarse on one rank (8 by 8 by 64 cells, 128 steps), fine on one
-# rank (16 by 16 by 128 cells, 256 steps) and coarse on two ranks, each with --output and
+# rank (16 by 16 by 128 cells, 256 steps) and coarse on two ranks, each with YAML field output and
 # limited to 120 s. wave_checks.compare_csv_runs() checks every CSV row against the
 # independent scalar recurrence, the continuum errors and their refinement ratio, and the
 # two-rank CSV against the one-rank CSV within 1e-11. The source hashes before and after
@@ -49,9 +49,20 @@ def fingerprint(binary):
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
 
 
-def command(args, case, output):
-    extra = ['--fine'] if case == 'fine-serial' else []
-    base = [str(args.binary)] + extra + ['--output', str(output)]
+def write_input(path, case='coarse', steps=None, output=None):
+    """Write the benchmark's common YAML keys, leaving omitted settings at their defaults."""
+    document = (f'schema_version: 1\ncase: {json.dumps(case)}\n'
+                'units: {system: normalized}\n')
+    if steps is not None:
+        document += f'run: {{steps: {json.dumps(steps)}}}\n'
+    if output is not None:
+        document += f'output: {{directory: {json.dumps(str(output))}}}\n'
+    path.write_text(document)
+    return ['--input', str(path)]
+
+
+def command(args, case, input_arguments):
+    base = [str(args.binary)] + input_arguments
     if case != 'coarse-mpi2':
         return base
     return ([args.mpiexec, args.numproc_flag, '2'] + args.mpi_before
@@ -80,7 +91,9 @@ def invoke(argv, cwd, environment, out, err, stdin=None):
 def run_case(args, directory, case):
     output, csv = directory / case, directory / (case + '.csv')
     stderr = directory / (case + '.stderr.log')
-    argv = command(args, case, output)
+    input_arguments = write_input(directory / (case + '.yaml'),
+                                  case='fine' if case == 'fine-serial' else 'coarse', output=output)
+    argv = command(args, case, input_arguments)
     environment = os.environ.copy()
     environment.update(OMP_NUM_THREADS='1', OMP_PROC_BIND='false')
     with csv.open('w') as out, stderr.open('w') as err:

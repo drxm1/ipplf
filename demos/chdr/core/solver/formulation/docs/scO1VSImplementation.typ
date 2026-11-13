@@ -2,13 +2,13 @@
 
 #import "../../../../docs/manual/preamble.typ": *
 
-== The O1-VS implementation
-This section describes the implemented option O1 (Chew's gauge) on the virtually staggered (staggered spatial convention, see TODO) spatial convention and the R2 time-convention (see TODO).
+== The O1-VS implementation <sec-O1VS-implementation>
+This section describes the implemented option O1 (Chew's gauge) on the virtually staggered (staggered spatial convention, see @sec-spatial-placement) spatial convention and the R2 time-convention (see @sec-time-placement).
 
 The following calculation concerns the interior stencil on a uniform Cartesian mesh.
 `O1VSUpdate::advance` excludes the outermost layers owned by the Mur conditions because their boundary updates are separately handled.
 
-=== Spatial locations and difference operators
+=== Spatial locations and difference operators <sec-O1VS-operators>
 
 We use the spatial indices defined in @sec-spatial-placement.
 Here we specify the locations and differences needed for the O1-VS equations.
@@ -117,9 +117,11 @@ Chew's interface condition requires continuity of the normal product $epsilon A_
 
 O1-VS uses the same $epsilon_d$ in this product, in the scalar flux,
 and as the coefficient multiplying the vector potential's second time derivative.
-The calculation above establishes the harmonic coefficient for the scalar flux.
-Justifying its shared use in the vector update still requires showing how the two discrete potential equations remain
-compatible with the discrete gauge and charge continuity (TODO).
+The calculation above establishes the harmonic coefficient for the scalar flux only.
+
+*Open point:* the shared use of $epsilon_d$ in the vector update is not yet justified.
+This requires showing that the two discrete potential equations remain compatible with the discrete gauge and with charge continuity.
+This derivation has not been done.
 
 === Spatial discretization
 
@@ -137,14 +139,15 @@ Taking its backward divergence gives the centre quantity
 $sum_d D_d^- (epsilon_d D_d^+ phi)$, which represents
 $div (epsilon grad phi)$ in @eq-Chew-scalar. Thus
 $
-  chi partial_t^2 phi
-  = sum_d D_d^- (epsilon_d D_d^+ phi) + rho.
+  chi_bold(i) partial_t^2 phi_bold(i)
+  = sum_d (D_d^- (epsilon_d D_d^+ phi))_bold(i) + rho_bold(i).
 $
 To relate this to the existing Standard update, write $epsilon_d = 1 +
 (epsilon_d - 1)$ inside the flux. Linearity and the composition above give
 $
-  sum_d D_d^- (epsilon_d D_d^+ phi) & = L_vb(h)^"Standard" phi
-                                      + sum_d D_d^- ((epsilon_d - 1) D_d^+ phi).
+  sum_d (D_d^- (epsilon_d D_d^+ phi))_bold(i)
+  & = (L_vb(h)^"Standard" phi)_bold(i)
+    + sum_d (D_d^- ((epsilon_d - 1) D_d^+ phi))_bold(i).
 $ <eq-O1VS-scalar-flux-split>
 The last sum is the correction evaluated by
 `O1VSOperator::scalarCorrection`.
@@ -155,8 +158,8 @@ We now discretize the continuous correction defined in @eq-Chew-material-correct
 obtained from @chew2014generalizedgauge[Eq. (17)].
 We define the two discrete divergences
 $
-  gamma & = sum_q D_q^- A_q #<eq-O1VS-gamma> \
-      g & = sum_q D_q^- (epsilon_q A_q). #<eq-O1VS-g>
+  gamma_bold(i) & = sum_q (D_q^- A_q)_bold(i) #<eq-O1VS-gamma> \
+      g_bold(i) & = sum_q (D_q^- (epsilon_q A_q))_bold(i). #<eq-O1VS-g>
 $
 
 #[
@@ -195,7 +198,9 @@ $
 Both $gamma$ and $g/chi$ are centre scalars, so their forward differences return to the positive faces.
 Subtracting the fourth row of the table from the fifth gives the discrete correction
 $
-  (T_h A)_d = epsilon_d D_d^+ (g / chi) - D_d^+ gamma.
+  (T_h A)_(d,bold(i)+1/2 bold(e)_d)
+  = epsilon_(d,bold(i)+1/2 bold(e)_d) (D_d^+ (g / chi))_(bold(i)+1/2 bold(e)_d)
+  - (D_d^+ gamma)_(bold(i)+1/2 bold(e)_d).
 $ <eq-O1VS-ThAd>
 Note that $chi$ is used at the centres
 inside the difference, whereas the factor $epsilon_d$ is at the output face.
@@ -212,28 +217,37 @@ $bold(i)$. The result is assigned to that centre.
 Thus the vector equation, with space discretized but time still continuous,
 is
 $
-  epsilon_d partial_t^2 A_d
-  = L_vb(h)^"Standard" A_d + (T_h A)_d + J_d.
+  epsilon_(d,bold(i)+1/2 bold(e)_d) partial_t^2 A_(d,bold(i)+1/2 bold(e)_d)
+  = (L_vb(h)^"Standard" A_d)_(bold(i)+1/2 bold(e)_d)
+  + (T_h A)_(d,bold(i)+1/2 bold(e)_d)
+  + J_(d,bold(i)+1/2 bold(e)_d).
 $
 `O1VSOperator::curlCorrection` returns the negative of our material correction.
 In the code's notation, $C_h^"code" = -T_h$. `O1VSUpdate::advance` subtracts that result.
 The manual uses $T$ and $T_h$ with the same sign in the continuous and discrete equations.
-`O1VSOperator::inverseMass` (TODO:unfortunateNaming?) uses $1/epsilon_d$ in the vector update.
+`O1VSOperator::inverseTimeDerivativeCoefficient` returns $1/epsilon_d$ for the vector update and $1/chi$ for the scalar update.
 
 === Time discretization and implemented update
-The following update equations are used when TODO:CodeOfExactSolverConfiguration is selected. They assume TODO.
-Here the upper index on $vb(A)$ and on $phi$ denotes the actual time level TODO:(In contradiction to the notation I used in other sections?, I should standardize the notation), e.g. an on $phi$ the upper index $n + 3/2$ denotes that after the step $n$, the new stored $phi$ value is at $t_(n + 3/2)$.
-Spatial indices are suppressed in these operator expressions.
-The vector update is evaluated at $bold(i) + 1/2 bold(e)_d$, and the scalar update at $bold(i)$.
+The following update equations are used when `MaterialFormulation::O1VS` is selected together with `Stencil::Standard`, `SpatialDiscretization::Staggered` and `EBReconstructionConvention::R2`.
+`validateMaterialUpdate` rejects every other combination with `O1VS`.
+They assume a finite $epsilon >= 1$ in every cell and $alpha = 1$, so that $chi = epsilon^2$.
+The code accepts $alpha > 1$ only when every direction is periodic, and then uses $chi = alpha epsilon^2$.
+The superscripts are the actual time levels defined in @sec-time-placement, and the subscripts are the mesh locations defined in @sec-spatial-placement.
+The solve that advances the vector potential from $t_n$ to $t_(n+1)$ advances the scalar potential from $t_(n+1/2)$ to $t_(n+3/2)$.
+The vector update is evaluated at the face $bold(i) + 1/2 bold(e)_d$, and the scalar update at the centre $bold(i)$.
 The second equality in the scalar update uses @eq-O1VS-scalar-flux-split.
 $
-  A_d^(n+1) &= 2 A_d^n - A_d^(n-1)
-  + h_t^2/epsilon_d [L_vb(h)^"Standard" A_d^n + (T_h A^n)_d + J_d^n]\
-  phi^(n+3/2) &= 2 phi^(n+1/2) - phi^(n-1/2) + h_t^2/chi [ sum_d D_d^- (epsilon_d D_d^+ phi^(n+1/2)) + rho^(n+1/2) ] \
-  & display(
-    = 2 phi^(n+1/2) - phi^(n-1/2)
-    + h_t^2/chi [ L_vb(h)^"Standard" phi^(n+1/2)
-      + sum_d D_d^- ((epsilon_d - 1) D_d^+ phi^(n+1/2))
-      + rho^(n+1/2) ].
-  ) #<equate:revoke>
+  A_(d,bold(i)+1/2 bold(e)_d)^(n+1)
+  &= 2 A_(d,bold(i)+1/2 bold(e)_d)^n - A_(d,bold(i)+1/2 bold(e)_d)^(n-1) #<equate:revoke> \
+  &quad + h_t^2/epsilon_(d,bold(i)+1/2 bold(e)_d)
+  [(L_vb(h)^"Standard" A_d^n)_(bold(i)+1/2 bold(e)_d)
+    + (T_h A^n)_(d,bold(i)+1/2 bold(e)_d)
+    + J_(d,bold(i)+1/2 bold(e)_d)^n], \
+  phi_bold(i)^(n+3/2)
+  &= 2 phi_bold(i)^(n+1/2) - phi_bold(i)^(n-1/2)
+  + h_t^2/chi_bold(i) [ sum_d (D_d^- (epsilon_d D_d^+ phi^(n+1/2)))_bold(i) + rho_bold(i)^(n+1/2) ] \
+  &= 2 phi_bold(i)^(n+1/2) - phi_bold(i)^(n-1/2) #<equate:revoke> \
+  &quad + h_t^2/chi_bold(i) [ (L_vb(h)^"Standard" phi^(n+1/2))_bold(i)
+    + sum_d (D_d^- ((epsilon_d - 1) D_d^+ phi^(n+1/2)))_bold(i)
+    + rho_bold(i)^(n+1/2) ]. #<equate:revoke>
 $

@@ -51,9 +51,15 @@ namespace chdr::solver {
         KOKKOS_INLINE_FUNCTION double gamma(int i, int j, int k) const {
             return divergence(i, j, k, false);
         }
-        /// Component zero uses \f$\chi^{-1}\f$; vector component \f$d+1\f$ uses
-        /// \f$\varepsilon_d^{-1}\f$.
-        KOKKOS_INLINE_FUNCTION double inverseMass(unsigned c, int i, int j, int k) const {
+        /** @brief Return the reciprocal of the coefficient of the second time derivative.
+         * @details In Chew's equations this coefficient is \f$\chi\f$ for the scalar
+         * potential and \f$\varepsilon\f$ for the vector potential
+         * [chew2014generalizedgauge, Eqs. (16)--(17)]. Component zero therefore returns
+         * \f$\chi^{-1}\f$ at the cell centre, and vector component \f$d+1\f$ returns
+         * \f$\varepsilon_d^{-1}\f$ at the positive \f$d\f$-face.
+         */
+        KOKKOS_INLINE_FUNCTION double inverseTimeDerivativeCoefficient(unsigned c, int i, int j,
+                                                                       int k) const {
             return c == 0 ? inverseAlpha_m * inverseSquare_m(i, j, k) : 1 / face_m[c - 1](i, j, k);
         }
         /** @brief Evaluate \f$(C_h A)_d=D_d^+\gamma-\varepsilon_dD_d^+(g/\chi)\f$.
@@ -65,8 +71,9 @@ namespace chdr::solver {
             ++p[d];
             return (gamma(p[0], p[1], p[2]) - gamma(i, j, k)
                     - face_m[d](i, j, k)
-                          * (g(p[0], p[1], p[2]) * inverseMass(0, p[0], p[1], p[2])
-                             - g(i, j, k) * inverseMass(0, i, j, k)))
+                          * (g(p[0], p[1], p[2])
+                                 * inverseTimeDerivativeCoefficient(0, p[0], p[1], p[2])
+                             - g(i, j, k) * inverseTimeDerivativeCoefficient(0, i, j, k)))
                    / spacing_m[d];
         }
         /** @brief Flux correction \f$D_\Phi\phi=\sum_dD_d^-[(\varepsilon_d-1)D_d^+\phi]\f$.

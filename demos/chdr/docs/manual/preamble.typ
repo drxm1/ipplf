@@ -30,9 +30,13 @@
 #let manual-layout(body, title: "ChDR Manual") = {
   set document(title: title)
   set page(
-    width: 210mm,
-    height: auto,
+    paper: "a4",
     margin: (x: 24mm, y: 24mm),
+    footer: context align(center, text(
+      size: 9pt,
+      fill: luma(45%),
+      counter(page).display("1"),
+    )),
   )
   manual-typography(body)
 }

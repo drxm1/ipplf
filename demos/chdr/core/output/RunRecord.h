@@ -24,7 +24,8 @@ namespace chdr::output {
 
     namespace run_record_detail {
         /// Store common box settings without assigning physical units to normalized values.
-        void geometryRecord(conduit_cpp::Node node, const simulation::RunBox& box);
+        void geometryRecord(conduit_cpp::Node node,
+                            const simulation::ChdrCartesianGridSettings& box);
         /// Give the actual temporal reconstruction a stable, readable record label.
         const char* reconstructionName(EBReconstructionConvention convention);
 
@@ -51,7 +52,8 @@ namespace chdr::output {
      * This function performs no MPI operation and is called once on each rank.
      */
     template <class Solver>
-    RunRecordDescription describeRun(const std::string& application, const simulation::RunBox& box,
+    RunRecordDescription describeRun(const std::string& application,
+                                     const simulation::ChdrCartesianGridSettings& box,
                                      const Solver& solver, int steps,
                                      const std::string& caseMetadata = "") {
         RunRecordDescription result;
@@ -88,6 +90,6 @@ namespace chdr::output {
      * settings. Rank-zero filesystem failures are broadcast before any caller returns.
      * Source/build definitions are injected by CMake; absent definitions read "unrecorded".
      */
-    void writeRunRecord(const std::string& directory, const input::RunInput& input,
+    void writeRunRecord(const std::string& directory, const input::ChdrYamlRunInput& input,
                         const RunRecordDescription& description, MPI_Comm communicator);
 }  // namespace chdr::output

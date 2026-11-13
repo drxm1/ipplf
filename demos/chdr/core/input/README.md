@@ -1,12 +1,14 @@
 # Common experiment input and run records
 
-The field applications retain their executable names. Each accepts `--input FILE`
-for the same strict YAML schema. Historical command-line arguments are translated
-into the same `RunInput` structure before setup and execution. YAML input cannot
-be mixed with case or output overrides on the command line.
+The field applications require `--input FILE` and use the same strict YAML schema.
+Case selection, run length, output and measurement settings belong in that file.
+Additional application arguments are rejected. IPPL's own runtime options are
+processed before the YAML selector.
 
-`Application.h` handles this selection, IPPL initialization/finalization and fatal
-error reporting. `ChDRSimulationManager` owns and advances the simulation. The
+`Application.h` declares `runApplication(argc, argv, execute)`;
+`Application.cpp` handles input selection, IPPL initialization/finalization and fatal
+error reporting. The supplied function has signature `void(const ChdrYamlRunInput&)`.
+`ChDRSimulationManager` owns and advances the simulation. The
 application supplies its material, initial data, measurements and interpretation
 of their results. Measurements use the manager's existing callback; a shared
 `ObservationSchedule` defines when each measurement is called.
@@ -142,8 +144,9 @@ Source identity is refreshed at each build; a failed Git query is labelled
 `unrecorded`. It is not a hash of every source or output file. `status: completed` means the
 application returned successfully; it is not a physics-accuracy claim.
 
-To connect an existing case, translate its arguments to `RunInput`, validate its
-supported names, resolve its duration after selecting the actual time step, and
+To connect a case, supply an execution function taking `const ChdrYamlRunInput&` to
+`runApplication`. Validate the supported names in that function,
+resolve the duration after selecting the actual time step, and
 attach its existing measurements to the manager callback. Call each measurement
 only when its resolved schedule selects the state, finalize its output, then
 record the effective settings. Core code does not depend on experiment-specific

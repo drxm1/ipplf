@@ -120,10 +120,11 @@ passes \f$nv\f$ to Mur, so that
 \f$(nv)\Delta t_{\mathrm{update}}=v\Delta t\f$ (deduction).
 Without homogeneous timestep rescaling, the conversion factor is one.
 
-`MurSpeed::matched()` instead passes exactly one to the Mur coefficient
-constructors, equal to the propagation speed in the reused potential-update
-equations. This corresponds to speed \f$1/n\f$ in the time coordinate of
-`getDt()`. The API name does not assert perfect absorption. Pass the policy
+`MurSpeed::matched()` passes one to the Mur coefficient constructors.
+This matches the unit-speed kernel used by `Homogeneous`, corresponding to
+speed \f$1/n\f$ in the time coordinate of `getDt()`. With `O1VS` in a homogeneous
+dielectric, use `MurSpeed::physical(1/n)` to match the physical-time update.
+Pass the policy
 after the spatial reading, or after the owner and formulation parameters for
 a material solver. Material metadata and owner identity are validated before
 reading permittivity; conversion and boundary validation finish before base
@@ -134,12 +135,11 @@ the potential update; the library does not apply the conversion above. The
 speed passed to each Mur face must be finite, positive and below \f$\sqrt{2}\f$.
 This continuum guard is not a discrete stability proof
 [trefethen1986OneWayWellPosed, Theorem 2, p. 424]. If Mur is selected on two or
-three axes, every selected speed must be exactly one: the retained edge/corner
-updates use the unit-interior-speed compatibility equations
-[bamberger1987SecondOrderCorner, section II, Eqs. (2.10)–(2.11)]. With Mur on
-only one axis, its two opposing faces do not intersect, and direct library
-callers may supply separate validated speeds. A Mur–periodic intersection does
-not impose the unit-speed restriction.
+three axes, all selected faces must use one common speed. The edge and corner
+updates use it in the compatibility equations
+[bamberger1987SecondOrderCorner, section II, Eqs. (2.10)–(2.11)]. The caller
+matches it to the bulk speed. With Mur on one axis, its opposing faces may use
+separate validated speeds. Entries for periodic faces are ignored.
 
 Ghost cells are extra storage around each rank's owned subdomain. `fillHalo()`
 supplies inter-rank ghosts and periodic-wrap ghosts. Separate boundary helpers

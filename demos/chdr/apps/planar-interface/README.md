@@ -7,19 +7,15 @@ along x, in a box that is periodic on every axis.
 
 ```sh
 OMP_NUM_THREADS=1 planar-interface --input half-space.yaml
-OMP_NUM_THREADS=1 planar-interface plane
-OMP_NUM_THREADS=1 planar-interface half-space --output periodic-half-space
-OMP_NUM_THREADS=1 planar-interface slab --output periodic-slab
-OMP_NUM_THREADS=1 planar-interface brewster-te --output periodic-brewster-te
-OMP_NUM_THREADS=1 planar-interface brewster-tm --output periodic-brewster-tm
 python3 ../interface-movies/render_movie.py periodic-half-space
-python3 ../interface-movies/render_movie.py periodic-brewster-tm --field B_raw
 ```
 
-`--input FILE` uses the [common YAML schema](../../core/input/README.md).
+The program requires `--input FILE`, using the
+[common YAML schema](../../core/input/README.md).
 [half-space.yaml](half-space.yaml) selects the existing full packet case.
-The historical commands remain available and use the same setup and execution
-path. Do not combine them with `--input`.
+To run another packet case, copy that file and change `case` and
+`output.directory`. The packet case names are `half-space`, `slab`, `brewster-te`
+and `brewster-tm`. For TM output, pass `--field B_raw` to the rendering script.
 
 The packet cases accept `parameters: {smoke: true}`, an optional `run.steps`
 or `run.duration`, and the observations `fields` and `diagnostics`. Both
@@ -31,7 +27,7 @@ Output directories must be new or empty. A successful recorded run includes
 `run.json` with the supplied input, resolved schedules and actual solver settings.
 Explicitly enabled packet observations require `output.directory`; disabled
 observations may be declared without it. Omitting both output and observations
-retains the historical packet command's execution without saved files.
+runs the packet without saving files.
 
 For SI output, set `units.system: si` and provide `length_m` and
 `charge_density_C_m3` as described in the common schema. The presets retain
@@ -46,9 +42,17 @@ The `plane` mode is the exact-lattice measurement configuration: a quasi
 one-dimensional box, an exact lattice plane pulse at normal incidence from
 vacuum, and two Fourier probes. It prints the complex reflection and
 transmission amplitudes, their Fresnel and exact lattice references, and the
-energy drift to standard output. The historical `plane` command writes no files.
-YAML with `case: plane` and `output.directory` also saves these measured complex
-amplitudes in `spectra.csv` and writes `run.json`. Reflection and transmission
+energy drift to standard output. This minimal input selects the measurement
+without saved files:
+
+```yaml
+schema_version: 1
+case: plane
+units: {system: normalized}
+```
+
+Adding `output.directory` also saves these measured complex amplitudes in
+`spectra.csv` and writes `run.json`. Reflection and transmission
 amplitudes remain dimensionless; the frequency column uses inverse code time or
 rad/s according to the selected units. The material solver uses
 harmonic face permittivities and the generalized-gauge potential equations
@@ -64,15 +68,16 @@ case does not produce field frames.
 ## Packet cases
 
 The packet cases use the x-z plane with y out of plane and keep periodic
-boundaries on every axis. Full meshes are 512 by 2 by 512; `--smoke` selects
-32 by 2 by 32 and four steps. The packet starts at z=256 for the normal cases
+boundaries on every axis. Full meshes are 512 by 2 by 512;
+`parameters: {smoke: true}` selects 32 by 2 by 32 and four steps.
+The packet starts at z=256 for the normal cases
 and z=128 for the Brewster cases. Normal cases run 560 steps and Brewster cases
 1,000, with output every ten steps.
 
 The material occupies x from zero to 230 in the half-space cases, or from 156
 to 230 in the slab. Its second interface lies at the periodic wrap. The
 translating Gaussian packet is approximate and intended for qualitative field
-pictures. With `--output`, a case writes `wave.pvti.series`, `material.pvti`
+pictures. With `output.directory`, a case writes `wave.pvti.series`, `material.pvti`
 and `energy.csv` in the format described in the
 [interface-movies README](../interface-movies/README.md), whose `render_movie.py`
 renders them.

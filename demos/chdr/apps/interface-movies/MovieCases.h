@@ -21,7 +21,7 @@ namespace chdr::apps::interfaceMovies {
     /// One movie input: z horizontal, x vertical, and two periodic y cells.
     struct MovieCase {
         std::string name_m;
-        simulation::RunBox box_m;
+        simulation::ChdrCartesianGridSettings box_m;
         material::RectangleXZ region_m;
         AnnulusStart start_m;
         double epsilon_m = 2.13;

@@ -7,8 +7,12 @@
  * directly, planar-interface and interface-movies through opt-in/output/FieldRunOutput.h.
  * The fixture has 4 by 3 by 6 cells, origin (-2, 3, 5) and spacing (0.5, 1.25, 2); on two
  * ranks each rank owns 3 z layers. Every halo cell holds the sentinel -987654321.
- * Under a comma-decimal global locale, the case "valid" writes the frames of steps 0, 1
- * and 3 (times 0, 0.125, 0.375). The failure cases "piece", "wrapper", "series" and
+ * Under a comma-decimal global locale, the case "valid" writes three vector arrays at
+ * steps 0, 1 and 3 (series times 0, 0.125, 0.375). R2 supplies staggered positions and
+ * separate electric/averaged-magnetic and raw-magnetic sample times. The synthetic
+ * averaged-magnetic values have an independent offset and output scale to distinguish
+ * all three arrays. Serial readback exercises ASCII; two-rank readback exercises binary.
+ * The failure cases "piece", "wrapper", "series" and
  * "nonfinite" write frame 0 and then make frame 1 fail on one rank; every rank must catch
  * std::runtime_error. read_output_fixture.py reads the files.
  *
@@ -20,8 +24,7 @@
 
 #include "core/output/FieldOutput.h"
 
-using Vector = Kokkos::Array<double, 3>;
-using View   = Kokkos::View<Vector***, Kokkos::LayoutLeft>;
+using Vector = chdr::EMFieldsType::value_type;
 
 /** @brief Test locale independent of the host's installed locale catalogue. */
 struct CommaPunctuation : std::numpunct<char> {
@@ -37,95 +40,102 @@ void useCommaLocale() {
         throw std::runtime_error("Comma-decimal locale probe failed");
 }
 
-/** @brief Minimal IPPL-shaped index API; fixture ownership is specified independently. */
-struct Range {
-    int begin_m, end_m;
-    int first() const { return begin_m; }
-    int last() const { return end_m - 1; }
-    std::size_t length() const { return static_cast<std::size_t>(end_m - begin_m); }
-};
+/** @brief Own real IPPL storage at a stable address, split only in the z direction.
+ * @details Synthetic values and expected global indices remain independent of the writer.
+ * No solver or boundary exchange is used; all halo entries remain forbidden sentinels.
+ */
+struct FixtureFields {
+    ippl::NDIndex<3> domain_m{ippl::Index(4), ippl::Index(3), ippl::Index(6)};
+    Mesh_t<3> mesh_m{domain_m, Vector(0.5, 1.25, 2.0), Vector(-2.0, 3.0, 5.0)};
+    ippl::FieldLayout<3> layout_m{MPI_COMM_WORLD, domain_m, {false, false, true}, false};
+    chdr::EMFieldsType electric_m, rawMagnetic_m, averagedMagnetic_m;
 
-/** @brief Minimal IPPL-shaped layout API for a full-x/y, serial or two-z-piece grid. */
-struct Layout {
-    std::array<Range, 3> global_m{{{0, 4}, {0, 3}, {0, 6}}};
-    std::array<Range, 3> local_m;
-    const auto& getDomain() const { return global_m; }
-    const auto& getLocalNDIndex() const { return local_m; }
-};
-
-/** @brief Real Kokkos allocation with one sentinel halo cell per side. */
-struct FixtureField {
-    View view_m;
-    Layout layout_m;
-    FixtureField(const char* name, int rank, int ranks)
-        : view_m(name, 6, 5, 6 / ranks + 2)
-        , layout_m{{{{0, 4}, {0, 3}, {0, 6}}},
-                   {{{0, 4}, {0, 3}, {rank * (6 / ranks), (rank + 1) * (6 / ranks)}}}} {}
-    const auto& getView() const { return view_m; }
-    const auto& getLayout() const { return layout_m; }
-    int getNghost() const { return 1; }
+    FixtureFields() {
+        electric_m.initialize(mesh_m, layout_m);
+        rawMagnetic_m.initialize(mesh_m, layout_m);
+        averagedMagnetic_m.initialize(mesh_m, layout_m);
+    }
 };
 
 /** @brief Signed nextafter/pi values demand binary64 round trips, with a varying E offset. */
-Vector fixtureValue(int i, int j, int k, double time, bool electric) {
+Vector fixtureValue(int i, int j, int k, double time, unsigned channel) {
     constexpr double Pi            = Kokkos::numbers::pi;
     constexpr double InfinityValue = std::numeric_limits<double>::infinity();
-    if (electric)
+    if (channel == 0)
         return {std::nextafter(1.0 + i + 100.0 * time, InfinityValue),
                 std::nextafter(Pi * (10.0 + j), InfinityValue),
                 std::nextafter((100.0 + k) / Pi, 0.0)};
-    return {std::nextafter(-10.0 - 2.0 * i, -InfinityValue),
-            std::nextafter(-Pi * (100.0 + 3.0 * j), -InfinityValue),
-            std::nextafter((-1000.0 - 5.0 * k) / Pi, 0.0)};
+    Vector value{std::nextafter(-10.0 - 2.0 * i, -InfinityValue),
+                 std::nextafter(-Pi * (100.0 + 3.0 * j), -InfinityValue),
+                 std::nextafter((-1000.0 - 5.0 * k) / Pi, 0.0)};
+    if (channel == 2)
+        for (unsigned c = 0; c < 3; ++c)
+            value[c] += 0.25;
+    return value;
 }
 
-/** @brief Explicit synthetic array times deliberately do not equal a writer-derived offset. */
+/** @brief Supply only the series clock; native array times come from the declared contract. */
 chdr::output::FrameRecord fixtureFrame(int step) {
-    const double time     = step * 0.125;
-    const double infinity = std::numeric_limits<double>::infinity();
-    return {step, time, std::nextafter(time - 0.0625, -infinity),
-            std::nextafter(time + 0.03125, infinity), 0.125};
+    return {step, step * 0.125, 0.125};
 }
 
 /** @brief Fill every halo with a forbidden finite sentinel, then only owned cells. */
-void fillFixture(FixtureField& field, double time, bool electric) {
-    auto host       = Kokkos::create_mirror_view(field.view_m);
-    const int start = field.layout_m.local_m[2].first();
+void fillFixture(chdr::EMFieldsType& field, double time, unsigned channel) {
+    auto host       = Kokkos::create_mirror_view(field.getView());
+    const int start = field.getLayout().getLocalNDIndex()[2].first();
     for (std::size_t k = 0; k < host.extent(2); ++k)
         for (std::size_t j = 0; j < host.extent(1); ++j)
             for (std::size_t i = 0; i < host.extent(0); ++i) {
                 host(i, j, k) = {-987654321.0, -987654321.0, -987654321.0};
                 if (i > 0 && i + 1 < host.extent(0) && j > 0 && j + 1 < host.extent(1) && k > 0
                     && k + 1 < host.extent(2))
-                    host(i, j, k) = fixtureValue(i - 1, j - 1, start + k - 1, time, electric);
+                    host(i, j, k) = fixtureValue(i - 1, j - 1, start + k - 1, time, channel);
             }
-    Kokkos::deep_copy(field.view_m, host);
+    Kokkos::deep_copy(field.getView(), host);
 }
 
-/** @brief Fill E and B for one step (time step/8), write its frame and rewrite the series. */
-void writeFixtureFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b,
-                       int step) {
-    fillFixture(e, step * 0.125, true);
-    fillFixture(b, step * 0.125, false);
-    writer.writeFrame(e, b, fixtureFrame(step));
+/// Fill three independently distinguishable arrays without any Maxwell update.
+void fillFixture(FixtureFields& fields, int step) {
+    fillFixture(fields.electric_m, step * 0.125, 0);
+    fillFixture(fields.rawMagnetic_m, step * 0.125, 1);
+    fillFixture(fields.averagedMagnetic_m, step * 0.125, 2);
+}
+
+/// Bind the three arrays to native quantity labels and one nontrivial conversion factor.
+auto fixtureSnapshots(const FixtureFields& fields) {
+    using chdr::output::VectorFieldSnapshot;
+    return std::array{
+        VectorFieldSnapshot{"E", fields.electric_m, chdr::Quantity::Electric, 1.0},
+        VectorFieldSnapshot{"B_raw", fields.rawMagnetic_m, chdr::Quantity::RawMagnetic, 1.0},
+        VectorFieldSnapshot{"B_R2", fields.averagedMagnetic_m, chdr::Quantity::Magnetic, 0.5}};
+}
+
+/// Exercise native staggered R2 metadata without writing a material map first.
+void writeFixture(chdr::output::FieldOutput& writer, const FixtureFields& fields, int step) {
+    const chdr::LevelContract contract{chdr::EBReconstructionConvention::R2,
+                                       chdr::SpatialDiscretization::Staggered};
+    const auto snapshots = fixtureSnapshots(fields);
+    writer.writeFrame(fixtureFrame(step), contract, snapshots);
     writer.writeSeries();
 }
 
 /** @brief Three unequal steps 0, 1 and 3 (times 0, 0.125, 0.375), on the same writer path. */
-void successfulFrames(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b) {
-    for (const int step : {0, 1, 3})
-        writeFixtureFrame(writer, e, b, step);
+void successfulFrames(chdr::output::FieldOutput& writer, FixtureFields& fields) {
+    for (const int step : {0, 1, 3}) {
+        fillFixture(fields, step);
+        writeFixture(writer, fields, step);
+    }
 }
 
 /** @brief Prepare one failure: a NaN in one owned E value on the last rank ("nonfinite"),
  * or a directory that blocks the temporary file of the last rank's piece ("piece"), of
  * rank zero's PVTI wrapper ("wrapper") or of rank zero's series file ("series"). */
 void injectFailure(const std::string& mode, const std::filesystem::path& directory,
-                   FixtureField& electric, int rank, int ranks) {
+                   chdr::EMFieldsType& electric, int rank, int ranks) {
     if (mode == "nonfinite" && rank == ranks - 1) {
-        auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), electric.view_m);
+        auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), electric.getView());
         host(1, 1, 1)[0] = std::numeric_limits<double>::quiet_NaN();
-        Kokkos::deep_copy(electric.view_m, host);
+        Kokkos::deep_copy(electric.getView(), host);
     }
     if (mode == "piece" && rank == ranks - 1)
         std::filesystem::create_directory(directory
@@ -138,10 +148,9 @@ void injectFailure(const std::string& mode, const std::filesystem::path& directo
 }
 
 /** @brief Try to publish frame 1; return 1 if this rank catches std::runtime_error, else 0. */
-int rejectedFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b) {
+int rejectedFrame(chdr::output::FieldOutput& writer, const FixtureFields& fields) {
     try {
-        writer.writeFrame(e, b, fixtureFrame(1));
-        writer.writeSeries();
+        writeFixture(writer, fields, 1);
     } catch (const std::runtime_error&) {
         return 1;
     }
@@ -149,14 +158,14 @@ int rejectedFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureFie
 }
 
 /** @brief Establish one good frame, then require every rank to receive the injected failure. */
-void failureFrame(chdr::output::FieldOutput& writer, FixtureField& e, FixtureField& b,
+void failureFrame(chdr::output::FieldOutput& writer, FixtureFields& fields,
                   const std::filesystem::path& directory, const std::string& mode, int rank,
                   int ranks) {
-    writeFixtureFrame(writer, e, b, 0);
-    fillFixture(e, 0.125, true);
-    fillFixture(b, 0.125, false);
-    injectFailure(mode, directory, e, rank, ranks);
-    const int caught = rejectedFrame(writer, e, b);
+    fillFixture(fields, 0);
+    writeFixture(writer, fields, 0);
+    fillFixture(fields, 1);
+    injectFailure(mode, directory, fields.electric_m, rank, ranks);
+    const int caught = rejectedFrame(writer, fields);
     int total        = 0;
     MPI_Allreduce(&caught, &total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     if (total != ranks)
@@ -170,33 +179,33 @@ void runFixture(int argc, char** argv) {
     int rank = 0, ranks = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &ranks);
-    if (argc < 2 || (ranks != 1 && ranks != 2))
-        throw std::runtime_error("Use OUTPUT_DIR [piece|wrapper|series|nonfinite], 1/2 ranks");
+    if (argc != 4 || (ranks != 1 && ranks != 2))
+        throw std::runtime_error("Use OUTPUT_DIR MODE ascii|binary|binary32, with 1/2 ranks");
     useCommaLocale();
     if (rank == 0)
         std::cout << "PASS custom comma-decimal global locale\n";
     const chdr::output::OutputGeometry geometry{{4, 3, 6}, {-2, 3, 5}, {0.5, 1.25, 2}};
-    chdr::output::FieldOutput writer(argv[1], geometry, MPI_COMM_WORLD);
-    FixtureField e("fixture_E", rank, ranks), b("fixture_B", rank, ranks);
-    if (argc == 2)
-        successfulFrames(writer, e, b);
+    const std::string mode = argv[2], encoding = argv[3];
+    chdr::output::FieldOutput writer(argv[1], geometry, MPI_COMM_WORLD, "wave", encoding != "ascii",
+                                     {}, encoding == "binary32");
+    FixtureFields fields;
+    if (mode == "valid")
+        successfulFrames(writer, fields);
     else
-        failureFrame(writer, e, b, argv[1], argv[2], rank, ranks);
-    if (rank == 0 && argc == 2)
+        failureFrame(writer, fields, argv[1], mode, rank, ranks);
+    if (rank == 0 && mode == "valid")
         std::cout << "PASS wrote three sentinel frames on " << ranks << " rank(s)\n";
 }
 
-/** @brief MPI/Kokkos fixture lifetime; unexpected errors use collective abort policy. */
+/** @brief IPPL fixture lifetime; unexpected errors use collective abort policy. */
 int main(int argc, char** argv) {
-    MPI_Init(&argc, &argv);
-    Kokkos::initialize(argc, argv);
+    ippl::initialize(argc, argv);
     try {
         runFixture(argc, argv);
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    Kokkos::finalize();
-    MPI_Finalize();
+    ippl::finalize();
     return 0;
 }

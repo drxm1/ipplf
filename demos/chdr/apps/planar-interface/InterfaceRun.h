@@ -9,8 +9,8 @@ namespace chdr::apps::planarInterface {
     // TODO: This file doesn't really have a point anymore,
     // we could just use the actual names without these
     // using declarations.
-    using RunBox          = simulation::RunBox;
-    using SolverSettings  = simulation::SolverSettings;
+    using RunBox          = simulation::ChdrCartesianGridSettings;
+    using SolverSettings  = simulation::ChdrSolverSettings;
     using InterfaceRun    = simulation::ChDRSimulationManager<>;
     using InterfaceSolver = InterfaceRun::Solver;
 }  // namespace chdr::apps::planarInterface

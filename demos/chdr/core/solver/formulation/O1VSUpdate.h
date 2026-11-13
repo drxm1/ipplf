@@ -8,8 +8,9 @@
 
 namespace chdr::solver {
     /** @brief Add variable-material terms before the physical-time Standard step.
-     * @details For each component with inverse mass m, the effective source is
-     * \f$s=mJ+(m-1)L_c A-m C_hA\f$; for the scalar component the last term is
+     * @details For each component, let m be the reciprocal of the coefficient of its
+     * second time derivative (O1VSOperator::inverseTimeDerivativeCoefficient). The effective
+     * source is \f$s=mJ+(m-1)L_c A-m C_hA\f$; for the scalar component the last term is
      * \f$+mD_\Phi\Phi\f$. Substitution into the Standard recurrence gives Chew's
      * equations (16)--(18) [chew2014generalizedgauge], discretized by forward/backward
      * differences [ryu2016potentialfdtd, App. A]. The caller retains physical sources.
@@ -44,15 +45,15 @@ namespace chdr::solver {
                     if (!bounds.contains(i + first[0], j + first[1], k + first[2]))
                         return;
                     for (unsigned c = 0; c < 4; ++c) {
-                        const double mass = op.inverseMass(c, i, j, k);
+                        const double m = op.inverseTimeDerivativeCoefficient(c, i, j, k);
                         const double correction =
-                            (mass - 1) * laplacian(op, c, i, j, k)
-                            + mass
+                            (m - 1) * laplacian(op, c, i, j, k)
+                            + m
                                   * (c == 0 ? op.scalarCorrection(i, j, k)
                                             : -op.curlCorrection(c - 1, i, j, k));
-                        output(i, j, k)[c] = mass == 1 && correction == 0
+                        output(i, j, k)[c] = m == 1 && correction == 0
                                                  ? source(i, j, k)[c]
-                                                 : mass * source(i, j, k)[c] + correction;
+                                                 : m * source(i, j, k)[c] + correction;
                     }
                 });
             context.baseStep(context.dt(), effective_m);

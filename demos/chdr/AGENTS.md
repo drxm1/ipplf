@@ -32,6 +32,7 @@
 - Prefer functions of 20 lines or fewer; extract coherent helpers from longer routines. Do not sacrifice good code-comments or physical correctness to achieve under 20 LOC functions. Functions that call kokkos loops/reductions should be under 20 LOC if the kokkos reduction call's lambda function's lines are not counted, and any other function must be 20 LOC or less in almost any case.
 - Write READMEs and comments in precise scientific language and keep sentences well readable (in the spirit of ASD-STE100).
 - The pre-commit hook runs clang-format and cmake-format; keep every file clean under both.
+- Always respect the solver's LevelContract. Never create hardcoded redundant spatial or time offset implementations that assume a certain contract. Use the information of the constructed levelContract.
 
 ## Typst manual authorship
 

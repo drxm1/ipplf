@@ -5,6 +5,7 @@
 #include "Ippl.h"
 
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -20,6 +21,14 @@ namespace chdr::material {
     using CellIndex            = ippl::Vector<int, 3>;
     using Position             = ippl::Vector<double, 3>;
     using Policy               = Kokkos::MDRangePolicy<Kokkos::Rank<3>>;
+
+    using EpsilonrType = double;
+    /// Require const invocation with the material sampling arguments and an exact double result.
+    template <class T>
+    concept PermittivitySampler =
+        requires(const T& sample, const CellIndex& cellIdx, bool& marked) {
+            { sample(cellIdx, Position{}, marked) } -> std::same_as<EpsilonrType>;
+        };
 
     /** @brief Global statistics of the owned relative-permittivity samples in epsilon_m, excluding
      * ghosts.
@@ -243,8 +252,8 @@ namespace chdr::material {
          *
          * rasterize() fills `epsilon_m` and computes its statistics
          */
-        template <class Map>
-        MapStatistics rasterize(ScalarField& field, Map map) {
+        template <PermittivitySampler Sampler>
+        MapStatistics rasterize(ScalarField& field, Sampler samplePermittivity) {
             const auto coordinates = detail::coordinates(field.get_mesh(), field.getLayout());
             const auto view        = field.getView();
             std::uint64_t marked = 0, occupiedHash = 0, valueHash = 0, nonfinite = 0;
@@ -254,11 +263,12 @@ namespace chdr::material {
                 KOKKOS_LAMBDA(int i, int j, int k, std::uint64_t& count, std::uint64_t& mask,
                               std::uint64_t& values, std::uint64_t& bad, double& low,
                               double& high) {
-                    const auto global  = coordinates.global(i, j, k);
-                    bool inside        = false;
-                    const double value = map(global, coordinates.centre(global), inside);
-                    view(i, j, k)      = value;
-                    const auto hash    = detail::hash(coordinates.id(global));
+                    const auto global = coordinates.global(i, j, k);
+                    bool inside       = false;
+                    const double value =
+                        samplePermittivity(global, coordinates.centre(global), inside);
+                    view(i, j, k)   = value;
+                    const auto hash = detail::hash(coordinates.id(global));
                     if (inside) {
                         ++count;
                         mask += hash;
@@ -303,17 +313,17 @@ namespace chdr::material {
          * owner or any solver using its fields exists.
          * @param layout Distributed ownership and periodicity, with the same lifetime
          * as mesh. Every local axis must contain at least two owned cells.
-         * @param map Device-copyable double(CellIndex, Position, bool&) functor. It must
-         * return the same bits at the same coordinates and set its marked flag.
+         * @param samplePermittivity Device-copyable sampler satisfying PermittivitySampler.
+         * It must return the same bits at the same coordinates and set its marked flag.
          * @details One owned-cell device reduction computes all statistics; only
          * reduced scalars cross to the host. Verification accepts unchanged NaN bits.
          */
-        template <class Map>
-        MaterialOwner(Mesh& mesh, Layout& layout, const Map& map)
+        template <PermittivitySampler Sampler>
+        MaterialOwner(Mesh& mesh, Layout& layout, const Sampler& samplePermittivity)
             : epsilon_m(mesh, detail::checkedLayout(layout)) {
-            statistics_m = detail::rasterize(epsilon_m, map);
+            statistics_m = detail::rasterize(epsilon_m, samplePermittivity);
             detail::synchronize(epsilon_m);
-            verify(map);
+            verify(samplePermittivity);
         }
         MaterialOwner(const MaterialOwner&)            = delete;
         MaterialOwner& operator=(const MaterialOwner&) = delete;
@@ -423,17 +433,18 @@ namespace chdr::material {
          * One MPI sum makes every rank throw if any rank finds a mismatch.
          * @throws std::runtime_error If any allocated sample has unexpected bits.
          */
-        template <class Map>
-        void verify(Map map) const {
+        template <PermittivitySampler Sampler>
+        void verify(Sampler samplePermittivity) const {
             const auto coordinates = detail::coordinates(mesh(), layout());
             const auto view        = epsilon();
             std::uint64_t bad      = 0;
             Kokkos::parallel_reduce(
                 "Verify complete material", detail::allocationPolicy(epsilon_m),
                 KOKKOS_LAMBDA(int i, int j, int k, std::uint64_t& errors) {
-                    const auto source     = coordinates.source(coordinates.global(i, j, k));
-                    bool marked           = false;
-                    const double expected = map(source, coordinates.centre(source), marked);
+                    const auto source = coordinates.source(coordinates.global(i, j, k));
+                    bool marked       = false;
+                    const double expected =
+                        samplePermittivity(source, coordinates.centre(source), marked);
                     errors += Kokkos::bit_cast<std::uint64_t>(view(i, j, k))
                               != Kokkos::bit_cast<std::uint64_t>(expected);
                 },
