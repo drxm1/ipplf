@@ -3,14 +3,16 @@
 # core/output/FieldOutput.h, the writer of all three programs.
 # @details Case "valid" (argument: the number of pieces, 1 or 2): VTK reads each PVTI and
 # each piece, and ParaView reads the series. Every E/raw-B/R2-B component and metadata
-# value must equal the independent Python formula bit for bit. Only origin, spacing, cell
+# value must equal the independent Python formula bit for bit (for a single-precision run,
+# given as third argument "float", after rounding to binary32). Only origin, spacing, cell
 # centres and cell widths use a tolerance, 1e-14 relative and absolute. Each image must
 # hold exactly its owned cells (12 per z layer, no halo values), and the series must list
 # the times 0, 0.125 and 0.375. Failure cases ("piece", "wrapper", "series", "nonfinite"):
 # the series lists only frame 0, frame 0 is readable, and except for "series" no
 # wave-1.pvti exists.
 # CTest (through run_output_fixture.py): chdr.vacuum.output.serial,
-# chdr.vacuum.output.mpi2 and the four chdr.vacuum.output.failure entries.
+# chdr.vacuum.output.mpi2, chdr.vacuum.output.single and the four
+# chdr.vacuum.output.failure entries.
 """Read the independent 72-cell sentinel using installed VTK and ParaView readers.
 
 Expected physical coordinates/data come from the declared fixture, not the writer.
@@ -33,6 +35,8 @@ ORIGIN = (-2.0, 3.0, 5.0)
 SPACING = (0.5, 1.25, 2.0)
 TIMES = (0.0, 0.125, 0.375)
 STEPS = (0, 1, 3)
+# Stored type of the vector values: "double", or "float" for a single-precision run.
+PRECISION = sys.argv[3] if len(sys.argv) > 3 else "double"
 
 
 def close(actual, expected):
@@ -41,7 +45,13 @@ def close(actual, expected):
 
 
 def exact(actual, expected):
-    """Require equal binary64 representations after the actual VTK reader conversion."""
+    """Require equal binary64 representations after the actual VTK reader conversion.
+
+    For single-precision files the expected value is first rounded to binary32, which is
+    the conversion that the writer applies.
+    """
+    if PRECISION == "float":
+        expected = struct.unpack(">f", struct.pack(">f", expected))[0]
     assert math.isfinite(actual) and struct.pack(">d", actual) == struct.pack(">d", expected), (actual.hex(), float(expected).hex())
 
 
@@ -110,7 +120,7 @@ def check_cells(image, first_z, end_z, time):
     arrays = [image.GetCellData().GetArray(name) for name in ("E", "B_raw", "B_R2")]
     for array in arrays:
         assert array is not None and array.GetNumberOfComponents() == 3
-        assert array.GetDataTypeAsString() == "double"
+        assert array.GetDataTypeAsString() == PRECISION
         assert array.GetNumberOfTuples() == image.GetNumberOfCells()
     found = set()
     for cell in range(image.GetNumberOfCells()):

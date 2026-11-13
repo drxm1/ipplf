@@ -8,6 +8,7 @@ target_compile_options(test-chdr-vacuum-output
                        PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall;-Wextra;-Werror=sign-compare>)
 
 if(NOT Python3_Interpreter_FOUND)
+  chdr_vacuum_skip_test("chdr.vacuum.output.single" "Python3 interpreter unavailable" output reader)
   foreach(_case IN ITEMS serial mpi2 failure.piece failure.wrapper failure.series failure.nonfinite)
     chdr_vacuum_skip_test("chdr.vacuum.output.${_case}" "Python3 interpreter unavailable" output
                           reader)
@@ -15,13 +16,20 @@ if(NOT Python3_Interpreter_FOUND)
   return()
 endif()
 
+# The arguments after output_case are the fixture command. The optional keyword ENCODING selects the
+# stored value format; without it the launcher chooses by the rank count.
 function(chdr_add_output_test test_name ranks output_case)
+  cmake_parse_arguments(PARSE_ARGV 3 _output "" "ENCODING" "")
+  set(_encoding_arguments)
+  if(_output_ENCODING)
+    set(_encoding_arguments --encoding "${_output_ENCODING}")
+  endif()
   add_test(
     NAME "${test_name}"
     COMMAND
       "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/run_output_fixture.py" --reader
       "${CHDR_VACUUM_PVPYTHON}" --output-parent "${CHDR_VACUUM_TEST_OUTPUT_DIR}/writer" --ranks
-      "${ranks}" --case "${output_case}" -- ${ARGN})
+      "${ranks}" --case "${output_case}" ${_encoding_arguments} -- ${_output_UNPARSED_ARGUMENTS})
   set_tests_properties(
     "${test_name}"
     PROPERTIES LABELS
@@ -38,6 +46,9 @@ function(chdr_add_output_test test_name ranks output_case)
 endfunction()
 
 chdr_add_output_test(chdr.vacuum.output.serial 1 valid $<TARGET_FILE:test-chdr-vacuum-output>)
+# The same sentinel frames with 4-byte values: the reader must return them rounded to binary32.
+chdr_add_output_test(chdr.vacuum.output.single 1 valid ENCODING binary32
+                     $<TARGET_FILE:test-chdr-vacuum-output>)
 if(MPIEXEC_EXECUTABLE)
   set(_chdr_output_mpi "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" 2 ${MPIEXEC_PREFLAGS}
                        $<TARGET_FILE:test-chdr-vacuum-output> ${MPIEXEC_POSTFLAGS})

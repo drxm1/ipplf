@@ -394,24 +394,47 @@ namespace chdr::output {
             }
         }
 
-        /** @brief Append one Float64 vector block with its UInt64 byte count (VTK XML format).
-         * Logical x-fastest traversal excludes halos and preserves the ASCII tuple order.
+        /** @brief How one piece stores its vector values.
+         * @details Text, or raw IEEE values of 8 or 4 bytes in an appended block. The
+         * 4-byte form halves the file size and keeps about seven significant digits. It is
+         * meant for visualization; measurements read the solver fields, not these files.
          */
-        template <class View>
+        struct ValueEncoding {
+            bool binary_m = false, single_m = false;
+
+            /// VTK XML name of the stored floating-point type.
+            const char* typeName() const { return single_m ? "Float32" : "Float64"; }
+            /// Bytes of one stored component.
+            std::uint64_t valueBytes() const { return single_m ? sizeof(float) : sizeof(double); }
+        };
+
+        /** @brief Convert one scaled component to the stored type; reject nonfinite values.
+         * @details The check after the conversion also rejects a finite double that
+         * exceeds the range of a 4-byte value.
+         */
+        template <class Value>
+        Value storedValue(double value) {
+            const Value stored = static_cast<Value>(value);
+            if (!std::isfinite(value) || !std::isfinite(stored))
+                throw std::runtime_error("Nonfinite output field");
+            return stored;
+        }
+
+        /** @brief Append one vector block of type Value with its UInt64 byte count (VTK XML
+         * format). Logical x-fastest traversal excludes halos and preserves the ASCII tuple order.
+         */
+        template <class Value, class View>
         void binaryVectors(std::ostream& out, const View& view, const Extent& e, int ghost,
                            double scale = 1) {
-            std::vector<double> values;
+            std::vector<Value> values;
             values.reserve(3ULL * (e[1] - e[0]) * (e[3] - e[2]) * (e[5] - e[4]));
             for (int k = 0; k < e[5] - e[4]; ++k)
                 for (int j = 0; j < e[3] - e[2]; ++j)
                     for (int i = 0; i < e[1] - e[0]; ++i)
-                        for (int c = 0; c < 3; ++c) {
-                            const double value = scale * view(i + ghost, j + ghost, k + ghost)[c];
-                            if (!std::isfinite(value))
-                                throw std::runtime_error("Nonfinite output field");
-                            values.push_back(value);
-                        }
-            const std::uint64_t bytes = values.size() * sizeof(double);
+                        for (int c = 0; c < 3; ++c)
+                            values.push_back(storedValue<Value>(
+                                scale * view(i + ghost, j + ghost, k + ghost)[c]));
+            const std::uint64_t bytes = values.size() * sizeof(Value);
             out.write(reinterpret_cast<const char*>(&bytes), sizeof(bytes));
             out.write(reinterpret_cast<const char*>(values.data()), bytes);
         }
@@ -431,10 +454,10 @@ namespace chdr::output {
 
         /// Declare all vectors in the same order used by the appended binary blocks.
         inline void vectorDeclarations(std::ostream& out, const std::vector<VectorMetadata>& fields,
-                                       bool parallel, std::uint64_t stride = 0) {
+                                       bool parallel, const char* type, std::uint64_t stride = 0) {
             for (std::size_t i = 0; i < fields.size(); ++i) {
-                out << '<' << (parallel ? "PDataArray" : "DataArray") << " type=\"Float64\" Name=\""
-                    << fields[i].name_m << "\" NumberOfComponents=\"3\"";
+                out << '<' << (parallel ? "PDataArray" : "DataArray") << " type=\"" << type
+                    << "\" Name=\"" << fields[i].name_m << "\" NumberOfComponents=\"3\"";
                 if (!parallel)
                     out << " format=\"appended\" offset=\"" << i * stride << '"';
                 out << "/>\n";
@@ -443,39 +466,43 @@ namespace chdr::output {
 
         /// Mirror one field at a time; copies finish before host serialization reads the values.
         inline void writeVectors(std::ostream& out, const Extent& extent,
-                                 std::span<const VectorFieldSnapshot> fields, bool binary) {
+                                 std::span<const VectorFieldSnapshot> fields,
+                                 ValueEncoding encoding) {
             for (const auto& snapshot : fields) {
                 const auto& field = snapshot.field_m;
                 const auto host =
                     Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), field.getView());
-                if (binary)
-                    binaryVectors(out, host, extent, field.getNghost(), snapshot.valueScale_m);
+                const int ghost    = field.getNghost();
+                const double scale = snapshot.valueScale_m;
+                if (!encoding.binary_m)
+                    vectors(out, snapshot.name_m.c_str(), host, extent, ghost, scale);
+                else if (encoding.single_m)
+                    binaryVectors<float>(out, host, extent, ghost, scale);
                 else
-                    vectors(out, snapshot.name_m.c_str(), host, extent, field.getNghost(),
-                            snapshot.valueScale_m);
+                    binaryVectors<double>(out, host, extent, ghost, scale);
             }
         }
 
         /// Serialize one rank's owned vectors with a common mesh and per-array metadata.
         inline void piece(std::ostream& out, const OutputGeometry& geometry, const Extent& extent,
                           std::span<const VectorFieldSnapshot> fields, const FrameMetadata& frame,
-                          bool binary, OutputScales scales) {
+                          ValueEncoding encoding, OutputScales scales) {
             imageHeader(out, geometry, extent, false);
             metadata(out, frame, scales);
             out << "<Piece Extent=\"" << arrayText(extent) << "\"><CellData Vectors=\""
                 << fields.front().name_m << "\">\n";
-            if (binary) {
-                const std::uint64_t stride = 8
-                                             + 3ULL * (extent[1] - extent[0])
-                                                   * (extent[3] - extent[2])
-                                                   * (extent[5] - extent[4]) * sizeof(double);
-                vectorDeclarations(out, frame.vectors_m, false, stride);
+            if (encoding.binary_m) {
+                const std::uint64_t stride =
+                    8
+                    + 3ULL * (extent[1] - extent[0]) * (extent[3] - extent[2])
+                          * (extent[5] - extent[4]) * encoding.valueBytes();
+                vectorDeclarations(out, frame.vectors_m, false, encoding.typeName(), stride);
             } else
-                writeVectors(out, extent, fields, false);
+                writeVectors(out, extent, fields, encoding);
             out << "</CellData><PointData/></Piece>\n</ImageData>\n";
-            if (binary) {
+            if (encoding.binary_m) {
                 out << "<AppendedData encoding=\"raw\">_";
-                writeVectors(out, extent, fields, true);
+                writeVectors(out, extent, fields, encoding);
                 out << "</AppendedData>\n";
             }
             out << "</VTKFile>\n";
@@ -484,12 +511,13 @@ namespace chdr::output {
         /// Publish a parallel wrapper, including the serial one-piece case.
         inline void wrapper(std::ostream& out, const OutputGeometry& geometry,
                             const std::vector<Extent>& extents, const FrameMetadata& frame,
-                            const std::string& basename, OutputScales scales) {
+                            const std::string& basename, OutputScales scales,
+                            const char* valueType) {
             imageHeader(out, geometry, wholeExtent(geometry), true);
             metadata(out, frame, scales);
             out << "<PPointData/><PCellData Vectors=\"" << frame.vectors_m.front().name_m
                 << "\">\n";
-            vectorDeclarations(out, frame.vectors_m, true);
+            vectorDeclarations(out, frame.vectors_m, true, valueType);
             out << "</PCellData>\n";
             for (std::size_t rank = 0; rank < extents.size(); ++rank)
                 out << "<Piece Extent=\"" << arrayText(extents[rank]) << "\" Source=\""
@@ -561,14 +589,19 @@ namespace chdr::output {
      */
     class FieldOutput {
     public:
-        /** @brief Collectively prepare a fresh output directory; borrow the communicator. */
+        /** @brief Collectively prepare a fresh output directory; borrow the communicator.
+         * @param singlePrecision Store binary vector values as 4-byte instead of 8-byte IEEE
+         * numbers. This halves the size of a frame and keeps about seven significant digits,
+         * which suffices for visualization. It requires binary output.
+         */
         FieldOutput(std::filesystem::path directory, OutputGeometry geometry, MPI_Comm communicator,
-                    std::string basename, bool binary = false, OutputScales scales = {})
+                    std::string basename, bool binary = false, OutputScales scales = {},
+                    bool singlePrecision = false)
             : directory_m(std::move(directory))
             , geometry_m(geometry)
             , communicator_m(communicator)
             , basename_m(std::move(basename))
-            , binary_m(binary)
+            , encoding_m{binary, singlePrecision}
             , scales_m(scales) {
             MPI_Comm_rank(communicator_m, &rank_m);
             MPI_Comm_size(communicator_m, &size_m);
@@ -662,8 +695,10 @@ namespace chdr::output {
             output_detail::validateName(basename_m);
             geometry_m = output_detail::scaledGeometry(geometry_m, scales_m);
             output_detail::validateGeometry(geometry_m);
-            if (binary_m && std::endian::native != std::endian::little)
+            if (encoding_m.binary_m && std::endian::native != std::endian::little)
                 throw std::runtime_error("Binary VTK output requires a little-endian host");
+            if (encoding_m.single_m && !encoding_m.binary_m)
+                throw std::invalid_argument("Single-precision field output requires binary output");
             extents_m.resize(size_m);
             if (rank_m == 0)
                 prepareDirectory();
@@ -695,7 +730,8 @@ namespace chdr::output {
             output_detail::atomicFile(
                 directory_m / output_detail::frameName(basename_m, frame.frame_m.step_m, rank_m),
                 [&](std::ostream& out) {
-                    output_detail::piece(out, geometry_m, local, fields, frame, binary_m, scales_m);
+                    output_detail::piece(out, geometry_m, local, fields, frame, encoding_m,
+                                         scales_m);
                 });
             return local;
         }
@@ -705,7 +741,8 @@ namespace chdr::output {
             output_detail::atomicFile(
                 directory_m / output_detail::frameName(basename_m, frame.frame_m.step_m),
                 [&](std::ostream& out) {
-                    output_detail::wrapper(out, geometry_m, extents_m, frame, basename_m, scales_m);
+                    output_detail::wrapper(out, geometry_m, extents_m, frame, basename_m, scales_m,
+                                           encoding_m.typeName());
                 });
         }
 
@@ -738,7 +775,7 @@ namespace chdr::output {
         std::vector<output_detail::Extent> extents_m;
         std::vector<FrameRecord> frames_m;
         bool materialWritten_m = false;
-        bool binary_m          = false;
+        output_detail::ValueEncoding encoding_m;
         OutputScales scales_m;
     };
 }  // namespace chdr::output

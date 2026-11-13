@@ -294,6 +294,8 @@ so these displacements are zero.
 
 The writer retains ASCII output by default; its optional `binary` constructor
 argument selects appended Float64 vectors with UInt64 byte counts.
+With binary output, the optional `singlePrecision` argument stores the vectors as Float32,
+which halves the size of a frame and is meant for visualization.
 The caller selects the filename basename; this application retains `wave`.
 The separate `writeMaterial` operation writes the immutable cell array
 `epsilon_r` once as `material.pvti`; field-position metadata does not depend on it.

@@ -180,14 +180,14 @@ void runFixture(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &ranks);
     if (argc != 4 || (ranks != 1 && ranks != 2))
-        throw std::runtime_error("Use OUTPUT_DIR MODE ascii|binary, with 1/2 ranks");
+        throw std::runtime_error("Use OUTPUT_DIR MODE ascii|binary|binary32, with 1/2 ranks");
     useCommaLocale();
     if (rank == 0)
         std::cout << "PASS custom comma-decimal global locale\n";
     const chdr::output::OutputGeometry geometry{{4, 3, 6}, {-2, 3, 5}, {0.5, 1.25, 2}};
-    const std::string mode = argv[2];
-    chdr::output::FieldOutput writer(argv[1], geometry, MPI_COMM_WORLD, "wave",
-                                     std::string(argv[3]) == "binary");
+    const std::string mode = argv[2], encoding = argv[3];
+    chdr::output::FieldOutput writer(argv[1], geometry, MPI_COMM_WORLD, "wave", encoding != "ascii",
+                                     {}, encoding == "binary32");
     FixtureFields fields;
     if (mode == "valid")
         successfulFrames(writer, fields);
