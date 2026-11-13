@@ -78,8 +78,9 @@ namespace chdr::experiments::e03 {
             std::floor((target - state.labelTime(quantity, 0)) / state.getDt() + 0.5));
     }
 
+    /// The only optional observation is `fields`: full-volume frames for visualization.
     inline void validateSphericalRun(const input::ChdrYamlRunInput& request) {
-        input::validateObservationNames(request, {});
+        input::validateObservationNames(request, {"fields"});
         if (request.units_m.system_m != "normalized" || request.duration_m
             || request.outputDirectory_m.empty())
             throw std::invalid_argument(

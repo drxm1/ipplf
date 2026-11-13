@@ -400,6 +400,30 @@ observation times, reference scales and sample counts).
 The late-energy targets and the crossing integrals of E04.typ are evaluated from these traces afterwards.
 The launcher does not integrate them and draws no figures.
 
+## Field frames of E03 and E04 for ParaView
+
+E03 and E04 can write full-volume frames of E and R2 B for visualization.
+The frames are off by default and do not enter any measurement.
+An `observations: fields` block in the input enables them:
+
+```yaml
+parameters: {cells_per_axis: 96, profile_sharpness: 8, single_precision_fields: true}
+observations:
+  fields: {every: 2}
+```
+
+`every` is the number of steps between two frames; the first and the last state are always written.
+Open `data/fields/fields.pvti.series` in ParaView.
+Each array carries its sample time and component positions, as described under "Full-domain snapshots".
+
+One frame holds 48 bytes per cell.
+With `single_precision_fields: true` the values are stored as 4-byte numbers, which gives 24 bytes per cell:
+21 MB per frame at 96 cells per axis and 0.8 GB at 324.
+Single precision keeps about seven significant digits and is meant for pictures and movies.
+
+The study launchers pass these settings with `--fields-every` (one value for all levels,
+or one per level in ascending order) and `--single-precision-fields`.
+
 ## Code organization
 
 `E01.h` and `E02.h` contain the named experiment protocols.
@@ -407,4 +431,5 @@ Their code lives in `chdr::experiments::e01e02`; the shared files implement E01 
 `E01AnalyticContinuumReference.h` defines E01's analytic reference, reused by E02 with periodic wrapping disabled.
 The `E01E02…` measurement, profile, snapshot, run and study components implement the common path.
 `E02Diagnostics.h` contains only E02's residual and probe observations.
+`E03E04FieldSnapshots.h` schedules the optional field frames of E03 and E04.
 The entry point dispatches `E01`, `E02`, `E01-study` and `E02-study` explicitly.

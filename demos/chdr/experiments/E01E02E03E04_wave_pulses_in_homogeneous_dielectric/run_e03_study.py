@@ -4,6 +4,10 @@
 The script writes each case's input, launches the executable and records the exit status,
 the wall time and the peak memory of every rank. It writes measured data and run records
 only: it computes no orders and draws no figures.
+
+With --fields-every the executable also writes full-volume frames of E and R2 B for
+ParaView (data/fields/fields.pvti.series). One frame holds 48 bytes per cell, or 24 with
+--single-precision-fields: 0.8 GB per frame at 324 cells per axis in single precision.
 """
 
 import argparse
@@ -59,15 +63,28 @@ def prepare_study(args, experiment="E03"):
     return pinned
 
 
+def frame_interval(args, n):
+    """Steps between two full-volume field frames of this mesh; None without frames."""
+    if not args.fields_every:
+        return None
+    levels = sorted(set(args.levels))
+    return args.fields_every[levels.index(n) if len(args.fields_every) > 1 else 0]
+
+
 def case_input(args, n, experiment):
-    """One ordinary YAML input; the sharpness is written only when it differs from one."""
+    """One ordinary YAML input; optional settings are written only when they are selected."""
     parameters = f"cells_per_axis: {n}"
     if experiment == "E03" and n == LEVELS[0]:
         parameters += ", write_plane: true"
     if args.profile_sharpness != 1:
         parameters += f", profile_sharpness: {args.profile_sharpness:g}"
+    observations = ""
+    if frame_interval(args, n):
+        observations = f"observations:\n  fields: {{every: {frame_interval(args, n)}}}\n"
+        if args.single_precision_fields:
+            parameters += ", single_precision_fields: true"
     return (f"schema_version: 1\ncase: {experiment}\nunits: {{system: normalized}}\n"
-            f"parameters: {{{parameters}}}\noutput: {{directory: data}}\n")
+            f"parameters: {{{parameters}}}\n{observations}output: {{directory: data}}\n")
 
 
 def run_case(args, executable, n, experiment="E03"):
@@ -114,11 +131,19 @@ def study_arguments(description):
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--profile-sharpness", type=float, default=1.0,
                         help="sharpness beta of the compact radial profile (default 1, the E01 profile)")
+    parser.add_argument("--fields-every", type=int, nargs="+", default=[],
+                        help="write full-volume field frames for ParaView every this many steps: "
+                             "one value for all levels, or one per level in ascending order")
+    parser.add_argument("--single-precision-fields", action="store_true",
+                        help="store the field frames as 4-byte values (half the size)")
     args = parser.parse_args()
     if min(args.ranks, args.threads) < 1 or not shutil.which("time"):
         parser.error("Positive ranks and threads and GNU time on PATH are required")
     if not args.profile_sharpness > 0:
         parser.error("The profile sharpness must be positive")
+    if len(args.fields_every) not in (0, 1, len(set(args.levels))) or min(args.fields_every,
+                                                                         default=1) < 1:
+        parser.error("--fields-every takes one positive value, or one per level")
     args.executable, args.output = args.executable.resolve(), args.output.resolve()
     return args
 

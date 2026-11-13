@@ -15,6 +15,7 @@
 
 #include "core/output/RunRecord.h"
 #include "core/simulation/ChDRSimulationManager.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04FieldSnapshots.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Plane.h"
@@ -153,9 +154,11 @@ namespace chdr::experiments::e03 {
         /// Publish provenance only when the requested schedule and output have finished.
         void recordE03(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state, int steps,
-                       int protocolSteps, bool plane, double sharpness) {
+                       int protocolSteps, bool plane, double sharpness,
+                       const SphericalFieldSnapshots& snapshots) {
             auto record = output::describeRun("experiments-wave-pulses-in-homogeneous-dielectric",
                                               grid, state, steps, "E03 periodic spherical pulse");
+            snapshots.record(record);
             record.effective_m["protocol_steps"]                                = protocolSteps;
             record.effective_m["material/relative_permittivity"]                = E03Epsilon;
             record.effective_m["analytic_reference/centre_in_mesh_coordinates"] = E03BoxCentre;
@@ -200,6 +203,7 @@ namespace chdr::experiments::e03 {
             const auto comm  = state.A_n.getLayout().comm;
             output::prepareRunDirectory(request.outputDirectory_m, comm);
             E03MeasurementsCsv csv(request, comm, grid.cells_m[0]);
+            SphericalFieldSnapshots snapshots(request, grid, state);
             const auto scales = constraintScales(state, ref);
             if (request.steps_m)
                 checkLoadedHistory(state, ref);
@@ -207,14 +211,17 @@ namespace chdr::experiments::e03 {
                 observeE03(solver, ref, csv, scales, points, step);
                 if (plane && (step == 0 || step == last.ebStep_m))
                     writeE03Plane(solver, ref, request.outputDirectory_m, step);
+                snapshots.observe(step, solver, steps);
             });
             csv.finish();
-            recordE03(request, grid, state, steps, fullSteps, plane, ref.sharpness_m);
+            snapshots.finish();
+            recordE03(request, grid, state, steps, fullSteps, plane, ref.sharpness_m, snapshots);
         }
     }  // namespace
 
     void runE03(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request, {"cells_per_axis", "write_plane", "profile_sharpness"});
+        input::validateParameters(request, {"cells_per_axis", "write_plane", "profile_sharpness",
+                                            "single_precision_fields"});
         validateSphericalRun(request);
         const auto grid = sphericalGrid(sphericalCells(request), true);
         const auto ref  = sphericalReference(sphericalSharpness(request));

@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "core/output/RunRecord.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04FieldSnapshots.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04Control.h"
@@ -234,10 +235,12 @@ namespace chdr::experiments::e04 {
 
         void recordE04(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state, int steps,
-                       int protocolSteps, double U0h, int controlStep, double sharpness) {
+                       int protocolSteps, double U0h, int controlStep, double sharpness,
+                       const SphericalFieldSnapshots& snapshots) {
             auto record =
                 output::describeRun("experiments-wave-pulses-in-homogeneous-dielectric", grid,
                                     state, steps, "E04 spherical pulse with all-face Mur");
+            snapshots.record(record);
             auto& node                                   = record.effective_m;
             node["protocol_steps"]                       = protocolSteps;
             node["material/relative_permittivity"]       = E03Epsilon;
@@ -295,17 +298,22 @@ namespace chdr::experiments::e04 {
                                     observation(state, Quantity::Electric, 0, ref.v_m, 0), initial);
             observeConstraint<false>(
                 state, csv, observation(state, Quantity::VectorPotential, 0, ref.v_m, 0), initial);
+            SphericalFieldSnapshots snapshots(request, grid, state);
             run.advance(steps, [&](long long step, Solver& solver, const auto& owner) {
                 observeTraces(solver, owner, csv, step, firstMonitorStep, ref.v_m, U0h);
                 observeTargets(solver, ref, control, csv, initial, points, step);
+                snapshots.observe(step, solver, steps);
             });
             csv.finish();
-            recordE04(request, grid, state, steps, fullSteps, U0h, controlStep, ref.sharpness_m);
+            snapshots.finish();
+            recordE04(request, grid, state, steps, fullSteps, U0h, controlStep, ref.sharpness_m,
+                      snapshots);
         }
     }  // namespace
 
     void runE04(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request, {"cells_per_axis", "profile_sharpness"});
+        input::validateParameters(
+            request, {"cells_per_axis", "profile_sharpness", "single_precision_fields"});
         e03::validateSphericalRun(request);
         const auto grid = e03::sphericalGrid(e03::sphericalCells(request), false);
         const auto ref  = e03::sphericalReference(e03::sphericalSharpness(request));
