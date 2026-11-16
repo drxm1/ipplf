@@ -15,11 +15,13 @@
 
 #include "core/base/LevelContract.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01AnalyticContinuumReference.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/PulseReferenceConcepts.h"
 
 namespace chdr::experiments::e01e02 {
     namespace e01Reference = chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric::
         E01_analytic_continuum_reference;
-    using E01Reference = e01Reference::E01AnalyticContinuumReferenceSampler;
+    /// The compact plane pulse of E01 and E02. The run path accepts other samplers of this form.
+    using E01Reference = e01Reference::E01AnalyticContinuumReferenceSampler<>;
 
     /// Reference-normalized errors of all three Cartesian components over the whole domain.
     struct PulseErrorNorms {
@@ -67,9 +69,10 @@ namespace chdr::experiments::e01e02 {
         };
 
         /// Evaluate the requested Cartesian component; four-potential component zero is excluded.
-        KOKKOS_INLINE_FUNCTION double referenceValue(const E01Reference& reference,
-                                                     Quantity quantity, double x, double y,
-                                                     double z, double time, unsigned component) {
+        template <PlanePulseReference Reference>
+        KOKKOS_INLINE_FUNCTION double referenceValue(const Reference& reference, Quantity quantity,
+                                                     double x, double y, double z, double time,
+                                                     unsigned component) {
             if (quantity == Quantity::VectorPotential)
                 return reference.referenceFourPotentialA(x, y, z, time, component + 1);
             if (quantity == Quantity::Electric)
@@ -100,7 +103,8 @@ namespace chdr::experiments::e01e02 {
 
     /** @brief Measure one numerical vector field at its native positions and time.
      * @param field Current A_n, electricField() or magneticField(), matching quantity.
-     * @param reference Continuum reference with the experiment's fixed physical parameters.
+     * @param reference Continuum reference with the experiment's fixed physical parameters,
+     * for example E01Reference.
      * @param contract The solver's staggered R2 level contract.
      * @param quantity VectorPotential, Electric or Magnetic. Potential samples use slots 1--3;
      * field samples use slots 0--2. All three components contribute, including reference zeros.
@@ -113,8 +117,8 @@ namespace chdr::experiments::e01e02 {
      * analytic replacement of reconstructed fields is performed. Views are used only
      * during this measurement; no numerical field or halo is modified.
      */
-    template <class Field>
-    PulseErrorNorms measurePulseFieldError(Field& field, const E01Reference& reference,
+    template <class Field, PlanePulseReference Reference>
+    PulseErrorNorms measurePulseFieldError(Field& field, const Reference& reference,
                                            LevelContract contract, Quantity quantity, double time) {
         const auto view = field.getView();
         const auto h = field.get_mesh().getMeshSpacing(), origin = field.get_mesh().getOrigin();

@@ -1,0 +1,9 @@
+schema_version: 1
+case: E05
+units: {system: normalized}
+# Check of E05.typ: the coarsest level with 4 x 4 instead of 8 x 8 transverse cells
+# must give the same errors and profiles to rounding. Not part of the study.
+parameters: {cells_per_pulse: 32, transverse_cells_per_axis: 4}
+observations:
+  fields: {enabled: false}
+output: {directory: n32-transverse4}

@@ -1,1 +1,2 @@
 add_subdirectory(E01E02E03E04_wave_pulses_in_homogeneous_dielectric)
+add_subdirectory(E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric)

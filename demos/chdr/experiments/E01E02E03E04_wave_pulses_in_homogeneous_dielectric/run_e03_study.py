@@ -63,18 +63,19 @@ def prepare_study(args, experiment="E03"):
     return pinned
 
 
-def frame_interval(args, n):
-    """Steps between two full-volume field frames of this mesh; None without frames."""
-    if not args.fields_every:
+def frame_interval(args, n, intervals=None):
+    """Steps between two frames of this mesh (full volume by default); None without frames."""
+    intervals = args.fields_every if intervals is None else intervals
+    if not intervals:
         return None
     levels = sorted(set(args.levels))
-    return args.fields_every[levels.index(n) if len(args.fields_every) > 1 else 0]
+    return intervals[levels.index(n) if len(intervals) > 1 else 0]
 
 
 def case_input(args, n, experiment):
     """One ordinary YAML input; optional settings are written only when they are selected."""
     parameters = f"cells_per_axis: {n}"
-    if experiment == "E03" and n == LEVELS[0]:
+    if experiment in ("E03", "E07") and n == LEVELS[0]:
         parameters += ", write_plane: true"
     if args.profile_sharpness != 1:
         parameters += f", profile_sharpness: {args.profile_sharpness:g}"
@@ -83,6 +84,9 @@ def case_input(args, n, experiment):
         observations = f"observations:\n  fields: {{every: {frame_interval(args, n)}}}\n"
         if args.single_precision_fields:
             parameters += ", single_precision_fields: true"
+    if frame_interval(args, n, args.plane_every):
+        observations = observations or "observations:\n"
+        observations += f"  plane: {{every: {frame_interval(args, n, args.plane_every)}}}\n"
     return (f"schema_version: 1\ncase: {experiment}\nunits: {{system: normalized}}\n"
             f"parameters: {{{parameters}}}\n{observations}output: {{directory: data}}\n")
 
@@ -136,14 +140,17 @@ def study_arguments(description):
                              "one value for all levels, or one per level in ascending order")
     parser.add_argument("--single-precision-fields", action="store_true",
                         help="store the field frames as 4-byte values (half the size)")
+    parser.add_argument("--plane-every", type=int, nargs="+", default=[],
+                        help="write the z=0 section of E and R2 B to plane-z0.csv every this many "
+                             "steps, for two-dimensional videos: one value or one per level")
     args = parser.parse_args()
     if min(args.ranks, args.threads) < 1 or not shutil.which("time"):
         parser.error("Positive ranks and threads and GNU time on PATH are required")
     if not args.profile_sharpness > 0:
         parser.error("The profile sharpness must be positive")
-    if len(args.fields_every) not in (0, 1, len(set(args.levels))) or min(args.fields_every,
-                                                                         default=1) < 1:
-        parser.error("--fields-every takes one positive value, or one per level")
+    for intervals in (args.fields_every, args.plane_every):
+        if len(intervals) not in (0, 1, len(set(args.levels))) or min(intervals, default=1) < 1:
+            parser.error("--fields-every and --plane-every take one positive value, or one per level")
     args.executable, args.output = args.executable.resolve(), args.output.resolve()
     return args
 

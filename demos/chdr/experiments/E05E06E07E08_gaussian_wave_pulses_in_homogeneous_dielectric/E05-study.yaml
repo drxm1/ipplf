@@ -1,0 +1,14 @@
+schema_version: 1
+case: E05-study
+units: {system: normalized}
+parameters:
+  # Paths are relative to the directory from which the executable is invoked.
+  input_files:
+    - ippl/demos/chdr/experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/inputs/E05-n32.yaml
+    - ippl/demos/chdr/experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/inputs/E05-n64.yaml
+    - ippl/demos/chdr/experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/inputs/E05-n128.yaml
+    - ippl/demos/chdr/experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/inputs/E05-n256.yaml
+    - ippl/demos/chdr/experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/inputs/E05-n512.yaml
+    - ippl/demos/chdr/experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/inputs/E05-n1024.yaml
+output:
+  directory: build/results/e05-study

@@ -15,6 +15,7 @@
 
 #include "core/base/LevelContract.h"
 #include "core/solver/operators/StaggeredOperators.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/PulseReferenceConcepts.h"
 
 namespace chdr::experiments::e03 {
     /** @brief E03.meas01--05 absolute norms at one quantity's native time.
@@ -58,7 +59,7 @@ namespace chdr::experiments::e03 {
         };
 
         /// Scalar reference at a native position. Vector components use Cartesian indices.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         KOKKOS_INLINE_FUNCTION double referenceValue(const Reference& reference, Quantity quantity,
                                                      double x, double y, double z, double time,
                                                      unsigned component) {
@@ -83,7 +84,7 @@ namespace chdr::experiments::e03 {
          * executes in the field's execution space. Native offsets follow
          * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)] and LevelContract.
          */
-        template <class Field, class Reference>
+        template <class Field, DipolePulseReference Reference>
         FieldReduction localFieldNorms(Field& field, Reference reference, LevelContract contract,
                                        Quantity quantity, double time) {
             const auto view = field.getView();
@@ -254,7 +255,7 @@ namespace chdr::experiments::e03 {
      * @details Phi reads slot zero. A reads slots one through three. The continuum
      * evaluator receives LevelContract's component positions. All ranks participate.
      */
-    template <class Field, class Reference>
+    template <class Field, DipolePulseReference Reference>
     E03FieldNorms measureE03Field(Field& field, const Reference& reference, LevelContract contract,
                                   Quantity quantity, double time) {
         e03MeasurementDetail::requireE03Contract(contract);
