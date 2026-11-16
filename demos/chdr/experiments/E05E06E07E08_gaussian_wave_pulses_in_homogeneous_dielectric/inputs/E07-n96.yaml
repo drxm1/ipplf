@@ -1,0 +1,5 @@
+schema_version: 1
+case: E07
+units: {system: normalized}
+parameters: {cells_per_axis: 96, write_plane: true}
+output: {directory: n96}

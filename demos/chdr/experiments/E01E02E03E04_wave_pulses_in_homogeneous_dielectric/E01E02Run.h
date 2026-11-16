@@ -111,7 +111,7 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Convert an experiment target using the reference speed and the actual level contract.
-        template <class Reference>
+        template <PlanePulseReference Reference>
         Checkpoint observationCheckpoint(const PulseTarget& target, const Reference& reference,
                                          const LevelContract& contract, double dt) {
             const double time = target.travelWidths_m * e01Reference::w / reference.v_m;
@@ -134,7 +134,7 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Resolve the protocol independently of an optional short-run limit.
-        template <class Reference>
+        template <PlanePulseReference Reference>
         RunPlan runPlan(const input::ChdrYamlRunInput& request, const Reference& reference,
                         const LevelContract& contract, double dt, const PulseProtocol& protocol) {
             RunPlan plan{};
@@ -215,7 +215,7 @@ namespace chdr::experiments::e01e02 {
         };
 
         /// Measure E01.meas04 at the integer time of the current vector-potential slot.
-        template <class Reference>
+        template <PlanePulseReference Reference>
         void observePotential(PulseSolver& state, const Reference& reference,
                               const char* checkpoint, double target, long long step, ErrorCsv& csv,
                               PulseProfileCsv<Reference>& profiles, bool continuumErrors = true) {
@@ -229,7 +229,7 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Measure E01.meas01-03 using each reconstructed field's actual R2 time label.
-        template <class Reference>
+        template <PlanePulseReference Reference>
         void observeFields(PulseSolver& state, const Reference& reference, const char* checkpoint,
                            double target, long long step, ErrorCsv& csv,
                            PulseProfileCsv<Reference>& profiles, bool continuumErrors = true) {
@@ -258,7 +258,7 @@ namespace chdr::experiments::e01e02 {
         };
 
         /// All ranks enter the same measurement branches, including their global reductions.
-        template <class Reference>
+        template <PlanePulseReference Reference>
         ObservedGroups observeScheduled(PulseSolver& state, const Reference& reference,
                                         const RunPlan& plan, long long step, ErrorCsv& csv,
                                         PulseProfileCsv<Reference>& profiles) {
@@ -283,7 +283,7 @@ namespace chdr::experiments::e01e02 {
          * stored state, with integer potential time as its target and actual per-field times
          * for comparisons. Scheduled quantity rows at that state are not duplicated.
          */
-        template <class Reference>
+        template <PlanePulseReference Reference>
         void observe(PulseSolver& state, const Reference& reference, const RunPlan& plan,
                      long long step, ErrorCsv& csv, PulseProfileCsv<Reference>& profiles) {
             if (step == 0) {
@@ -387,7 +387,7 @@ namespace chdr::experiments::e01e02 {
          * @details The reference sampler records its own analytic input values, so they are
          * not inferred from numerical field samples.
          */
-        template <class Reference>
+        template <PlanePulseReference Reference>
         void recordRun(PulseSimulation& run, const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid,
                        const Reference& reference, const RunPlan& plan,
@@ -421,7 +421,7 @@ namespace chdr::experiments::e01e02 {
      * diagnostics.
      * @pre validatePulseInput has succeeded and the analytic histories are already loaded.
      */
-    template <class Reference>
+    template <PlanePulseReference Reference>
     void evolvePulse(PulseSimulation& run, const input::ChdrYamlRunInput& request,
                      const simulation::ChdrCartesianGridSettings& grid, const Reference& reference,
                      const PulseProtocol& protocol) {
@@ -487,7 +487,7 @@ namespace chdr::experiments::e01e02 {
      * E01Reference. The run constructs it with the domain length, the initial center
      * \f$z_0=2w\f$, the dielectric speed and the protocol's periodicity.
      */
-    template <class Reference = E01Reference>
+    template <PlanePulseReference Reference = E01Reference>
     void runPulse(const input::ChdrYamlRunInput& request, const PulseProtocol& protocol) {
         validatePulseInput(request, protocol);
         const auto grid = pulseGrid(request, protocol);

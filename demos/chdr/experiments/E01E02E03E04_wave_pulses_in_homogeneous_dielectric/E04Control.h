@@ -28,7 +28,7 @@ namespace chdr::experiments::e04 {
 
     public:
         /// Run the periodic replay with the same continuum sampler as the Mur run.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         E04PeriodicControl(simulation::ChdrCartesianGridSettings grid, const Reference& ref,
                            int stopStep, int controlStep) {
             grid.periodic_m = {true, true, true};

@@ -38,9 +38,11 @@ namespace chdr::experiments::e04 {
             double time_m, eta_m, targetEta_m;
         };
 
+        /// The three E04 CSV files on rank zero. The constructor first prepares the directory.
         class E04Csv {
         public:
             E04Csv(const std::string& directory, MPI_Comm comm) {
+                output::prepareRunDirectory(directory, comm);
                 int rank;
                 MPI_Comm_rank(comm, &rank);
                 if (rank != 0)
@@ -115,7 +117,7 @@ namespace chdr::experiments::e04 {
             }
         };
 
-        template <class Field, class Reference>
+        template <class Field, DipolePulseReference Reference>
         E03FieldNorms norms(Solver& state, Field& field, const Reference& ref, Quantity quantity,
                             long long step) {
             return measureE03Field(field, ref, state.levelContract(), quantity,
@@ -123,7 +125,7 @@ namespace chdr::experiments::e04 {
         }
 
         /// The constraint scales and energy denominator are fixed at initialization.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         InitialNorms initialNorms(Solver& state, const Reference& ref) {
             return {norms(state, state.electricField(), ref, Quantity::Electric, 0),
                     norms(state, state.magneticField(), ref, Quantity::Magnetic, 0),
@@ -142,7 +144,7 @@ namespace chdr::experiments::e04 {
         }
 
         /// Observe the field difference before the outgoing continuum support leaves the cube.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         void observeFields(Solver& state, const Reference& ref, const E04PeriodicControl& control,
                            E04Csv& csv, const Observation& at, double U0h) {
             const auto e = norms(state, state.electricField(), ref, Quantity::Electric, at.step_m);
@@ -200,7 +202,7 @@ namespace chdr::experiments::e04 {
         }
 
         /// Evaluate only the target observables selected by this state.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         void observeTargets(Solver& state, const Reference& ref, const E04PeriodicControl& control,
                             E04Csv& csv, const InitialNorms& initial,
                             const std::array<Checkpoint, targets.size()>& points, long long step) {
@@ -242,9 +244,10 @@ namespace chdr::experiments::e04 {
             int steps_m, protocolSteps_m;
             double U0h_m;
             int controlStep_m;
+            bool planeFrames_m;
         };
 
-        template <class Reference>
+        template <DipolePulseReference Reference>
         void recordE04(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state,
                        const E04RecordValues& values, const Reference& ref,
@@ -265,6 +268,8 @@ namespace chdr::experiments::e04 {
             node["initial_reference_energy"]           = values.U0h_m;
             node["periodic_control/target_eta"]        = 2.0;
             node["periodic_control/target_field_step"] = values.controlStep_m;
+            if (values.planeFrames_m)
+                node["plane/file"] = "plane-z0.csv";
             output::writeRunRecord(request.outputDirectory_m, request, record,
                                    state.A_n.getLayout().comm);
         }
@@ -289,7 +294,7 @@ namespace chdr::experiments::e04 {
         }
 
         /// Save the startup control, field and constraint rows before the first update.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         void observeStartup(Solver& state, const Reference& ref, const E04PeriodicControl& control,
                             E04Csv& csv, const InitialNorms& initial) {
             compareControl(state, control, csv,
@@ -301,35 +306,33 @@ namespace chdr::experiments::e04 {
                 state, csv, observation(state, Quantity::VectorPotential, 0, ref.v_m, 0), initial);
         }
 
-        template <class Reference>
+        template <DipolePulseReference Reference>
         void evolveE04(SphericalSimulation& run, const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, const Reference& ref,
                        const SphericalExperiment& experiment) {
-            auto& state         = run.solver();
-            const auto points   = checkpoints(state, ref.v_m);
-            const int fullSteps = bracketStep(state, finalEta, ref.v_m, true);
-            const int steps     = request.steps_m.value_or(fullSteps);
-            if (steps < 0 || steps > fullSteps)
-                throw std::invalid_argument("E04 run.steps must fit the prescribed interval");
+            auto& state           = run.solver();
+            const auto points     = checkpoints(state, ref.v_m);
+            const int fullSteps   = bracketStep(state, finalEta, ref.v_m, true);
+            const int steps       = sphericalRunSteps(request, fullSteps, "E04");
             const int controlStep = points.front().fieldStep_m;
-            const auto comm       = state.A_n.getLayout().comm;
-            output::prepareRunDirectory(request.outputDirectory_m, comm);
+            E04Csv csv(request.outputDirectory_m, state.A_n.getLayout().comm);
             E04PeriodicControl control(grid, ref, std::min(steps, controlStep), controlStep);
-            E04Csv csv(request.outputDirectory_m, comm);
             const auto initial         = initialNorms(state, ref);
             const double U0h           = initial.referenceEnergy();
             const int firstMonitorStep = bracketStep(state, precursorStart, ref.v_m, false);
             observeStartup(state, ref, control, csv, initial);
             SphericalFieldSnapshots snapshots(request, grid, state);
+            const SphericalPlaneFrames planes(request);
             run.advance(steps, [&](long long step, Solver& solver, const auto& owner) {
                 observeTraces(solver, owner, csv, step, firstMonitorStep, ref.v_m, U0h);
                 observeTargets(solver, ref, control, csv, initial, points, step);
                 snapshots.observe(step, solver, steps);
+                planes.observe(step, solver, ref, steps);
             });
             csv.finish();
             snapshots.finish();
-            recordE04(request, grid, state, {steps, fullSteps, U0h, controlStep}, ref, experiment,
-                      snapshots);
+            recordE04(request, grid, state, {steps, fullSteps, U0h, controlStep, planes.writes()},
+                      ref, experiment, snapshots);
         }
     }  // namespace e04RunDetail
 
@@ -338,7 +341,7 @@ namespace chdr::experiments::e04 {
      * @param experiment Names for the run record.
      * @pre The caller has validated the experiment's parameter names.
      */
-    template <class Reference>
+    template <DipolePulseReference Reference>
     void runE04(const input::ChdrYamlRunInput& request, const Reference& ref,
                 const e03::SphericalExperiment& experiment) {
         e03::validateSphericalRun(request);

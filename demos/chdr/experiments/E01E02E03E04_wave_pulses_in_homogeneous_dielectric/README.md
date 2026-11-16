@@ -424,6 +424,11 @@ Single precision keeps about seven significant digits and is meant for pictures 
 The study launchers pass these settings with `--fields-every` (one value for all levels,
 or one per level in ascending order) and `--single-precision-fields`.
 
+For two-dimensional videos, an `observations: plane: {every: K}` block writes the \(z=0\) section of E03's
+`write_plane` every K steps and at the final state, appended to `plane-z0.csv`, instead of full frames.
+The launchers pass it with `--plane-every`. In E04, the first row and column of a section
+interpolate with samples outside the Mur box and are not physical.
+
 ## Code organization
 
 `E01.h` and `E02.h` contain the named experiment protocols.
@@ -436,6 +441,9 @@ The entry point dispatches `E01`, `E02`, `E03`, `E04`, `E01-study` and `E02-stud
 
 Both run paths take the analytic reference sampler as a template parameter,
 and both samplers take their pulse profile as a template parameter.
+Named concepts constrain these parameters: `PlanePulseReference` and `DipolePulseReference`
+(`PulseReferenceConcepts.h`) for the samplers of the two run paths,
+`PlanePulseProfile` and `RadialPulseProfile` for their profiles.
 The entry point builds the sampler and validates the parameter names of each experiment.
 Another experiment directory can therefore reuse these run paths with a different profile.
 `../E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/` does this for the Gaussian pulse of E05 to E08.

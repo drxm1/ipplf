@@ -95,7 +95,7 @@ namespace chdr::experiments::e01e02 {
      * directory disables profiles, preserving the error-only CSV on standard output.
      * @tparam Reference Plane-pulse continuum sampler, for example E01Reference.
      */
-    template <class Reference>
+    template <PlanePulseReference Reference>
     class PulseProfileCsv {
     public:
         PulseProfileCsv(const std::string& directory, const Reference& reference,

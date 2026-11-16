@@ -19,6 +19,18 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric:
         double f_m = 0, fPrime_m = 0, fSecond_m = 0;
     };
 
+    /** @brief Radial profile \f$p\f$ of the dipole pulse, through its generator \f$f=w^2p\f$.
+     * @details `contains(s)` is false where the generator is exactly zero, so the sampler can
+     * skip all divisions there. `generator(s)` returns \f$f\f$, \f$f'\f$ and \f$f''\f$, and
+     * `record(node)` writes the profile parameters to the run record.
+     */
+    template <class T>
+    concept RadialPulseProfile = requires(const T& profile, double s, conduit_cpp::Node& node) {
+        { profile.contains(s) } -> std::same_as<bool>;
+        { profile.generator(s) } -> std::same_as<RadialGenerator>;
+        profile.record(node);
+    };
+
     /** @brief The compact radial profile of E03.typ with sharpness \f$\beta>0\f$.
      * @details The profile is \f$p_\beta(s)=A_0\exp\bigl(\beta\,(1-1/(1-(s/w)^2))\bigr)\f$
      * for \f$|s|<w\f$ and zero otherwise. \f$\beta=1\f$ is the profile of E01.
@@ -26,7 +38,6 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric:
      * Gaussian \f$A_0\exp(-\beta s^2/w^2)\f$ near the center. Its flanks are less steep
      * relative to its width, so its spectrum is narrower and a given mesh resolves it
      * better (the factor in the exponent equals \f$-\beta u^2/(1-u^2)\f$, \f$u=s/w\f$).
-     * A radial profile supplies `contains(s)`, `generator(s)` and `record(node)`.
      */
     struct E03SharpenedCompactProfile {
         double sharpness_m = 1;
@@ -51,10 +62,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric:
         }
 
         /// Record the sharpness \f$\beta\f$ of the run (by reference; a copied node is detached).
-        template <class Node>
-        void record(Node& node) const {
-            node["profile_sharpness"] = sharpness_m;
-        }
+        void record(conduit_cpp::Node& node) const { node["profile_sharpness"] = sharpness_m; }
 
     private:
         /** @brief Evaluate \f$p_\beta(s)\f$ inside its support.
@@ -82,9 +90,9 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric:
      * not implemented. Chew's homogeneous equations and reconstruction give the fields
      * [chew2014generalizedgauge, Eqs. (5)--(6), (11)--(13)]. Only the central copy
      * contributes during E03. The same unwrapped pulse supplies E04's free-space reference.
-     * @tparam Profile Radial profile, as E03SharpenedCompactProfile.
+     * @tparam Profile Radial profile, for example E03SharpenedCompactProfile.
      */
-    template <class Profile = E03SharpenedCompactProfile>
+    template <RadialPulseProfile Profile = E03SharpenedCompactProfile>
     struct E03AnalyticContinuumReferenceSampler {
         double v_m;
         /// Translation of the spherical centre along each Cartesian axis.
@@ -120,9 +128,11 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric:
             return -radial.c_m * normalCrossDipole(radial, component);
         }
 
-        /// Write the center, the speed and the profile parameters to the run record.
-        template <class Node>
-        void record(Node node) const {
+        /** @brief Write the center, the speed and the profile parameters to the run record.
+         * @param node The record's `analytic_reference` node. Pass the node that `operator[]`
+         * returns: a copy of a conduit node is a separate tree.
+         */
+        void record(conduit_cpp::Node node) const {
             node["centre_in_mesh_coordinates"] = centre_m;
             node["speed"]                      = v_m;
             profile_m.record(node);

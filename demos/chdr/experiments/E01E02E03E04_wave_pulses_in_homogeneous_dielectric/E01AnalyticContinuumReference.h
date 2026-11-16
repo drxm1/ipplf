@@ -2,6 +2,8 @@
 
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
+#include <catalyst_conduit.hpp>
+#include <concepts>
 #include <string>
 
 namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
@@ -28,6 +30,19 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                        : -2 * s * p(s) / (Kokkos::pow(w * (1 - Kokkos::pow(s / w, 2)), 2));
         }
 
+        /** @brief Potential profile \f$p\f$ of one copy of the plane pulse.
+         * @details It supplies \f$p(s)\f$ and \f$p'(s)\f$ at the displacement \f$s\f$ from the
+         * pulse center, a static word `name` for the run record ("compact", "Gaussian") and
+         * `record(node)`, which writes its parameters to the run record.
+         */
+        template <class T>
+        concept PlanePulseProfile = requires(const T& profile, double s, conduit_cpp::Node& node) {
+            { profile.value(s) } -> std::same_as<double>;
+            { profile.derivative(s) } -> std::same_as<double>;
+            { T::name } -> std::convertible_to<const char*>;
+            profile.record(node);
+        };
+
         /** @brief The compact potential profile of E01.typ as a profile of the plane-pulse sampler.
          * @details A profile supplies \f$p(s)\f$ and \f$p'(s)\f$ of one pulse copy and the
          * run-record entries of its parameters. The plane-pulse sampler adds the travelling
@@ -46,8 +61,7 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
              * @details The node is taken by reference: a copied conduit node is a separate
              * tree, and entries written to it would not reach the run record.
              */
-            template <class Node>
-            void record(Node& node) const {
+            void record(conduit_cpp::Node& node) const {
                 node["potential_amplitude"] = A0;
                 node["support_half_width"]  = w;
             }
@@ -56,10 +70,9 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
         /** @brief Use this struct to sample the continuum analytic four-potential A reference of
          * experiment E01. You can also sample the corresponding E and B fields by explicitly
          * calling their functions.
-         * @tparam Profile Potential profile of one pulse copy, with `value(s)`, `derivative(s)`,
-         * a static `name` and `record(node)`, as E01CompactProfile.
+         * @tparam Profile Potential profile of one pulse copy, for example E01CompactProfile.
          */
-        template <class Profile = E01CompactProfile>
+        template <PlanePulseProfile Profile = E01CompactProfile>
         struct E01AnalyticContinuumReferenceSampler {
             /// The length of the computational mesh domain
             const double Lz_m;
@@ -126,10 +139,11 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             }
 
             /** @brief Write the reference's name, geometry, speed and profile to the run record.
+             * @param node The record's `analytic_reference` node. Pass the node that
+             * `operator[]` returns: a copy of a conduit node is a separate tree.
              * @param experiment The experiment name, for example "E01".
              */
-            template <class Node>
-            void record(Node node, const std::string& experiment) const {
+            void record(conduit_cpp::Node node, const std::string& experiment) const {
                 node["name"] = experiment + (periodicZ_m ? " periodic " : " unwrapped ")
                                + Profile::name + " continuum pulse";
                 node["periodic_z"]      = periodicZ_m;

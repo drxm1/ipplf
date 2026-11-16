@@ -11,6 +11,7 @@
 #include "core/input/RunInput.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/PulseReferenceConcepts.h"
 
 namespace chdr::experiments::e03 {
     using SphericalSimulation = simulation::ChDRSimulationManager<>;
@@ -59,7 +60,7 @@ namespace chdr::experiments::e03 {
      * @details O1VS advances in physical time. The Mur coefficient sees the dielectric
      * speed [chew2014generalizedgauge, Eq. (13), mur1981AbsorbingBoundaryFdtd, Eq. (16)].
      */
-    template <class Reference>
+    template <DipolePulseReference Reference>
     SphericalSimulation makeSphericalSimulation(const simulation::ChdrCartesianGridSettings& grid,
                                                 const Reference& ref) {
         const auto dielectric =
@@ -73,6 +74,15 @@ namespace chdr::experiments::e03 {
             grid, dielectric, {.murSpeed_m = speed, .timeStep_m = grid.spacing_m[0] / 2}};
     }
 
+    /// The requested `run.steps`, or the full protocol; a limit outside the protocol is an error.
+    inline int sphericalRunSteps(const input::ChdrYamlRunInput& request, int fullSteps,
+                                 const std::string& experiment) {
+        const int steps = request.steps_m.value_or(fullSteps);
+        if (steps < 0 || steps > fullSteps)
+            throw std::invalid_argument(experiment + " run.steps must fit the prescribed interval");
+        return steps;
+    }
+
     /// Invert LevelContract's label map to select the nearest native observation.
     inline int nearestSphericalStep(SphericalSimulation::Solver& state, Quantity quantity,
                                     double target) {
@@ -80,9 +90,9 @@ namespace chdr::experiments::e03 {
             std::floor((target - state.labelTime(quantity, 0)) / state.getDt() + 0.5));
     }
 
-    /// The only optional observation is `fields`: full-volume frames for visualization.
+    /// The optional observations are visualization only: full frames and z=0 sections.
     inline void validateSphericalRun(const input::ChdrYamlRunInput& request) {
-        input::validateObservationNames(request, {"fields"});
+        input::validateObservationNames(request, {"fields", "plane"});
         if (request.units_m.system_m != "normalized" || request.duration_m
             || request.outputDirectory_m.empty())
             throw std::invalid_argument(
