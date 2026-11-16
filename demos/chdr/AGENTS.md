@@ -64,3 +64,9 @@
 # Math
 
 Mathematical constants should be obtained from `Kokkos::numbers` (moved out of `experimental` in Kokkos 4). Any instance of a mathematical function in host-only code should use symbols from the standard library, e.g. `std::sqrt`. Any instances occurring in device-code or code that might be run on a device (such as those marked with `KOKKOS_INLINE_FUNCTION`) should use the symbols from Kokkos, e.g. `Kokkos::sqrt`, to ensure performance and portability on GPUs.
+
+# Template parameters
+Yes, you can use template parameters when they provide a benefit. However try to constrain the types as much as possible.
+General template type parameters can be confusing as a user of the function/class has to figure out what its purpose is.
+Try to mitigate this with good naming, c++ concepts and other such strategies. Most of the template params refer to
+the same concepts and appear in various places, so such concepts must be explicitly named.
