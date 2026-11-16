@@ -93,10 +93,12 @@ namespace chdr::experiments::e01e02 {
      * The caller supplies R2 magneticField() and the selected native profile times.
      * @pre A nonempty output directory has already been prepared collectively. An empty
      * directory disables profiles, preserving the error-only CSV on standard output.
+     * @tparam Reference Plane-pulse continuum sampler, for example E01Reference.
      */
+    template <class Reference>
     class PulseProfileCsv {
     public:
-        PulseProfileCsv(const std::string& directory, const E01Reference& reference,
+        PulseProfileCsv(const std::string& directory, const Reference& reference,
                         LevelContract contract, MPI_Comm communicator)
             : reference_m(reference)
             , contract_m(contract)
@@ -163,7 +165,7 @@ namespace chdr::experiments::e01e02 {
             }
         }
 
-        E01Reference reference_m;
+        Reference reference_m;
         LevelContract contract_m;
         bool enabled_m;
         int rank_m = 0;

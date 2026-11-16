@@ -427,9 +427,15 @@ or one per level in ascending order) and `--single-precision-fields`.
 ## Code organization
 
 `E01.h` and `E02.h` contain the named experiment protocols.
-Their code lives in `chdr::experiments::e01e02`; the shared files implement E01 and E02 only.
+Their code lives in `chdr::experiments::e01e02`.
 `E01AnalyticContinuumReference.h` defines E01's analytic reference, reused by E02 with periodic wrapping disabled.
 The `E01E02…` measurement, profile, snapshot, run and study components implement the common path.
 `E02Diagnostics.h` contains only E02's residual and probe observations.
-`E03E04FieldSnapshots.h` schedules the optional field frames of E03 and E04.
-The entry point dispatches `E01`, `E02`, `E01-study` and `E02-study` explicitly.
+`E03Run.h` and `E04Run.h` run E03 and E04, and `E03E04FieldSnapshots.h` schedules their optional field frames.
+The entry point dispatches `E01`, `E02`, `E03`, `E04`, `E01-study` and `E02-study` explicitly.
+
+Both run paths take the analytic reference sampler as a template parameter,
+and both samplers take their pulse profile as a template parameter.
+The entry point builds the sampler and validates the parameter names of each experiment.
+Another experiment directory can therefore reuse these run paths with a different profile.
+`../E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/` does this for the Gaussian pulse of E05 to E08.

@@ -113,7 +113,7 @@ namespace chdr::experiments::e01e02 {
         /// E02 comparisons use an existing completed E01 study, never a new control run.
         inline std::filesystem::path e01ReferenceDirectory(const input::ChdrYamlRunInput& request,
                                                            const PulseProtocol& protocol) {
-            if (protocol.periodicZ_m)
+            if (!protocol.bundlesE01Reference_m)
                 return {};
             if (!request.parameters_m.has_path("e01_reference_directory")
                 || !request.parameters_m["e01_reference_directory"].dtype().is_string())
@@ -135,7 +135,7 @@ namespace chdr::experiments::e01e02 {
             if (request.outputDirectory_m.empty() || request.steps_m || request.duration_m)
                 throw std::invalid_argument(
                     "Pulse study requires output.directory and full runs without run limits");
-            if (protocol.periodicZ_m)
+            if (!protocol.bundlesE01Reference_m)
                 input::validateParameters(request, {"input_files"});
             else
                 input::validateParameters(request, {"input_files", "e01_reference_directory"});

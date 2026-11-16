@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "core/input/RunInput.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
 
@@ -51,15 +52,16 @@ namespace chdr::experiments::e03 {
 
     /// The dipole pulse of E03.typ, centred in the translated mesh coordinates.
     inline E03Reference sphericalReference(double sharpness = 1) {
-        return {1 / std::sqrt(E03Epsilon), E03BoxCentre, sharpness};
+        return {1 / std::sqrt(E03Epsilon), E03BoxCentre, {sharpness}};
     }
 
     /** @brief Select the same bulk update for periodic propagation and Mur exit.
      * @details O1VS advances in physical time. The Mur coefficient sees the dielectric
      * speed [chew2014generalizedgauge, Eq. (13), mur1981AbsorbingBoundaryFdtd, Eq. (16)].
      */
-    inline SphericalSimulation makeSphericalSimulation(
-        const simulation::ChdrCartesianGridSettings& grid, const E03Reference& ref) {
+    template <class Reference>
+    SphericalSimulation makeSphericalSimulation(const simulation::ChdrCartesianGridSettings& grid,
+                                                const Reference& ref) {
         const auto dielectric =
             KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
             marked = false;

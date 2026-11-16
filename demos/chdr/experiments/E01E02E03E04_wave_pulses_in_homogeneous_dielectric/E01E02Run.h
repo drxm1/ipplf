@@ -111,9 +111,9 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Convert an experiment target using the reference speed and the actual level contract.
-        inline Checkpoint observationCheckpoint(const PulseTarget& target,
-                                                const E01Reference& reference,
-                                                const LevelContract& contract, double dt) {
+        template <class Reference>
+        Checkpoint observationCheckpoint(const PulseTarget& target, const Reference& reference,
+                                         const LevelContract& contract, double dt) {
             const double time = target.travelWidths_m * e01Reference::w / reference.v_m;
             return {target.name_m,
                     target.travelWidths_m,
@@ -134,9 +134,9 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Resolve the protocol independently of an optional short-run limit.
-        inline RunPlan runPlan(const input::ChdrYamlRunInput& request,
-                               const E01Reference& reference, const LevelContract& contract,
-                               double dt, const PulseProtocol& protocol) {
+        template <class Reference>
+        RunPlan runPlan(const input::ChdrYamlRunInput& request, const Reference& reference,
+                        const LevelContract& contract, double dt, const PulseProtocol& protocol) {
             RunPlan plan{};
             for (const auto& target : protocol.targets_m)
                 appendCheckpoint(plan, observationCheckpoint(target, reference, contract, dt));
@@ -215,10 +215,10 @@ namespace chdr::experiments::e01e02 {
         };
 
         /// Measure E01.meas04 at the integer time of the current vector-potential slot.
-        inline void observePotential(PulseSolver& state, const E01Reference& reference,
-                                     const char* checkpoint, double target, long long step,
-                                     ErrorCsv& csv, PulseProfileCsv& profiles,
-                                     bool continuumErrors = true) {
+        template <class Reference>
+        void observePotential(PulseSolver& state, const Reference& reference,
+                              const char* checkpoint, double target, long long step, ErrorCsv& csv,
+                              PulseProfileCsv<Reference>& profiles, bool continuumErrors = true) {
             const double time = state.labelTime(Quantity::VectorPotential, step);
             if (continuumErrors) {
                 const auto error = measurePulseFieldError(
@@ -229,10 +229,10 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Measure E01.meas01-03 using each reconstructed field's actual R2 time label.
-        inline void observeFields(PulseSolver& state, const E01Reference& reference,
-                                  const char* checkpoint, double target, long long step,
-                                  ErrorCsv& csv, PulseProfileCsv& profiles,
-                                  bool continuumErrors = true) {
+        template <class Reference>
+        void observeFields(PulseSolver& state, const Reference& reference, const char* checkpoint,
+                           double target, long long step, ErrorCsv& csv,
+                           PulseProfileCsv<Reference>& profiles, bool continuumErrors = true) {
             const double electricTime = state.labelTime(Quantity::Electric, step);
             const double magneticTime = state.labelTime(Quantity::Magnetic, step);
             if (continuumErrors) {
@@ -258,9 +258,10 @@ namespace chdr::experiments::e01e02 {
         };
 
         /// All ranks enter the same measurement branches, including their global reductions.
-        inline ObservedGroups observeScheduled(PulseSolver& state, const E01Reference& reference,
-                                               const RunPlan& plan, long long step, ErrorCsv& csv,
-                                               PulseProfileCsv& profiles) {
+        template <class Reference>
+        ObservedGroups observeScheduled(PulseSolver& state, const Reference& reference,
+                                        const RunPlan& plan, long long step, ErrorCsv& csv,
+                                        PulseProfileCsv<Reference>& profiles) {
             ObservedGroups observed;
             for (const auto& checkpoint : plan.checkpoints_m) {
                 if (step == checkpoint.potentialStep_m) {
@@ -282,8 +283,9 @@ namespace chdr::experiments::e01e02 {
          * stored state, with integer potential time as its target and actual per-field times
          * for comparisons. Scheduled quantity rows at that state are not duplicated.
          */
-        inline void observe(PulseSolver& state, const E01Reference& reference, const RunPlan& plan,
-                            long long step, ErrorCsv& csv, PulseProfileCsv& profiles) {
+        template <class Reference>
+        void observe(PulseSolver& state, const Reference& reference, const RunPlan& plan,
+                     long long step, ErrorCsv& csv, PulseProfileCsv<Reference>& profiles) {
             if (step == 0) {
                 observePotential(state, reference, "initial", 0, step, csv, profiles);
                 observeFields(state, reference, "initial", 0, step, csv, profiles);
@@ -300,22 +302,6 @@ namespace chdr::experiments::e01e02 {
             if (!observed.fields_m)
                 observeFields(state, reference, "partial_final", target, step, csv, profiles,
                               continuumErrors);
-        }
-
-        /// Record the analytic input values without inferring them from numerical field samples.
-        inline void recordReference(output::RunRecordDescription& description,
-                                    const E01Reference& reference) {
-            auto node               = description.effective_m["analytic_reference"];
-            node["name"]            = reference.periodicZ_m ? "E01 periodic compact continuum pulse"
-                                                            : "E02 unwrapped compact continuum pulse";
-            node["periodic_z"]      = reference.periodicZ_m;
-            node["domain_length_z"] = reference.Lz_m;
-            if (reference.periodicZ_m)
-                node["period"] = reference.Lz_m;
-            node["initial_centre_z"]    = reference.z0_m;
-            node["wave_speed"]          = reference.v_m;
-            node["potential_amplitude"] = e01Reference::A0;
-            node["support_half_width"]  = e01Reference::w;
         }
 
         /// Record each target's name and distance alongside its selected native state indices.
@@ -397,20 +383,24 @@ namespace chdr::experiments::e01e02 {
             node["speed_units"] = "physical solver units for O1VS; periodic-face entries unused";
         }
 
-        /// Publish the common provenance record only after the selected run and CSVs finish.
-        inline void recordRun(PulseSimulation& run, const input::ChdrYamlRunInput& request,
-                              const simulation::ChdrCartesianGridSettings& grid,
-                              const E01Reference& reference, const RunPlan& plan,
-                              const PulseFieldSnapshots& snapshots, const PulseProtocol& protocol,
-                              const std::optional<E02Diagnostics>& diagnostics) {
+        /** @brief Publish the common provenance record only after the selected run and CSVs finish.
+         * @details The reference sampler records its own analytic input values, so they are
+         * not inferred from numerical field samples.
+         */
+        template <class Reference>
+        void recordRun(PulseSimulation& run, const input::ChdrYamlRunInput& request,
+                       const simulation::ChdrCartesianGridSettings& grid,
+                       const Reference& reference, const RunPlan& plan,
+                       const PulseFieldSnapshots& snapshots, const PulseProtocol& protocol,
+                       const std::optional<E02Diagnostics>& diagnostics) {
             if (request.outputDirectory_m.empty())
                 return;
-            auto description = output::describeRun(
-                "experiments-wave-pulses-in-homogeneous-dielectric", grid, run.solver(),
-                plan.steps_m, std::string(protocol.name_m) + " homogeneous pulse refinement");
+            auto description =
+                output::describeRun(protocol.application_m, grid, run.solver(), plan.steps_m,
+                                    std::string(protocol.name_m) + " homogeneous pulse refinement");
             description.effective_m["material/relative_permittivity"] =
                 run.material().homogeneousValue();
-            recordReference(description, reference);
+            reference.record(description.effective_m["analytic_reference"], protocol.name_m);
             recordBoundary(description, run.solver());
             recordSchedule(description, plan);
             recordSampleTimes(description, run.solver(), plan, "error_observations", true);
@@ -431,9 +421,10 @@ namespace chdr::experiments::e01e02 {
      * diagnostics.
      * @pre validatePulseInput has succeeded and the analytic histories are already loaded.
      */
-    inline void evolvePulse(PulseSimulation& run, const input::ChdrYamlRunInput& request,
-                            const simulation::ChdrCartesianGridSettings& grid,
-                            const E01Reference& reference, const PulseProtocol& protocol) {
+    template <class Reference>
+    void evolvePulse(PulseSimulation& run, const input::ChdrYamlRunInput& request,
+                     const simulation::ChdrCartesianGridSettings& grid, const Reference& reference,
+                     const PulseProtocol& protocol) {
         const auto plan = pulseRunDetail::runPlan(request, reference, run.solver().levelContract(),
                                                   run.solver().getDt(), protocol);
         pulseRunDetail::ErrorCsv csv(request.outputDirectory_m, grid, run.solver().getDt(),
@@ -490,12 +481,18 @@ namespace chdr::experiments::e01e02 {
                 .timeStep_m = dt};
     }
 
-    /// Construct, initialize and evolve one named experiment without duplicating solver setup.
-    inline void runPulse(const input::ChdrYamlRunInput& request, const PulseProtocol& protocol) {
+    /** @brief Construct, initialize and evolve one named experiment without duplicating solver
+     * setup.
+     * @tparam Reference Plane-pulse continuum sampler selected by the caller, for example
+     * E01Reference. The run constructs it with the domain length, the initial center
+     * \f$z_0=2w\f$, the dielectric speed and the protocol's periodicity.
+     */
+    template <class Reference = E01Reference>
+    void runPulse(const input::ChdrYamlRunInput& request, const PulseProtocol& protocol) {
         validatePulseInput(request, protocol);
         const auto grid = pulseGrid(request, protocol);
-        const E01Reference reference{grid.lengths()[2], 2.0, 1.0 / std::sqrt(2.13),
-                                     protocol.periodicZ_m};
+        const Reference reference{grid.lengths()[2], 2.0, 1.0 / std::sqrt(2.13),
+                                  protocol.periodicZ_m};
         const auto homogeneousDielectric =
             KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
             marked = false;

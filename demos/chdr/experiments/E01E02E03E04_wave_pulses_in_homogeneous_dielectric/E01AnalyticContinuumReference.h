@@ -2,6 +2,7 @@
 
 #include <Kokkos_Macros.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
+#include <string>
 
 namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric {
 
@@ -27,10 +28,38 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
                        : -2 * s * p(s) / (Kokkos::pow(w * (1 - Kokkos::pow(s / w, 2)), 2));
         }
 
+        /** @brief The compact potential profile of E01.typ as a profile of the plane-pulse sampler.
+         * @details A profile supplies \f$p(s)\f$ and \f$p'(s)\f$ of one pulse copy and the
+         * run-record entries of its parameters. The plane-pulse sampler adds the travelling
+         * coordinate and the periodic extension, so another profile (for example the Gaussian
+         * of E05.typ) reuses the whole E01/E02 run path without changing it.
+         */
+        struct E01CompactProfile {
+            /// Word in the run record's reference name, as in "E01 periodic compact ...".
+            static constexpr const char* name = "compact";
+
+            KOKKOS_INLINE_FUNCTION double value(double s) const { return p(s); }
+
+            KOKKOS_INLINE_FUNCTION double derivative(double s) const { return p_prime(s); }
+
+            /** @brief Record the amplitude and the support half-width of E01.typ.
+             * @details The node is taken by reference: a copied conduit node is a separate
+             * tree, and entries written to it would not reach the run record.
+             */
+            template <class Node>
+            void record(Node& node) const {
+                node["potential_amplitude"] = A0;
+                node["support_half_width"]  = w;
+            }
+        };
+
         /** @brief Use this struct to sample the continuum analytic four-potential A reference of
          * experiment E01. You can also sample the corresponding E and B fields by explicitly
          * calling their functions.
+         * @tparam Profile Potential profile of one pulse copy, with `value(s)`, `derivative(s)`,
+         * a static `name` and `record(node)`, as E01CompactProfile.
          */
+        template <class Profile = E01CompactProfile>
         struct E01AnalyticContinuumReferenceSampler {
             /// The length of the computational mesh domain
             const double Lz_m;
@@ -43,6 +72,9 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
 
             /// Disable periodic wrapping when reusing this reference for E02.
             const bool periodicZ_m = true;
+
+            /// Potential profile \f$p\f$ of one pulse copy.
+            const Profile profile_m{};
 
             /// @brief sample the four analytic continuum reference four potential
             KOKKOS_INLINE_FUNCTION double operator()([[maybe_unused]] const double _x,
@@ -82,13 +114,31 @@ namespace chdr::experiments::E01E02E03E04_wave_pulses_in_homogeneous_dielectric 
             }
 
             /// @brief Periodic extension of \f$p(s)\f$
-            KOKKOS_INLINE_FUNCTION double a(const double s) const { return p(r(s)); }
+            KOKKOS_INLINE_FUNCTION double a(const double s) const { return profile_m.value(r(s)); }
 
             /// @brief Derivative of \f$a(s)\f$ wrt \f$s\f$
-            KOKKOS_INLINE_FUNCTION double a_prime(const double s) const { return p_prime(r(s)); }
+            KOKKOS_INLINE_FUNCTION double a_prime(const double s) const {
+                return profile_m.derivative(r(s));
+            }
 
             KOKKOS_INLINE_FUNCTION double Ax(const double z, const double t) const {
                 return a(s(z, t));
+            }
+
+            /** @brief Write the reference's name, geometry, speed and profile to the run record.
+             * @param experiment The experiment name, for example "E01".
+             */
+            template <class Node>
+            void record(Node node, const std::string& experiment) const {
+                node["name"] = experiment + (periodicZ_m ? " periodic " : " unwrapped ")
+                               + Profile::name + " continuum pulse";
+                node["periodic_z"]      = periodicZ_m;
+                node["domain_length_z"] = Lz_m;
+                if (periodicZ_m)
+                    node["period"] = Lz_m;
+                node["initial_centre_z"] = z0_m;
+                node["wave_speed"]       = v_m;
+                profile_m.record(node);
             }
         };
 

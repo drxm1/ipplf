@@ -27,7 +27,9 @@ namespace chdr::experiments::e04 {
         };
 
     public:
-        E04PeriodicControl(simulation::ChdrCartesianGridSettings grid, const e03::E03Reference& ref,
+        /// Run the periodic replay with the same continuum sampler as the Mur run.
+        template <class Reference>
+        E04PeriodicControl(simulation::ChdrCartesianGridSettings grid, const Reference& ref,
                            int stopStep, int controlStep) {
             grid.periodic_m = {true, true, true};
             auto periodic   = e03::makeSphericalSimulation(grid, ref);

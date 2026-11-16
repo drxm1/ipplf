@@ -1,7 +1,7 @@
-/** @file E03.cpp
+/** @file E03Run.h
  * @brief Run the periodic spherical pulse and record E03.meas01–06.
  */
-#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
+#pragma once
 
 #include <algorithm>
 #include <cmath>
@@ -13,15 +13,17 @@
 #include <string>
 #include <string_view>
 
+#include "core/input/RunInput.h"
 #include "core/output/RunRecord.h"
 #include "core/simulation/ChDRSimulationManager.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04FieldSnapshots.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Plane.h"
 
 namespace chdr::experiments::e03 {
-    namespace {
+    namespace e03RunDetail {
         using Simulation = SphericalSimulation;
         using Solver     = Simulation::Solver;
 
@@ -31,7 +33,7 @@ namespace chdr::experiments::e03 {
             int aStep_m, phiStep_m, ebStep_m;
         };
 
-        std::array<Checkpoint, 4> e03Checkpoints(Solver& state, double v) {
+        inline std::array<Checkpoint, 4> e03Checkpoints(Solver& state, double v) {
             std::array<Checkpoint, 4> result{};
             for (unsigned i = 0; i < result.size(); ++i) {
                 const double target = 0.5 * (i + 1) / v;
@@ -85,15 +87,16 @@ namespace chdr::experiments::e03 {
             double qL2_m, qLinf_m, gL2_m, gLinf_m;
         };
 
-        template <class Field>
-        E03FieldNorms norms(Solver& state, Field& field, const E03Reference& ref, Quantity quantity,
+        template <class Field, class Reference>
+        E03FieldNorms norms(Solver& state, Field& field, const Reference& ref, Quantity quantity,
                             long long step) {
             return measureE03Field(field, ref, state.levelContract(), quantity,
                                    state.labelTime(quantity, step));
         }
 
         /// Compare both loaded storage slots, including the TE scalar zeros, on short checks.
-        void checkLoadedHistory(Solver& state, const E03Reference& ref) {
+        template <class Reference>
+        void checkLoadedHistory(Solver& state, const Reference& ref) {
             for (const auto quantity : {Quantity::VectorPotential, Quantity::Phi}) {
                 if (norms(state, state.A_n, ref, quantity, 0).errorLinf_m != 0
                     || norms(state, state.A_nm1, ref, quantity, -1).errorLinf_m != 0)
@@ -102,16 +105,17 @@ namespace chdr::experiments::e03 {
         }
 
         /// Save both norms of one residual with E03's fixed full-domain reference scales.
-        void writeResidual(E03MeasurementsCsv& csv, const E03ResidualNorms& residual,
-                           std::string_view l2, std::string_view linf, double target,
-                           long long step, double time, double scaleL2, double scaleLinf) {
+        inline void writeResidual(E03MeasurementsCsv& csv, const E03ResidualNorms& residual,
+                                  std::string_view l2, std::string_view linf, double target,
+                                  long long step, double time, double scaleL2, double scaleLinf) {
             csv.row("E03.meas06", l2, target, step, time, residual.l2_m, scaleL2, residual.count_m);
             csv.row("E03.meas06", linf, target, step, time, residual.linf_m, scaleLinf,
                     residual.count_m);
         }
 
         /// Observe E03.meas01–03 and electric Gauss law at the shared R2 field time.
-        void observeFields(Solver& state, const E03Reference& ref, E03MeasurementsCsv& csv,
+        template <class Reference>
+        void observeFields(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                            const ConstraintScales& scales, long long step, double target) {
             const double time = state.labelTime(Quantity::Electric, step);
             const auto e      = norms(state, state.electricField(), ref, Quantity::Electric, step);
@@ -124,7 +128,8 @@ namespace chdr::experiments::e03 {
         }
 
         /// Observe E03.meas04 and Lorenz gauge at the vector-potential time.
-        void observeVectorPotential(Solver& state, const E03Reference& ref, E03MeasurementsCsv& csv,
+        template <class Reference>
+        void observeVectorPotential(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                                     const ConstraintScales& scales, long long step, double target) {
             const double time = state.labelTime(Quantity::VectorPotential, step);
             if (step > 0) {
@@ -136,7 +141,8 @@ namespace chdr::experiments::e03 {
         }
 
         /// Use the independent scalar clock of R2 for E03.meas05.
-        void observeScalarPotential(Solver& state, const E03Reference& ref, E03MeasurementsCsv& csv,
+        template <class Reference>
+        void observeScalarPotential(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                                     long long step, double target) {
             const auto phi = norms(state, state.A_n, ref, Quantity::Phi, step);
             csv.row("E03.meas05", "phi_L2", target, step, state.labelTime(Quantity::Phi, step),
@@ -144,7 +150,8 @@ namespace chdr::experiments::e03 {
         }
 
         /// The reference scales are fixed at the initial E and A times on each mesh.
-        ConstraintScales constraintScales(Solver& state, const E03Reference& ref) {
+        template <class Reference>
+        ConstraintScales constraintScales(Solver& state, const Reference& ref) {
             const auto e = norms(state, state.electricField(), ref, Quantity::Electric, 0);
             const auto a = norms(state, state.A_n, ref, Quantity::VectorPotential, 0);
             return {E03Epsilon * e.referenceL2_m, E03Epsilon * e.referenceLinf_m, a.referenceL2_m,
@@ -152,19 +159,20 @@ namespace chdr::experiments::e03 {
         }
 
         /// Publish provenance only when the requested schedule and output have finished.
+        template <class Reference>
         void recordE03(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state, int steps,
-                       int protocolSteps, bool plane, double sharpness,
+                       int protocolSteps, bool plane, const Reference& ref,
+                       const SphericalExperiment& experiment,
                        const SphericalFieldSnapshots& snapshots) {
-            auto record = output::describeRun("experiments-wave-pulses-in-homogeneous-dielectric",
-                                              grid, state, steps, "E03 periodic spherical pulse");
+            auto record =
+                output::describeRun(experiment.application_m, grid, state, steps,
+                                    std::string(experiment.name_m) + " periodic spherical pulse");
             snapshots.record(record);
-            record.effective_m["protocol_steps"]                                = protocolSteps;
-            record.effective_m["material/relative_permittivity"]                = E03Epsilon;
-            record.effective_m["analytic_reference/centre_in_mesh_coordinates"] = E03BoxCentre;
-            record.effective_m["analytic_reference/speed"]             = 1 / std::sqrt(E03Epsilon);
-            record.effective_m["analytic_reference/profile_sharpness"] = sharpness;
-            record.effective_m["measurements/file"]                    = "measurements.csv";
+            record.effective_m["protocol_steps"]                 = protocolSteps;
+            record.effective_m["material/relative_permittivity"] = E03Epsilon;
+            ref.record(record.effective_m["analytic_reference"]);
+            record.effective_m["measurements/file"] = "measurements.csv";
             if (plane)
                 record.effective_m["plane/file"] = "plane-z0.csv";
             output::writeRunRecord(request.outputDirectory_m, request, record,
@@ -172,7 +180,8 @@ namespace chdr::experiments::e03 {
         }
 
         /// Route each state to the observations whose native clocks select it.
-        void observeE03(Solver& state, const E03Reference& ref, E03MeasurementsCsv& csv,
+        template <class Reference>
+        void observeE03(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                         const ConstraintScales& scales, const std::array<Checkpoint, 4>& points,
                         long long step) {
             if (step == 0) {
@@ -190,8 +199,10 @@ namespace chdr::experiments::e03 {
         }
 
         /// Drive the manager once, sampling only the state indices selected by each clock.
+        template <class Reference>
         void evolveE03(Simulation& run, const input::ChdrYamlRunInput& request,
-                       const simulation::ChdrCartesianGridSettings& grid, const E03Reference& ref) {
+                       const simulation::ChdrCartesianGridSettings& grid, const Reference& ref,
+                       const SphericalExperiment& experiment) {
             auto& state         = run.solver();
             const auto points   = e03Checkpoints(state, ref.v_m);
             const auto last     = points.back();
@@ -215,18 +226,22 @@ namespace chdr::experiments::e03 {
             });
             csv.finish();
             snapshots.finish();
-            recordE03(request, grid, state, steps, fullSteps, plane, ref.sharpness_m, snapshots);
+            recordE03(request, grid, state, steps, fullSteps, plane, ref, experiment, snapshots);
         }
-    }  // namespace
+    }  // namespace e03RunDetail
 
-    void runE03(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request, {"cells_per_axis", "write_plane", "profile_sharpness",
-                                            "single_precision_fields"});
+    /** @brief Load the continuum histories and measure their evolution through the E03 targets.
+     * @param ref Continuum sampler of the spherical pulse, for example E03Reference.
+     * @param experiment Names for the run record.
+     * @pre The caller has validated the experiment's parameter names.
+     */
+    template <class Reference>
+    void runE03(const input::ChdrYamlRunInput& request, const Reference& ref,
+                const SphericalExperiment& experiment) {
         validateSphericalRun(request);
         const auto grid = sphericalGrid(sphericalCells(request), true);
-        const auto ref  = sphericalReference(sphericalSharpness(request));
         auto run        = makeSphericalSimulation(grid, ref);
         run.load(ref);
-        evolveE03(run, request, grid, ref);
+        e03RunDetail::evolveE03(run, request, grid, ref, experiment);
     }
 }  // namespace chdr::experiments::e03
