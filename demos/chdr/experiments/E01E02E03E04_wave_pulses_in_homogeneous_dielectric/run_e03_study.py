@@ -81,6 +81,8 @@ def case_input(args, n, experiment):
         parameters += ", write_plane: true"
     if args.write_native_lines:
         parameters += ", write_native_lines: true"
+    if args.write_energy_parts:
+        parameters += ", write_energy_parts: true"
     if args.profile_sharpness != 1:
         parameters += f", profile_sharpness: {args.profile_sharpness:g}"
     if args.solver_configuration:
@@ -160,6 +162,10 @@ def study_arguments(description):
                         help="write A, phi, E and B along the three central grid lines to "
                              "native-lines.csv, at their own positions, for the initial state "
                              "and the final target")
+    parser.add_argument("--write-energy-parts", action="store_true",
+                        help="E12 and E14 only: add the electric part, the magnetic part and the "
+                             "mean energy of the two raw curls of the initial state to "
+                             "measurements.csv (E12.meas02)")
     args = parser.parse_args()
     if min(args.ranks, args.threads) < 1 or not shutil.which("time"):
         parser.error("Positive ranks and threads and GNU time on PATH are required")

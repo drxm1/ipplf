@@ -80,3 +80,10 @@ the three central grid lines, each component at its own position beside its cont
 The directory holds study inputs of E09 and E10 for `O1VS`, `Homogeneous` and `Standard`.
 The `StandardR2Prime` studies of E09 and E10 use the `Standard` inputs with
 `solver_configuration: StandardR2Prime`.
+
+For E12 and E14, `--write-energy-parts` (parameter `write_energy_parts: true`) adds three rows
+`E12.meas02` to `measurements.csv` for the initial state: `electric_energy`, `magnetic_energy`
+and `raw_magnetic_energy`. The value is the part of the reconstructed fields and the reference
+scale is the same part of the continuum fields at \(t_{-1/2}\), as defined in `E12.typ`.
+`electric_energy` plus `magnetic_energy` is the energy of the first row of `energy.csv`.
+All other outputs stay unchanged.

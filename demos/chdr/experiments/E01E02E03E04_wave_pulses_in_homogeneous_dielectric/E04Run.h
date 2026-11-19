@@ -338,6 +338,24 @@ namespace chdr::experiments::e04 {
                 state, csv, observation(state, Quantity::VectorPotential, 0, ref.v_m, 0), initial);
         }
 
+        /** @brief E12.meas02: save the parts of the initial energy beside their continuum parts.
+         * @details Each row holds one part of the reconstructed fields before the first update
+         * and, as its scale, the same part of the continuum fields at the electric comparison
+         * time. The parameter `write_energy_parts` enables the rows.
+         */
+        inline void observeEnergyParts(Solver& state, E04Csv& csv, const InitialNorms& initial,
+                                       E04FieldEnergy& energy, double v) {
+            const auto at    = observation(state, Quantity::Electric, 0, v, 0);
+            const auto parts = energy.parts(state);
+            const double electric =
+                energyFromNorms(initial.e_m.referenceL2_m, 0, initial.epsilon_m);
+            const double magnetic =
+                energyFromNorms(0, initial.b_m.referenceL2_m, initial.epsilon_m);
+            csv.row("E12.meas02", "electric_energy", "box", at, parts.electric_m, electric);
+            csv.row("E12.meas02", "magnetic_energy", "box", at, parts.magnetic_m, magnetic);
+            csv.row("E12.meas02", "raw_magnetic_energy", "box", at, parts.rawMagnetic_m, magnetic);
+        }
+
         /// The steps of one run: targets, run length, periodic replay and monitor start.
         struct E04Schedule {
             std::array<Checkpoint, targets.size()> points_m;
@@ -380,6 +398,8 @@ namespace chdr::experiments::e04 {
                 initialNorms(state, ref, energy, experiment.relativePermittivity_m);
             const double U0h = initial.referenceEnergy();
             observeStartup(state, ref, control, csv, initial, energy.staggered());
+            if (input::booleanParameter(request, "write_energy_parts", false))
+                observeEnergyParts(state, csv, initial, energy, ref.v_m);
             SphericalFieldSnapshots snapshots(request, grid, state);
             const SphericalPlaneFrames planes(request);
             run.advance(steps, [&](long long step, Solver& solver, const auto& owner) {

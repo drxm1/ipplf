@@ -28,7 +28,28 @@ namespace chdr::experiments::e04 {
                            + magnetic_m(i, j, k)[d] * magnetic_m(i, j, k)[d];
             }
         };
+        /// \f$\sum|\mathbf F|^2\f$ of one field over the owned cells of one rank.
+        struct Squares {
+            View::const_type field_m;
+
+            /// Add the squares of one owned cell to the partial sum of this rank.
+            KOKKOS_INLINE_FUNCTION void operator()(int i, int j, int k, double& sum) const {
+                for (unsigned d = 0; d < 3; ++d)
+                    sum += field_m(i, j, k)[d] * field_m(i, j, k)[d];
+            }
+        };
     }  // namespace fieldEnergyDetail
+
+    /** @brief The parts of the energy of one state, each with the weight \f$\Delta V/2\f$.
+     * @details electric_m is \f$\varepsilon\sum|\mathbf E|^2\f$ and magnetic_m is
+     * \f$\sum|\bar{\mathbf B}|^2\f$; their sum is \f$W_h\f$ of E04FieldEnergy. rawMagnetic_m is
+     * \f$\sum(|\mathbf B^n|^2+|\mathbf B^{n-1}|^2)/2\f$ with the unaveraged curls of the two
+     * potential slots. Its difference to magnetic_m is the effect of the average:
+     * \f$|(a+b)/2|^2=(|a|^2+|b|^2)/2-|(a-b)/2|^2\f$.
+     */
+    struct EnergyParts {
+        double electric_m, magnetic_m, rawMagnetic_m;
+    };
 
     /** @brief The energy of E04.meas01 and the magnetic field it uses, for every configuration.
      * @details The staggered configurations use R2's averaged B and alignedFieldEnergy,
@@ -87,9 +108,39 @@ namespace chdr::experiments::e04 {
             return 0.5 * h[0] * h[1] * h[2] * total;
         }
 
+        /** @brief The electric part, the magnetic part and the mean energy of the two raw curls.
+         * @details The raw curls use the curl of the placement: rawStaggeredMagnetic on the
+         * staggered layout and the central curl of reconstructMagnetic on the collocated one.
+         * A uniform \f$\varepsilon\f$ is assumed, as in energy() for the collocated layout.
+         */
+        EnergyParts parts(Solver& state) {
+            if (raw_m.getView().size() == 0)
+                raw_m.initialize(state.A_n.get_mesh(), state.A_n.getLayout());
+            double raw = 0;
+            for (auto* slot : {&state.A_n, &state.A_nm1}) {
+                if (staggered_m)
+                    solver::rawStaggeredMagnetic(*slot, raw_m);
+                else
+                    solver::reconstructMagnetic(*slot, *slot, raw_m, false);
+                raw += 0.5 * squareSum(state, raw_m);
+            }
+            return {epsilon_m * squareSum(state, state.electricField()),
+                    squareSum(state, magnetic(state)), raw};
+        }
+
     private:
+        /// \f$(\Delta V/2)\sum|\mathbf F|^2\f$ over the owned cells of all ranks.
+        double squareSum(Solver& state, EMFieldsType& field) const {
+            double local = 0, total = 0;
+            Kokkos::parallel_reduce("E04 energy part", state.A_n.getFieldRangePolicy(),
+                                    fieldEnergyDetail::Squares{field.getView()}, local);
+            MPI_Allreduce(&local, &total, 1, MPI_DOUBLE, MPI_SUM, state.A_n.getLayout().comm);
+            const auto h = state.A_n.get_mesh().getMeshSpacing();
+            return 0.5 * h[0] * h[1] * h[2] * total;
+        }
+
         double epsilon_m;
         bool staggered_m;
-        EMFieldsType averaged_m;
+        EMFieldsType averaged_m, raw_m;
     };
 }  // namespace chdr::experiments::e04

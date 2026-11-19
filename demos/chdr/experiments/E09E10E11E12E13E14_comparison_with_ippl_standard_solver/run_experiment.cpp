@@ -44,8 +44,8 @@ namespace chdr::experiments::e09e14 {
 
     /// E08 (all-face Mur cube) in the medium of epsilon; E12 in vacuum, E14 in the dielectric.
     void runMurDipole(const input::ChdrYamlRunInput& request, const char* name, double epsilon) {
-        input::validateParameters(
-            request, {"cells_per_axis", "single_precision_fields", "solver_configuration"});
+        input::validateParameters(request, {"cells_per_axis", "single_precision_fields",
+                                            "solver_configuration", "write_energy_parts"});
         e04::runE04(request, dipolePulse(epsilon), dipoleExperiment(request, name, epsilon));
     }
 }  // namespace chdr::experiments::e09e14
