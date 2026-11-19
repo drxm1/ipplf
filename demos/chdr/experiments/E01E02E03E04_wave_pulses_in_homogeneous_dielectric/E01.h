@@ -16,5 +16,6 @@ namespace chdr::experiments::e01e02 {
 
     /// E01 retains its configurable transverse count and original quarter-run frame cadence.
     inline constexpr PulseProtocol E01{
-        "E01", 22, true, 0, E01CellsPerPulseLevels, E01Targets, 4, false, WavePulsesApplication};
+        "E01", 22,   true, 0, E01CellsPerPulseLevels, E01Targets, 4, false, WavePulsesApplication,
+        2.13,  false};
 }  // namespace chdr::experiments::e01e02

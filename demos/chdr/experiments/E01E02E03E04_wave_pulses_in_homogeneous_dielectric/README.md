@@ -447,3 +447,6 @@ Named concepts constrain these parameters: `PlanePulseReference` and `DipolePuls
 The entry point builds the sampler and validates the parameter names of each experiment.
 Another experiment directory can therefore reuse these run paths with a different profile.
 `../E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/` does this for the Gaussian pulse of E05 to E08.
+`SolverConfiguration.h` lists the solver configurations (O1VS for E01 to E08), and `E04FieldEnergy.h`
+gives E04.meas01 for the staggered and the collocated layout.
+`../E09E10E11E12E13E14_comparison_with_ippl_standard_solver/` uses both to compare with IPPL's Standard solver.

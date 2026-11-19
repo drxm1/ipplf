@@ -85,16 +85,20 @@ namespace chdr::experiments::e03 {
             std::ofstream file_m;
         };
 
-        /** @brief Preserve the fixed initial reference norms used by E03.meas06. */
+        /** @brief The fixed initial reference norms of E03.meas06 and the medium they belong to.
+         * @details E03.meas06 uses the operators of the staggered layout, so only the staggered
+         * configurations measure it; measured_m is false for collocated runs.
+         */
         struct ConstraintScales {
-            double qL2_m, qLinf_m, gL2_m, gLinf_m;
+            double qL2_m, qLinf_m, gL2_m, gLinf_m, epsilon_m;
+            bool measured_m;
         };
 
         template <class Field, DipolePulseReference Reference>
         E03FieldNorms norms(Solver& state, Field& field, const Reference& ref, Quantity quantity,
                             long long step) {
             return measureE03Field(field, ref, state.levelContract(), quantity,
-                                   state.labelTime(quantity, step));
+                                   comparisonTime(state, quantity, step));
         }
 
         /// Compare both loaded storage slots, including the TE scalar zeros, on short checks.
@@ -116,49 +120,58 @@ namespace chdr::experiments::e03 {
                     residual.count_m);
         }
 
-        /// Observe E03.meas01–03 and electric Gauss law at the shared R2 field time.
+        /// Observe E03.meas01–03 and electric Gauss law at the electric comparison time.
         template <DipolePulseReference Reference>
         void observeFields(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                            const ConstraintScales& scales, long long step, double target) {
-            const double time = state.labelTime(Quantity::Electric, step);
+            const double time = comparisonTime(state, Quantity::Electric, step);
             const auto e      = norms(state, state.electricField(), ref, Quantity::Electric, step);
             const auto b      = norms(state, state.magneticField(), ref, Quantity::Magnetic, step);
             csv.row("E03.meas01", "E_L2", target, step, time, e.errorL2_m, e.referenceL2_m);
-            csv.row("E03.meas02", "B_L2", target, step, time, b.errorL2_m, b.referenceL2_m);
+            csv.row("E03.meas02", "B_L2", target, step,
+                    comparisonTime(state, Quantity::Magnetic, step), b.errorL2_m, b.referenceL2_m);
             csv.row("E03.meas03", "E_Linf", target, step, time, e.errorLinf_m, e.referenceLinf_m);
-            writeResidual(csv, measureE03Gauss(state, E03Epsilon), "Q_L2", "Q_Linf", target, step,
-                          time, scales.qL2_m, scales.qLinf_m);
+            if (scales.measured_m)
+                writeResidual(csv, measureE03Gauss(state, scales.epsilon_m), "Q_L2", "Q_Linf",
+                              target, step, time, scales.qL2_m, scales.qLinf_m);
         }
 
         /// Observe E03.meas04 and Lorenz gauge at the vector-potential time.
         template <DipolePulseReference Reference>
         void observeVectorPotential(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                                     const ConstraintScales& scales, long long step, double target) {
-            const double time = state.labelTime(Quantity::VectorPotential, step);
+            const double time = comparisonTime(state, Quantity::VectorPotential, step);
             if (step > 0) {
                 const auto a = norms(state, state.A_n, ref, Quantity::VectorPotential, step);
                 csv.row("E03.meas04", "A_L2", target, step, time, a.errorL2_m, a.referenceL2_m);
             }
-            writeResidual(csv, measureE03Gauge(state, E03Epsilon), "G_L2", "G_Linf", target, step,
-                          time, scales.gL2_m, scales.gLinf_m);
+            if (scales.measured_m)
+                writeResidual(csv, measureE03Gauge(state, scales.epsilon_m), "G_L2", "G_Linf",
+                              target, step, time, scales.gL2_m, scales.gLinf_m);
         }
 
-        /// Use the independent scalar clock of R2 for E03.meas05.
+        /// Use the independent clock of the scalar potential for E03.meas05.
         template <DipolePulseReference Reference>
         void observeScalarPotential(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                                     long long step, double target) {
             const auto phi = norms(state, state.A_n, ref, Quantity::Phi, step);
-            csv.row("E03.meas05", "phi_L2", target, step, state.labelTime(Quantity::Phi, step),
-                    phi.errorL2_m, phi.referenceL2_m);
+            csv.row("E03.meas05", "phi_L2", target, step,
+                    comparisonTime(state, Quantity::Phi, step), phi.errorL2_m, phi.referenceL2_m);
         }
 
         /// The reference scales are fixed at the initial E and A times on each mesh.
         template <DipolePulseReference Reference>
-        ConstraintScales constraintScales(Solver& state, const Reference& ref) {
-            const auto e = norms(state, state.electricField(), ref, Quantity::Electric, 0);
-            const auto a = norms(state, state.A_n, ref, Quantity::VectorPotential, 0);
-            return {E03Epsilon * e.referenceL2_m, E03Epsilon * e.referenceLinf_m, a.referenceL2_m,
-                    a.referenceLinf_m};
+        ConstraintScales constraintScales(Solver& state, const Reference& ref,
+                                          const SphericalExperiment& experiment) {
+            const double epsilon = experiment.relativePermittivity_m;
+            const auto e         = norms(state, state.electricField(), ref, Quantity::Electric, 0);
+            const auto a         = norms(state, state.A_n, ref, Quantity::VectorPotential, 0);
+            return {epsilon * e.referenceL2_m,
+                    epsilon * e.referenceLinf_m,
+                    a.referenceL2_m,
+                    a.referenceLinf_m,
+                    epsilon,
+                    experiment.solver_m.staggered()};
         }
 
         /// Publish provenance only when the requested schedule and output have finished.
@@ -172,8 +185,9 @@ namespace chdr::experiments::e03 {
                 output::describeRun(experiment.application_m, grid, state, steps,
                                     std::string(experiment.name_m) + " periodic spherical pulse");
             snapshots.record(record);
-            record.effective_m["protocol_steps"]                 = protocolSteps;
-            record.effective_m["material/relative_permittivity"] = E03Epsilon;
+            record.effective_m["protocol_steps"] = protocolSteps;
+            record.effective_m["material/relative_permittivity"] =
+                experiment.relativePermittivity_m;
             ref.record(record.effective_m["analytic_reference"]);
             record.effective_m["measurements/file"] = "measurements.csv";
             if (plane)
@@ -218,11 +232,11 @@ namespace chdr::experiments::e03 {
             const auto points   = e03Checkpoints(state, ref.v_m);
             const auto last     = points.back();
             const int fullSteps = std::max({last.aStep_m, last.ebStep_m, last.phiStep_m});
-            const int steps     = sphericalRunSteps(request, fullSteps, "E03");
+            const int steps     = sphericalRunSteps(request, fullSteps, experiment.name_m);
             E03MeasurementsCsv csv(request, state.A_n.getLayout().comm, grid.cells_m[0]);
             SphericalFieldSnapshots snapshots(request, grid, state);
             const SphericalPlaneFrames planes(request, writePlaneSteps(request, last.ebStep_m));
-            const auto scales = constraintScales(state, ref);
+            const auto scales = constraintScales(state, ref, experiment);
             if (request.steps_m)
                 checkLoadedHistory(state, ref);
             run.advance(steps, [&](long long step, Solver& solver, const auto&) {
@@ -238,8 +252,9 @@ namespace chdr::experiments::e03 {
     }  // namespace e03RunDetail
 
     /** @brief Load the continuum histories and measure their evolution through the E03 targets.
-     * @param ref Continuum sampler of the spherical pulse, for example E03Reference.
-     * @param experiment Names for the run record.
+     * @param ref Continuum sampler of the spherical pulse in the experiment's medium, for example
+     * E03Reference.
+     * @param experiment Names, medium and solver configuration of the run.
      * @pre The caller has validated the experiment's parameter names.
      */
     template <DipolePulseReference Reference>
@@ -247,7 +262,7 @@ namespace chdr::experiments::e03 {
                 const SphericalExperiment& experiment) {
         validateSphericalRun(request);
         const auto grid = sphericalGrid(sphericalCells(request), true);
-        auto run        = makeSphericalSimulation(grid, ref);
+        auto run        = makeSphericalSimulation(grid, ref, experiment);
         run.load(ref);
         e03RunDetail::evolveE03(run, request, grid, ref, experiment);
     }

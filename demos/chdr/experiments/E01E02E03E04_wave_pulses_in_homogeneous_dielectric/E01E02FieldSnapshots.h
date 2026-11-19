@@ -19,6 +19,13 @@
 namespace chdr::experiments::e01e02 {
     using PulseSolver = solver::ChdrSolver<solver::StandardSolverPeriodic>;
 
+    /// The run-record description of magneticField(), which every pulse measurement uses.
+    inline const char* magneticConvention(const PulseSolver& state) {
+        return state.ebReconstructionConvention() == EBReconstructionConvention::R1
+                   ? "R1 magnetic field, central curl of the current vector potential"
+                   : "R2 averaged magnetic field";
+    }
+
     /** @brief Schedule E, R2 B and raw B snapshots without changing the measured fields.
      * @details The shared writer derives positions and times from the solver's LevelContract.
      * Raw magnetic reconstruction uses independent storage through computeRawMagneticField;
@@ -65,7 +72,11 @@ namespace chdr::experiments::e01e02 {
             const output::FrameRecord frame{static_cast<int>(step),
                                             state.labelTime(Quantity::VectorPotential, step),
                                             state.getDt()};
-            writer_m->writeFrame(frame, state.levelContract(), fields);
+            // The plane pulse has phi = 0, which gives R1's electric field a unique label.
+            // R2 frames are written without the declaration, as before.
+            const bool phiIsZero =
+                state.ebReconstructionConvention() == EBReconstructionConvention::R1;
+            writer_m->writeFrame(frame, state.levelContract(), fields, phiIsZero);
         }
 
         /// Publish the complete accepted frame series before the run record is written.

@@ -105,15 +105,17 @@ namespace chdr::experiments::e01e02 {
      * @param field Current A_n, electricField() or magneticField(), matching quantity.
      * @param reference Continuum reference with the experiment's fixed physical parameters,
      * for example E01Reference.
-     * @param contract The solver's staggered R2 level contract.
+     * @param contract The solver's level contract (component positions and time labels).
      * @param quantity VectorPotential, Electric or Magnetic. Potential samples use slots 1--3;
      * field samples use slots 0--2. All three components contribute, including reference zeros.
      * @param time Actual labelTime(quantity, completedSolves()), not the requested target time.
      * @details Only owned cells contribute, once globally. The reference uses the same
      * component positions as the numerical field [ryu2016potentialfdtd, Appendix A,
-     * Eqs. (19)--(24)]. In particular, \f$B_y\f$ has a longitudinal half-cell offset.
-     * The caller supplies R2-averaged magneticField(), whose time matches E
-     * [fallahi2020mithra20fullwavesimulation, Eqs. (3.50)--(3.55)]. No interpolation or
+     * Eqs. (19)--(24)]. In the staggered layout \f$B_y\f$ has a longitudinal half-cell
+     * offset, and the R2-averaged magneticField() has the time of E
+     * [fallahi2020mithra20fullwavesimulation, Eqs. (3.50)--(3.55)]. In the collocated layout
+     * every component is at the cell center, and the R1 magneticField() has the time of
+     * \f$A^n\f$. No interpolation or
      * analytic replacement of reconstructed fields is performed. Views are used only
      * during this measurement; no numerical field or halo is modified.
      */

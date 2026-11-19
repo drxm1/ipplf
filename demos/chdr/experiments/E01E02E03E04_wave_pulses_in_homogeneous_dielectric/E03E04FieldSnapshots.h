@@ -19,11 +19,11 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Plane.h"
 
 namespace chdr::experiments::e03 {
-    /** @brief Write E and R2 B of selected states of a spherical pulse run as a ParaView series.
+    /** @brief Write E and B of selected states of a spherical pulse run as a ParaView series.
      * @details The frames are a visualization product. They do not enter any measurement,
      * and they are disabled unless the input enables the `fields` observation, because one
      * frame of the finest mesh holds \f$2\cdot3\cdot324^3\f$ values. The arrays are the
-     * reconstructed fields that the measurements use, at their native staggered positions;
+     * reconstructed fields that the measurements use, at their native positions;
      * the shared writer records each array's time and component positions from the
      * solver's LevelContract. With `single_precision_fields: true` the values are stored as
      * 4-byte numbers, which halves the size of a frame.
@@ -93,7 +93,7 @@ namespace chdr::experiments::e03 {
         std::unique_ptr<output::FieldOutput> writer_m;
     };
 
-    /** @brief Write the z=0 sections of E and R2 B at prescribed and scheduled states.
+    /** @brief Write the z=0 sections of E and B at prescribed and scheduled states.
      * @details E03's `write_plane` prescribes the initial state and its final field target.
      * A `plane` block in `observations` adds a schedule for two-dimensional videos; its
      * `every` defaults to one section per step, and the final state is always included.
