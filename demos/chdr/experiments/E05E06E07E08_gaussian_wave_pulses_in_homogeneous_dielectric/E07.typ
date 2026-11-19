@@ -31,7 +31,7 @@ Every component position in the table of E03 has at least one coordinate at a ce
 and with an even $N$ no cell center lies on a coordinate plane through the center.
 Thus $r >= h\/2$ at every sample.
 At these samples and at the startup times $-h_t <= t <= h_t$,
-the inward-traveling term is below $3 times 10^(-10)$ of the peak values of $vb(E)$, $vb(B)$, $vb(A)$ and $phi$ on all four meshes.
+the inward-traveling term is below $10^(-9)$ of the peak values of $vb(E)$, $vb(B)$, $vb(A)$ and $phi$ on all four meshes.
 After a travel of $w\/4$ it is below $10^(-13)$.
 We neglect it, as we neglect the periodic copies below.
 
