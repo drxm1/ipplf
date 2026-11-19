@@ -27,20 +27,17 @@ $
 (`LevelContract`, a deduction by Taylor expansion), which is first order in $h_t$.
 E03.meas06 is measured only for the two staggered configurations, because its operators are those of the staggered layout.
 
-All four configurations save the $z = 0$ section of E03 at the initial state and at the final field target on every level.
+The two staggered configurations save the $z = 0$ section of E03 at the initial state and at the final field target on every level.
 As in E03, the section interpolates every component trilinearly from its own sample locations (@E09-samples) to the points $(x_i, y_j, 0)$,
 and the error of a sample is formed before the interpolation.
-The plane $z = 0$ lies halfway between two layers of cell centers, so the collocated configurations interpolate in $z$ only.
-For Standard the section holds $vb(E)$ at $t_(n-1/2)$ and $vb(B)$ at $t_n$, and each error uses the time of its own field.
-For StandardR2Prime it holds both at $t_(n-1/2)$.
 
 === E11.meas01: difference between O1VS and Homogeneous
 From the sections, compute the largest difference of $vb(E)$ and of $vb(B)$ between O1VS and Homogeneous at the final target,
 relative to the largest $abs(vb(E))$ and $abs(vb(B))$ of the section.
 Both configurations use the same positions and the same interpolation to the section, so the interpolation does not enter the difference.
-The sections of the collocated configurations are not compared with those of the staggered ones:
-their positions and their interpolation differ, and for Standard also the time of $vb(B)$.
-These configurations are compared through the error norms against the continuum.
+The collocated configurations save no section: their positions and their interpolation differ from those of the staggered ones,
+and for Standard also the time of $vb(B)$.
+They are compared through the error norms against the continuum.
 
 === E11.meas02: samples along the central grid lines
 With `write_native_lines`, every configuration saves $vb(A)$, $phi$, $vb(E)$ and $vb(B)$ in the cells of the three grid lines
@@ -66,7 +63,7 @@ It loads $phi$ at $t_(-1/2)$ and $t_(-3/2)$ instead of $t_0$ and $t_(-1)$, and $
 So at a given time its $phi$ has received one update more than that of O1VS, whose slots start at $t_(1/2)$ and $t_(-1/2)$.
 Its $vb(E)$ is the output of `evaluate_EB()`, now at $t_(n-1/2)$ alone.
 Its $vb(B)$ is the average of the central curls of both slots at $t_(n-1/2)$ (`ChdrSolver::reconstructEB`), not the $vb(B)^n$ of `evaluate_EB()`.
-StandardR2Prime measures E03.meas01–05 and saves the sections as Standard.
+StandardR2Prime measures E03.meas01–05 as Standard.
 It runs in all of E09 to E14.
 Its first runs used an executable that differs from that of the other configurations only by this configuration.
 

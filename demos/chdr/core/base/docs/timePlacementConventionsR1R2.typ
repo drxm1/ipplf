@@ -39,30 +39,34 @@ The following table therefore lists *R1* as the time-convention (in demos/chdr I
 #[
   #set text(size: 9pt)
   #table(
-    columns: (auto, 1fr, 1fr),
-    align: (left + horizon, center + horizon, center + horizon),
+    columns: (auto, 1fr, 1fr, 1fr),
+    align: (left + horizon, center + horizon, center + horizon, center + horizon),
     inset: (x: 5pt, y: 4.5pt),
     stroke: none,
     table.hline(stroke: 0.6pt),
     [*after $n$ solves*],
     [*R1* (in IPPL's FDTD Solvers currently)],
     [*R2* (half-step, MITHRA)],
+    [*R2′* (half-step, $phi$ behind)],
     table.hline(stroke: 0.4pt),
-    [current slot `A_n`], [$phi^n$, $vb(A)^n$], [$phi^(n+1\/2)$, $vb(A)^n$],
-    [previous slot `A_nm1`], [$phi^(n-1)$, $vb(A)^(n-1)$], [$phi^(n-1\/2)$, $vb(A)^(n-1)$],
-    [source for the next solve], [$rho^n$, $vb(J)^n$], [$rho^(n+1\/2)$, $vb(J)^n$],
+    [current slot `A_n`], [$phi^n$, $vb(A)^n$], [$phi^(n+1\/2)$, $vb(A)^n$], [$phi^(n-1\/2)$, $vb(A)^n$],
+    [previous slot `A_nm1`], [$phi^(n-1)$, $vb(A)^(n-1)$], [$phi^(n-1\/2)$, $vb(A)^(n-1)$], [$phi^(n-3\/2)$, $vb(A)^(n-1)$],
+    [source for the next solve], [$rho^n$, $vb(J)^n$], [$rho^(n+1\/2)$, $vb(J)^n$], [$rho^(n-1\/2)$, $vb(J)^n$],
     table.hline(stroke: 0.4pt + luma(85%)),
     [$vb(E)$],
     [$-(vb(A)^n - vb(A)^(n-1))\/h_t - grad phi^n$\ #text(
         fill: red,
       )[at $t_(n-1\/2)$ and $t_n$]],
     [$vb(E)^(n-1\/2) = -(vb(A)^n - vb(A)^(n-1))\/h_t - grad phi^(n-1\/2)$],
+    [$vb(E)^(n-1\/2) = -(vb(A)^n - vb(A)^(n-1))\/h_t - grad phi^(n-1\/2)$, from the current slot],
     [$vb(B)$],
     [$vb(B)^n = curl vb(A)^n$],
+    [$vb(B)^(n-1\/2) = 1/2 curl (vb(A)^n + vb(A)^(n-1))$],
     [$vb(B)^(n-1\/2) = 1/2 curl (vb(A)^n + vb(A)^(n-1))$],
     table.hline(stroke: 0.4pt + luma(85%)),
     [order of $vb(E)$ ($phi eq.not 0$)],
     [1],
+    [2],
     [2],
     table.hline(stroke: 0.6pt),
   )
@@ -89,5 +93,13 @@ The following table therefore lists *R1* as the time-convention (in demos/chdr I
   All four components use one Mur speed per face, which is why O1-VS with Mur faces requires $alpha = 1$ (see @sec-O1VS-implementation).
   Applying the condition to each potential component does not guarantee that the gauge condition and Gauss's law hold at the boundary.
   @experiment-e04 measures these defects.
+
+  *R2′* (`R2Prime` in `LevelContract`) keeps the slots that `evaluate_EB()` reads, but the current slot holds $phi^(n-1\/2)$, half a step behind $vb(A)^n$.
+  `evaluate_EB()` takes $grad phi$ from the current slot, so with R2′ its $vb(E)$ has the single time $t_(n-1\/2)$ without any change of the code.
+  `step()` updates the four components separately, so a common shift of $phi$ and $rho$ does not change the update, and for the reason given above for R2 the Mur condition needs no change either.
+  R1 is the notation of Winkler @winkler2024ChargeConservingFDTD[Sec. 3.1, p. 16, and Eqs. (3.1)–(3.4), p. 17].
+  Neither `step()`, `evaluate_EB()` nor the Mur update requires it.
+  E11 and E13 compare both readings of `StandardFDTDSolver` (@experiment-e11): with R1 the error of $vb(E)$ tends to first order, with R2′ it converges with second order.
+  For R2′ `ChdrSolver` averages $vb(B)$ over both slots. The raw curl of `evaluate_EB()` belongs to $t_n$.
 
 ]

@@ -90,7 +90,8 @@ namespace chdr {
         /// as described above.
         R2,
 
-        /// Use an alternative convention for equivalence tests.
+        /// Use the alternative convention in which IPPL's evaluate_EB() gives E a single time
+        /// (equivalence tests, and the StandardR2Prime configuration of the pulse experiments).
         /// The current phi represents \f$t_{k-1/2}\f$, so reconstruction reads the current phi to
         /// match the A difference. Scalar(phi)-history initialization and
         /// charge-source sampling must shift consistently relative to R2. Changing the field
