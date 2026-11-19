@@ -1,0 +1,7 @@
+schema_version: 1
+case: E09
+units: {system: normalized}
+parameters: {cells_per_pulse: 512, transverse_cells_per_axis: 4, solver_configuration: Homogeneous}
+observations:
+  fields: {every: 160}
+output: {directory: n512}
