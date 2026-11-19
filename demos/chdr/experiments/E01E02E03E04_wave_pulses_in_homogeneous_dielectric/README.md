@@ -348,6 +348,14 @@ the E03.meas01–06 observations. The executable accepts `case: E03` and
 adds the initial and final central sections. `inputs/E03-n96.yaml` is a
 single-run example.
 
+`write_native_lines: true` (launcher flag `--write-native-lines`) adds `native-lines.csv`.
+It holds \(\mathbf A\), \(\phi\), \(\mathbf E\) and \(\mathbf B\) along the three grid lines
+through the cell with the index \(N/2-1\) in every direction, for the initial state and the final target.
+Each row is one component at its own position (`x,y,z` relative to the pulse center),
+with the numerical value and the continuum value at that position and at the comparison time of the quantity.
+Nothing is interpolated. Each quantity uses the state that its own clock selects,
+and \(\mathbf B\) uses the state of \(\mathbf E\), as in `measurements.csv`.
+
 E03 runs one pulse: the pulse of an electric dipole (a TM_r field in the multipole terminology).
 Its scalar and vector potentials are both nonzero.
 The first study also ran the dual pulse of a magnetic dipole (TE_r),

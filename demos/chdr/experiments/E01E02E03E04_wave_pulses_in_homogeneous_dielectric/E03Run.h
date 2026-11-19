@@ -21,6 +21,7 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04FieldSnapshots.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03NativeLines.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Plane.h"
 
 namespace chdr::experiments::e03 {
@@ -32,6 +33,9 @@ namespace chdr::experiments::e03 {
         struct Checkpoint {
             double target_m;
             int aStep_m, phiStep_m, ebStep_m;
+
+            /// The last of the three states that this target selects.
+            int lastStep() const { return std::max({aStep_m, phiStep_m, ebStep_m}); }
         };
 
         inline std::array<Checkpoint, 4> e03Checkpoints(Solver& state, double v) {
@@ -180,11 +184,13 @@ namespace chdr::experiments::e03 {
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state, int steps,
                        int protocolSteps, bool plane, const Reference& ref,
                        const SphericalExperiment& experiment,
-                       const SphericalFieldSnapshots& snapshots) {
+                       const SphericalFieldSnapshots& snapshots,
+                       const SphericalNativeLines& lines) {
             auto record =
                 output::describeRun(experiment.application_m, grid, state, steps,
                                     std::string(experiment.name_m) + " periodic spherical pulse");
             snapshots.record(record);
+            lines.record(record);
             record.effective_m["protocol_steps"] = protocolSteps;
             record.effective_m["material/relative_permittivity"] =
                 experiment.relativePermittivity_m;
@@ -204,11 +210,37 @@ namespace chdr::experiments::e03 {
             return {0, finalFieldStep};
         }
 
+        /** @brief Write the samples along the central grid lines for the initial state and the
+         * final target.
+         * @details Each quantity is written in the state that its own clock selects, with the
+         * comparison time of the measurements. \f$\mathbf{B}\f$ uses the state of
+         * \f$\mathbf{E}\f$, as E03.meas02 does.
+         */
+        template <DipolePulseReference Reference>
+        void observeNativeLines(const SphericalNativeLines& lines, Solver& state,
+                                const Reference& ref, const Checkpoint& last, long long step) {
+            if (!lines.writes())
+                return;
+            const auto write = [&](auto& field, Quantity quantity) {
+                lines.write(field, state.levelContract(), ref, quantity, step,
+                            comparisonTime(state, quantity, step));
+            };
+            if (step == 0 || step == last.aStep_m)
+                write(state.A_n, Quantity::VectorPotential);
+            if (step == 0 || step == last.phiStep_m)
+                write(state.A_n, Quantity::Phi);
+            if (step == 0 || step == last.ebStep_m) {
+                write(state.electricField(), Quantity::Electric);
+                write(state.magneticField(), Quantity::Magnetic);
+            }
+        }
+
         /// Route each state to the observations whose native clocks select it.
         template <DipolePulseReference Reference>
         void observeE03(Solver& state, const Reference& ref, E03MeasurementsCsv& csv,
                         const ConstraintScales& scales, const std::array<Checkpoint, 4>& points,
-                        long long step) {
+                        const SphericalNativeLines& lines, long long step) {
+            observeNativeLines(lines, state, ref, points.back(), step);
             if (step == 0) {
                 observeFields(state, ref, csv, scales, 0, 0);
                 observeVectorPotential(state, ref, csv, scales, 0, 0);
@@ -228,26 +260,26 @@ namespace chdr::experiments::e03 {
         void evolveE03(Simulation& run, const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, const Reference& ref,
                        const SphericalExperiment& experiment) {
-            auto& state         = run.solver();
-            const auto points   = e03Checkpoints(state, ref.v_m);
-            const auto last     = points.back();
-            const int fullSteps = std::max({last.aStep_m, last.ebStep_m, last.phiStep_m});
-            const int steps     = sphericalRunSteps(request, fullSteps, experiment.name_m);
+            auto& state       = run.solver();
+            const auto points = e03Checkpoints(state, ref.v_m);
+            const auto last   = points.back();
+            const int steps   = sphericalRunSteps(request, last.lastStep(), experiment.name_m);
             E03MeasurementsCsv csv(request, state.A_n.getLayout().comm, grid.cells_m[0]);
             SphericalFieldSnapshots snapshots(request, grid, state);
             const SphericalPlaneFrames planes(request, writePlaneSteps(request, last.ebStep_m));
+            const SphericalNativeLines lines(request, state.A_n.getLayout().comm);
             const auto scales = constraintScales(state, ref, experiment);
             if (request.steps_m)
                 checkLoadedHistory(state, ref);
             run.advance(steps, [&](long long step, Solver& solver, const auto&) {
-                observeE03(solver, ref, csv, scales, points, step);
+                observeE03(solver, ref, csv, scales, points, lines, step);
                 planes.observe(step, solver, ref, steps);
                 snapshots.observe(step, solver, steps);
             });
             csv.finish();
             snapshots.finish();
-            recordE03(request, grid, state, steps, fullSteps, planes.writes(), ref, experiment,
-                      snapshots);
+            recordE03(request, grid, state, steps, last.lastStep(), planes.writes(), ref,
+                      experiment, snapshots, lines);
         }
     }  // namespace e03RunDetail
 

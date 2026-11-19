@@ -37,7 +37,7 @@ namespace chdr::experiments::e09e14 {
     /// E07 (periodic cube) in the medium of epsilon; E11 in vacuum, E13 in the dielectric.
     void runPeriodicDipole(const input::ChdrYamlRunInput& request, const char* name,
                            double epsilon) {
-        input::validateParameters(request, {"cells_per_axis", "write_plane",
+        input::validateParameters(request, {"cells_per_axis", "write_plane", "write_native_lines",
                                             "single_precision_fields", "solver_configuration"});
         e03::runE03(request, dipolePulse(epsilon), dipoleExperiment(request, name, epsilon));
     }

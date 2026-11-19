@@ -28,8 +28,9 @@ namespace {
 
     /// Periodic spherical pulse of E03.typ.
     void runE03(const chdr::input::ChdrYamlRunInput& input) {
-        chdr::input::validateParameters(input, {"cells_per_axis", "write_plane",
-                                                "profile_sharpness", "single_precision_fields"});
+        chdr::input::validateParameters(
+            input, {"cells_per_axis", "write_plane", "write_native_lines", "profile_sharpness",
+                    "single_precision_fields"});
         spherical::runE03(input, compactDipolePulse(input),
                           {"E03", experiment::WavePulsesApplication, spherical::E03Epsilon,
                            chdr::experiments::O1VSConfiguration});

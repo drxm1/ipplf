@@ -79,6 +79,8 @@ def case_input(args, n, experiment):
     parameters = f"cells_per_axis: {n}"
     if args.write_plane or (experiment in ("E03", "E07") and n == LEVELS[0]):
         parameters += ", write_plane: true"
+    if args.write_native_lines:
+        parameters += ", write_native_lines: true"
     if args.profile_sharpness != 1:
         parameters += f", profile_sharpness: {args.profile_sharpness:g}"
     if args.solver_configuration:
@@ -154,6 +156,10 @@ def study_arguments(description):
     parser.add_argument("--write-plane", action="store_true",
                         help="write the z=0 section at the initial state and the final field "
                              "target on every level, not only on the coarsest E03/E07 mesh")
+    parser.add_argument("--write-native-lines", action="store_true",
+                        help="write A, phi, E and B along the three central grid lines to "
+                             "native-lines.csv, at their own positions, for the initial state "
+                             "and the final target")
     args = parser.parse_args()
     if min(args.ranks, args.threads) < 1 or not shutil.which("time"):
         parser.error("Positive ranks and threads and GNU time on PATH are required")

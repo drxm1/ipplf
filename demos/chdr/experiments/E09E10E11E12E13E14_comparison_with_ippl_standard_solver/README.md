@@ -74,6 +74,8 @@ python3 ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_stan
 For `O1VS` and `Homogeneous` in E11 and E13 the script always writes the \(z=0\) section at the
 initial state and the final field target on every level (E11.meas01, E13.meas01). The collocated
 configurations write it only with `--write-plane`. E12 and E14 need no sections.
+For E11 and E13, `--write-native-lines` adds `native-lines.csv` (E11.meas02): the potentials and fields along
+the three central grid lines, each component at its own position beside its continuum value.
 
 The directory holds study inputs of E09 and E10 for `O1VS`, `Homogeneous` and `Standard`.
 The `StandardR2Prime` studies of E09 and E10 use the `Standard` inputs with

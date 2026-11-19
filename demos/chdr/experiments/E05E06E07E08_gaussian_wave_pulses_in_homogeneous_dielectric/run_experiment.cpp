@@ -23,8 +23,8 @@ namespace chdr::experiments::e05e08 {
 
     /// E03 with the Gaussian profile. E07 has no `profile_sharpness` parameter.
     void runE07(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request,
-                                  {"cells_per_axis", "write_plane", "single_precision_fields"});
+        input::validateParameters(request, {"cells_per_axis", "write_plane", "write_native_lines",
+                                            "single_precision_fields"});
         e03::runE03(request, GaussianDipolePulse{1 / std::sqrt(e03::E03Epsilon), e03::E03BoxCentre},
                     {"E07", GaussianPulsesApplication, e03::E03Epsilon, O1VSConfiguration});
     }
