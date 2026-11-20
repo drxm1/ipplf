@@ -41,8 +41,9 @@ namespace chdr::experiments::e03 {
         }
 
         /** @brief Interpolate the numerical sample and its native error separately.
-         * @details A centred z=0 plane is half a cell above its owner anchor. A and E use
-         * positive-face offsets and B uses edge offsets [ryu2016potentialfdtd, Appendix A].
+         * @details A centered z=0 plane is half a cell above its owner anchor. In the
+         * staggered layout A and E use positive-face offsets and B uses edge offsets
+         * [ryu2016potentialfdtd, Appendix A]; in the collocated layout all are at cell centers.
          * The native difference is formed before interpolation as prescribed by E03.typ.
          */
         template <class View, DipolePulseReference Reference>
@@ -113,9 +114,11 @@ namespace chdr::experiments::e03 {
         }
     }  // namespace planeDetail
 
-    /** @brief Export E and R2 B on one physical z=0 plane with the z-only MPI layout.
+    /** @brief Export E and B on one physical z=0 plane with the z-only MPI layout.
      * @details Each point is owned by the rank holding the lower central z cell. Ghosts
-     * supply bracket samples but never contribute as additional plotting points.
+     * supply bracket samples but never contribute as additional plotting points. Each error
+     * uses the comparison time of its own field; the time column holds that of E. Under R2
+     * both times agree; under R1, B belongs to \f$t_n\f$ and E to \f$t_{n-1/2}\f$.
      */
     template <class Solver, DipolePulseReference Reference>
     void writeE03Plane(Solver& state, const Reference& ref, const std::string& directory,
@@ -124,10 +127,11 @@ namespace chdr::experiments::e03 {
         const int n  = e.getLayout().getDomain()[0].length();
         using Device = typename EMFieldsType::view_type::device_type;
         Kokkos::View<double***, Kokkos::LayoutRight, Device> plane("E03 field section", n, n, 12);
-        const double time = state.labelTime(Quantity::Electric, step);
+        const double time = comparisonTime(state, Quantity::Electric, step);
         planeDetail::samplePlane(e, plane, 0, state.levelContract(), ref, Quantity::Electric, time);
         planeDetail::samplePlane(state.magneticField(), plane, 6, state.levelContract(), ref,
-                                 Quantity::Magnetic, time);
+                                 Quantity::Magnetic,
+                                 comparisonTime(state, Quantity::Magnetic, step));
         Kokkos::fence();
         const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, plane);
         const auto comm = e.getLayout().comm;

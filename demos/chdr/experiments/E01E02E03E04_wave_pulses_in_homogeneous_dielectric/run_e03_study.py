@@ -5,7 +5,7 @@ The script writes each case's input, launches the executable and records the exi
 the wall time and the peak memory of every rank. It writes measured data and run records
 only: it computes no orders and draws no figures.
 
-With --fields-every the executable also writes full-volume frames of E and R2 B for
+With --fields-every the executable also writes full-volume frames of E and B for
 ParaView (data/fields/fields.pvti.series). One frame holds 48 bytes per cell, or 24 with
 --single-precision-fields: 0.8 GB per frame at 324 cells per axis in single precision.
 """
@@ -31,7 +31,8 @@ def git(*args):
 def study_identity(args, experiment, binary_sha256):
     """The settings that every case of one study directory must share."""
     return {"experiment": experiment, "binary_sha256": binary_sha256, "ranks": args.ranks,
-            "threads": args.threads, "profile_sharpness": args.profile_sharpness}
+            "threads": args.threads, "profile_sharpness": args.profile_sharpness,
+            "solver_configuration": args.solver_configuration}
 
 
 def prepare_study(args, experiment="E03"):
@@ -46,9 +47,10 @@ def prepare_study(args, experiment="E03"):
         previous = json.loads(metadata.read_text())
         previous.setdefault("experiment", "E03")
         previous.setdefault("profile_sharpness", 1.0)
+        previous.setdefault("solver_configuration", None)
         if any(previous[key] != value for key, value in identity.items()):
             raise ValueError("Continuation requires the same experiment, executable, ranks, "
-                             "threads and profile sharpness")
+                             "threads, profile sharpness and solver configuration")
         with pinned.open("rb") as executable:
             if hashlib.file_digest(executable, "sha256").hexdigest() != identity["binary_sha256"]:
                 raise ValueError("The pinned executable changed")
@@ -75,10 +77,16 @@ def frame_interval(args, n, intervals=None):
 def case_input(args, n, experiment):
     """One ordinary YAML input; optional settings are written only when they are selected."""
     parameters = f"cells_per_axis: {n}"
-    if experiment in ("E03", "E07") and n == LEVELS[0]:
+    if args.write_plane or (experiment in ("E03", "E07") and n == LEVELS[0]):
         parameters += ", write_plane: true"
+    if args.write_native_lines:
+        parameters += ", write_native_lines: true"
+    if args.write_energy_parts:
+        parameters += ", write_energy_parts: true"
     if args.profile_sharpness != 1:
         parameters += f", profile_sharpness: {args.profile_sharpness:g}"
+    if args.solver_configuration:
+        parameters += f", solver_configuration: {args.solver_configuration}"
     observations = ""
     if frame_interval(args, n):
         observations = f"observations:\n  fields: {{every: {frame_interval(args, n)}}}\n"
@@ -140,9 +148,24 @@ def study_arguments(description):
                              "one value for all levels, or one per level in ascending order")
     parser.add_argument("--single-precision-fields", action="store_true",
                         help="store the field frames as 4-byte values (half the size)")
+    parser.add_argument("--solver-configuration",
+                        choices=("O1VS", "Homogeneous", "Standard", "StandardR2Prime"),
+                        default=None, help="solver configuration (written to the input only "
+                                           "when given; E03 and E04 run O1VS)")
     parser.add_argument("--plane-every", type=int, nargs="+", default=[],
-                        help="write the z=0 section of E and R2 B to plane-z0.csv every this many "
+                        help="write the z=0 section of E and B to plane-z0.csv every this many "
                              "steps, for two-dimensional videos: one value or one per level")
+    parser.add_argument("--write-plane", action="store_true",
+                        help="write the z=0 section at the initial state and the final field "
+                             "target on every level, not only on the coarsest E03/E07 mesh")
+    parser.add_argument("--write-native-lines", action="store_true",
+                        help="write A, phi, E and B along the three central grid lines to "
+                             "native-lines.csv, at their own positions, for the initial state "
+                             "and the final target")
+    parser.add_argument("--write-energy-parts", action="store_true",
+                        help="E12 and E14 only: add the electric part, the magnetic part and the "
+                             "mean energy of the two raw curls of the initial state to "
+                             "measurements.csv (E12.meas02)")
     args = parser.parse_args()
     if min(args.ranks, args.threads) < 1 or not shutil.which("time"):
         parser.error("Positive ranks and threads and GNU time on PATH are required")

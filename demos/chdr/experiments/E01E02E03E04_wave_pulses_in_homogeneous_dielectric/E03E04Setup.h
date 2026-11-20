@@ -11,6 +11,7 @@
 #include "core/input/RunInput.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/PulseReferenceConcepts.h"
 
 namespace chdr::experiments::e03 {
@@ -57,21 +58,32 @@ namespace chdr::experiments::e03 {
     }
 
     /** @brief Select the same bulk update for periodic propagation and Mur exit.
-     * @details O1VS advances in physical time. The Mur coefficient sees the dielectric
-     * speed [chew2014generalizedgauge, Eq. (13), mur1981AbsorbingBoundaryFdtd, Eq. (16)].
+     * @details The experiment selects the medium and the solver configuration. O1VS advances
+     * in physical time. The Mur coefficient sees the dielectric speed
+     * [chew2014generalizedgauge, Eq. (13), mur1981AbsorbingBoundaryFdtd, Eq. (16)]; for the
+     * Homogeneous formulation the solver converts it to the speed of its scaled step.
      */
     template <DipolePulseReference Reference>
     SphericalSimulation makeSphericalSimulation(const simulation::ChdrCartesianGridSettings& grid,
-                                                const Reference& ref) {
+                                                const Reference& ref,
+                                                const SphericalExperiment& experiment) {
+        const double permittivity = experiment.relativePermittivity_m;
         const auto dielectric =
             KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
             marked = false;
-            return E03Epsilon;
+            return permittivity;
         };
         const auto speed =
             grid.periodic_m[0] ? solver::MurSpeed::matched() : solver::MurSpeed::physical(ref.v_m);
+        const auto& solver = experiment.solver_m;
         return SphericalSimulation{
-            grid, dielectric, {.murSpeed_m = speed, .timeStep_m = grid.spacing_m[0] / 2}};
+            grid,
+            dielectric,
+            {.reconstruction_m = solver.reconstruction_m,
+             .spatial_m        = solver.spatial_m,
+             .formulation_m    = solver::FormulationParameters{solver.formulation_m, 1.0},
+             .murSpeed_m       = speed,
+             .timeStep_m       = grid.spacing_m[0] / 2}};
     }
 
     /// The requested `run.steps`, or the full protocol; a limit outside the protocol is an error.
@@ -83,11 +95,11 @@ namespace chdr::experiments::e03 {
         return steps;
     }
 
-    /// Invert LevelContract's label map to select the nearest native observation.
+    /// Invert the label map of comparisonTime to select the nearest native observation.
     inline int nearestSphericalStep(SphericalSimulation::Solver& state, Quantity quantity,
                                     double target) {
         return static_cast<int>(
-            std::floor((target - state.labelTime(quantity, 0)) / state.getDt() + 0.5));
+            std::floor((target - comparisonTime(state, quantity, 0)) / state.getDt() + 0.5));
     }
 
     /// The optional observations are visualization only: full frames and z=0 sections.

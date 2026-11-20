@@ -19,5 +19,7 @@ namespace chdr::experiments::e05e08 {
                                                e01e02::E02Targets,
                                                E05CellsPerPulseLevels.size(),
                                                false,
-                                               GaussianPulsesApplication};
+                                               GaussianPulsesApplication,
+                                               2.13,
+                                               false};
 }  // namespace chdr::experiments::e05e08

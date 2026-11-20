@@ -28,18 +28,22 @@ namespace {
 
     /// Periodic spherical pulse of E03.typ.
     void runE03(const chdr::input::ChdrYamlRunInput& input) {
-        chdr::input::validateParameters(input, {"cells_per_axis", "write_plane",
-                                                "profile_sharpness", "single_precision_fields"});
+        chdr::input::validateParameters(
+            input, {"cells_per_axis", "write_plane", "write_native_lines", "profile_sharpness",
+                    "single_precision_fields"});
         spherical::runE03(input, compactDipolePulse(input),
-                          {"E03", experiment::WavePulsesApplication});
+                          {"E03", experiment::WavePulsesApplication, spherical::E03Epsilon,
+                           chdr::experiments::O1VSConfiguration});
     }
 
     /// The same pulse leaving the all-Mur cube of E04.typ.
     void runE04(const chdr::input::ChdrYamlRunInput& input) {
         chdr::input::validateParameters(
             input, {"cells_per_axis", "profile_sharpness", "single_precision_fields"});
-        chdr::experiments::e04::runE04(input, compactDipolePulse(input),
-                                       {"E04", experiment::WavePulsesApplication});
+        chdr::experiments::e04::runE04(
+            input, compactDipolePulse(input),
+            {"E04", experiment::WavePulsesApplication, spherical::E03Epsilon,
+             chdr::experiments::O1VSConfiguration});
     }
 
     /// Keep experiment and study selection visible at the application's entry point.

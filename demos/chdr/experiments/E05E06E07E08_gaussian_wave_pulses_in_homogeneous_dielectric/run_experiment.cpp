@@ -8,14 +8,8 @@
 
 namespace chdr::experiments::e05e08 {
     namespace gaussian = E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric;
-
-    /// The Gaussian plane pulse of E05.typ on the E01/E02 run path.
-    using GaussianPlanePulse = e01e02::e01Reference::E01AnalyticContinuumReferenceSampler<
-        gaussian::GaussianPotentialProfile>;
-
-    /// The Gaussian dipole pulse of E07.typ on the E03/E04 run path.
-    using GaussianDipolePulse =
-        e03::reference::E03AnalyticContinuumReferenceSampler<gaussian::GaussianRadialProfile>;
+    using gaussian::GaussianDipolePulse;
+    using gaussian::GaussianPlanePulse;
 
     /// E01 with the Gaussian profile and the ladder 32 to 1024.
     void runE05(const input::ChdrYamlRunInput& request) {
@@ -29,17 +23,17 @@ namespace chdr::experiments::e05e08 {
 
     /// E03 with the Gaussian profile. E07 has no `profile_sharpness` parameter.
     void runE07(const input::ChdrYamlRunInput& request) {
-        input::validateParameters(request,
-                                  {"cells_per_axis", "write_plane", "single_precision_fields"});
+        input::validateParameters(request, {"cells_per_axis", "write_plane", "write_native_lines",
+                                            "single_precision_fields"});
         e03::runE03(request, GaussianDipolePulse{1 / std::sqrt(e03::E03Epsilon), e03::E03BoxCentre},
-                    {"E07", GaussianPulsesApplication});
+                    {"E07", GaussianPulsesApplication, e03::E03Epsilon, O1VSConfiguration});
     }
 
     /// E04 with the pulse of E07.
     void runE08(const input::ChdrYamlRunInput& request) {
         input::validateParameters(request, {"cells_per_axis", "single_precision_fields"});
         e04::runE04(request, GaussianDipolePulse{1 / std::sqrt(e03::E03Epsilon), e03::E03BoxCentre},
-                    {"E08", GaussianPulsesApplication});
+                    {"E08", GaussianPulsesApplication, e03::E03Epsilon, O1VSConfiguration});
     }
 }  // namespace chdr::experiments::e05e08
 

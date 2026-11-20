@@ -80,4 +80,12 @@ namespace chdr::experiments::E05E06E07E08_gaussian_wave_pulses_in_homogeneous_di
 
     static_assert(e01Reference::PlanePulseProfile<GaussianPotentialProfile>);
     static_assert(e03Reference::RadialPulseProfile<GaussianRadialProfile>);
+
+    /// The Gaussian plane pulse of E05.typ on the E01/E02 run path.
+    using GaussianPlanePulse =
+        e01Reference::E01AnalyticContinuumReferenceSampler<GaussianPotentialProfile>;
+
+    /// The Gaussian dipole pulse of E07.typ on the E03/E04 run path.
+    using GaussianDipolePulse =
+        e03Reference::E03AnalyticContinuumReferenceSampler<GaussianRadialProfile>;
 }  // namespace chdr::experiments::E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric

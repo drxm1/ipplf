@@ -26,7 +26,8 @@ namespace chdr::experiments::e01e02 {
      * E01.h or E02.h. The cell-count factor follows from the fixed domain length divided by
      * the full pulse width. A zero transverse count permits an explicitly selected transverse
      * mesh, as in E01. Only E02's study bundles the profiles of a completed E01 study for its
-     * pre-contact comparison.
+     * pre-contact comparison. With selectableSolver_m the input selects the solver
+     * configuration (`parameters.solver_configuration`); otherwise the run uses O1VS.
      */
     struct PulseProtocol {
         const char* name_m;
@@ -38,5 +39,9 @@ namespace chdr::experiments::e01e02 {
         unsigned minimumStudyLevels_m;
         bool bundlesE01Reference_m;
         const char* application_m;
+        /// Relative permittivity of the homogeneous medium: 2.13 in E01 and E02, 1 in vacuum.
+        double relativePermittivity_m;
+        /// Whether the input selects the solver configuration; otherwise the run uses O1VS.
+        bool selectableSolver_m;
     };
 }  // namespace chdr::experiments::e01e02

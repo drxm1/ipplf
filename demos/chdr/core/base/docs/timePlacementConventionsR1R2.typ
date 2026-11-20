@@ -30,39 +30,41 @@ So with either reading, an error of first order in $h_t$ remains whenever $grad 
 
 Therefore it can make sense to use MITHRA's half-step convention, where the scalar potential stored after $n$ solves is $phi^(n+1/2)$, the value at time $t_(n+1/2)$, while the stored vector potential is still $vb(A)^n$, the value at time $t_n$. Then both output terms in the expression for calculating $vb(E)$ align in their time-location, at $t_(n-1/2)$ if one takes the gradient of the previous scalar slot, $grad phi^(n-1/2)$.
 
-M. Winkler's MSc thesis confirms that after $n$ solves the stored scalar and vector potentials are at the same time $t_n$, so that the current slot holds $phi^n$ and $vb(A)^n$.
+M.W's thesis wrote the stored scalar and vector potentials after $n$ solves at the same time $t_n$, so that in its notation the current slot holds $phi^n$ and $vb(A)^n$.
 There a superscript $n$ denotes the time $n h_t$, and the four-potential is one quantity that carries this superscript @winkler2024ChargeConservingFDTD[p. 16].
 Its update uses the same two levels $n$ and $n-1$ for all four components, with the source term $(rho^n, vb(J)^n)$ at $n h_t$ @winkler2024ChargeConservingFDTD[Eqs. (3.2), (3.4), p. 17].
 The reconstruction of $vb(E)$ and $vb(B)$ in the table is read from the code of `FDTDSolverBase::evaluate_EB`.
-The following table therefore lists *R1* as the time-convention (in demos/chdr I sometimes also write `ebReconstructionConvention` instead of time-convention) that the currently-in-ippl FDTD solver assumes, and *R2* is MITHRA's convention where $phi$ and $vb(A)$ are shifted by half a time-step. The different implementation options described in @sec-material-treatment-options have different requirements on which time-level convention is used (see @sec-O1VS-implementation).
+The following table therefore lists *R1* as the time-convention (in demos/chdr I sometimes also write `ebReconstructionConvention` instead of time-convention) of this notation for the currently-in-ippl FDTD solver, and *R2* is MITHRA's convention where $phi$ and $vb(A)$ are shifted by half a time-step. The different implementation options described in @sec-material-treatment-options have different requirements on which time-level convention is used (see @sec-O1VS-implementation).
 
 #[
   #set text(size: 9pt)
   #table(
-    columns: (auto, 1fr, 1fr),
-    align: (left + horizon, center + horizon, center + horizon),
+    columns: (auto, 1fr, 1fr, 1fr),
+    align: (left + horizon, center + horizon, center + horizon, center + horizon),
     inset: (x: 5pt, y: 4.5pt),
     stroke: none,
     table.hline(stroke: 0.6pt),
     [*after $n$ solves*],
-    [*R1* (in IPPL's FDTD Solvers currently)],
+    [*R1* (M.W's notation)],
     [*R2* (half-step, MITHRA)],
+    [*R2′* (half-step, $phi$ behind)],
     table.hline(stroke: 0.4pt),
-    [current slot `A_n`], [$phi^n$, $vb(A)^n$], [$phi^(n+1\/2)$, $vb(A)^n$],
-    [previous slot `A_nm1`], [$phi^(n-1)$, $vb(A)^(n-1)$], [$phi^(n-1\/2)$, $vb(A)^(n-1)$],
-    [source for the next solve], [$rho^n$, $vb(J)^n$], [$rho^(n+1\/2)$, $vb(J)^n$],
+    [current slot `A_n`], [$phi^n$, $vb(A)^n$], [$phi^(n+1\/2)$, $vb(A)^n$], [$phi^(n-1\/2)$, $vb(A)^n$],
+    [previous slot `A_nm1`], [$phi^(n-1)$, $vb(A)^(n-1)$], [$phi^(n-1\/2)$, $vb(A)^(n-1)$], [$phi^(n-3\/2)$, $vb(A)^(n-1)$],
+    [source for the next solve], [$rho^n$, $vb(J)^n$], [$rho^(n+1\/2)$, $vb(J)^n$], [$rho^(n-1\/2)$, $vb(J)^n$],
     table.hline(stroke: 0.4pt + luma(85%)),
     [$vb(E)$],
     [$-(vb(A)^n - vb(A)^(n-1))\/h_t - grad phi^n$\ #text(
         fill: red,
       )[at $t_(n-1\/2)$ and $t_n$]],
-    [$vb(E)^(n-1\/2) = -(vb(A)^n - vb(A)^(n-1))\/h_t - grad phi^(n-1\/2)$],
+    table.cell(colspan: 2)[$vb(E)^(n-1\/2) = -(vb(A)^n - vb(A)^(n-1))\/h_t - grad phi^(n-1\/2)$\ $grad phi$ from the previous slot (R2), from the current slot (R2′)],
     [$vb(B)$],
     [$vb(B)^n = curl vb(A)^n$],
-    [$vb(B)^(n-1\/2) = 1/2 curl (vb(A)^n + vb(A)^(n-1))$],
+    table.cell(colspan: 2)[$vb(B)^(n-1\/2) = 1/2 curl (vb(A)^n + vb(A)^(n-1))$],
     table.hline(stroke: 0.4pt + luma(85%)),
     [order of $vb(E)$ ($phi eq.not 0$)],
     [1],
+    [2],
     [2],
     table.hline(stroke: 0.6pt),
   )
@@ -89,5 +91,16 @@ The following table therefore lists *R1* as the time-convention (in demos/chdr I
   All four components use one Mur speed per face, which is why O1-VS with Mur faces requires $alpha = 1$ (see @sec-O1VS-implementation).
   Applying the condition to each potential component does not guarantee that the gauge condition and Gauss's law hold at the boundary.
   @experiment-e04 measures these defects.
+
+  *R2′* (`R2Prime` in `LevelContract`) keeps the slots that `evaluate_EB()` reads, but the current slot holds $phi^(n-1\/2)$, half a step behind $vb(A)^n$.
+  `evaluate_EB()` takes $grad phi$ from the current slot, so with R2′ its $vb(E)$ has the single time $t_(n-1\/2)$ without any change of the code.
+  `step()` updates the four components separately, so a common shift of $phi$ and $rho$ does not change the update, and for the reason given above for R2 the Mur condition needs no change either.
+  As for R2, a Mur face requires ghost values in both stored slots, because $vb(B)$ averages the curl over both slots.
+  R1 is the notation of M.W @winkler2024ChargeConservingFDTD[Sec. 3.1, p. 16, and Eqs. (3.1)–(3.4), p. 17].
+  Neither `step()`, `evaluate_EB()` nor the Mur update requires it.
+  E11 and E13 compare both readings of `StandardFDTDSolver` (@experiment-e11): with R1 the error of $vb(E)$ tends to first order, with R2′ it converges with second order.
+  For R2′ `ChdrSolver` averages $vb(B)$ over both slots. The raw curl of `evaluate_EB()` belongs to $t_n$.
+  `ChdrSolver` accepts R2′ only with the collocated placement.
+  With the staggered placement its constructor refuses every time convention except R2.
 
 ]

@@ -27,12 +27,13 @@ namespace chdr::experiments::e04 {
         };
 
     public:
-        /// Run the periodic replay with the same continuum sampler as the Mur run.
+        /// Replay periodically with the continuum sampler, medium and solver of the Mur run.
         template <DipolePulseReference Reference>
         E04PeriodicControl(simulation::ChdrCartesianGridSettings grid, const Reference& ref,
-                           int stopStep, int controlStep) {
+                           const e03::SphericalExperiment& experiment, int stopStep,
+                           int controlStep) {
             grid.periodic_m = {true, true, true};
-            auto periodic   = e03::makeSphericalSimulation(grid, ref);
+            auto periodic   = e03::makeSphericalSimulation(grid, ref, experiment);
             periodic.load(ref);
             periodic.advance(stopStep, [&](long long step, Solver& state, const auto&) {
                 if (step == 0 || step == controlStep)

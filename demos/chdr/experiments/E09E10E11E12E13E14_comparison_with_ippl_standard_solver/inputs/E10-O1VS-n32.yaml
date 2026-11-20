@@ -1,0 +1,7 @@
+schema_version: 1
+case: E10
+units: {system: normalized}
+parameters: {cells_per_pulse: 32, transverse_cells_per_axis: 4, solver_configuration: O1VS}
+observations:
+  fields: {every: 2}
+output: {directory: n32}

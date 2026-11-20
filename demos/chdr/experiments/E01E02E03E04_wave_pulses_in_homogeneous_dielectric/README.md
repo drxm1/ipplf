@@ -348,6 +348,14 @@ the E03.meas01–06 observations. The executable accepts `case: E03` and
 adds the initial and final central sections. `inputs/E03-n96.yaml` is a
 single-run example.
 
+`write_native_lines: true` (launcher flag `--write-native-lines`) adds `native-lines.csv`.
+It holds \(\mathbf A\), \(\phi\), \(\mathbf E\) and \(\mathbf B\) along the three grid lines
+through the cell with the index \(N/2-1\) in every direction, for the initial state and the final target.
+Each row is one component at its own position (`x,y,z` relative to the pulse center),
+with the numerical value and the continuum value at that position and at the comparison time of the quantity.
+Nothing is interpolated. Each quantity uses the state that its own clock selects,
+and \(\mathbf B\) uses the state of \(\mathbf E\), as in `measurements.csv`.
+
 E03 runs one pulse: the pulse of an electric dipole (a TM_r field in the multipole terminology).
 Its scalar and vector potentials are both nonzero.
 The first study also ran the dual pulse of a magnetic dipole (TE_r),
@@ -447,3 +455,6 @@ Named concepts constrain these parameters: `PlanePulseReference` and `DipolePuls
 The entry point builds the sampler and validates the parameter names of each experiment.
 Another experiment directory can therefore reuse these run paths with a different profile.
 `../E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/` does this for the Gaussian pulse of E05 to E08.
+`SolverConfiguration.h` lists the solver configurations (O1VS for E01 to E08), and `E04FieldEnergy.h`
+gives E04.meas01 for the staggered and the collocated layout.
+`../E09E10E11E12E13E14_comparison_with_ippl_standard_solver/` uses both to compare with IPPL's Standard solver.

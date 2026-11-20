@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -20,8 +21,8 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04Control.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04FieldEnergy.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04Monitor.h"
-#include "opt-in/diagnostics/AlignedFieldEnergy.h"
 
 namespace chdr::experiments::e04 {
     namespace e04RunDetail {
@@ -104,57 +105,77 @@ namespace chdr::experiments::e04 {
         };
 
         /// E04.meas01 uses the same energy weights for the reference and the difference.
-        inline double energyFromNorms(double electric, double magnetic) {
+        inline double energyFromNorms(double electric, double magnetic, double epsilon) {
             // Unit permeability [ellingson2020ElectromagneticsVol2, Eqs. (3.20), (3.22)].
-            return 0.5 * (E03Epsilon * electric * electric + magnetic * magnetic);
+            return 0.5 * (epsilon * electric * electric + magnetic * magnetic);
         }
 
+        /// The norms fixed at initialization and the relative permittivity they belong to.
         struct InitialNorms {
             E03FieldNorms e_m, b_m, a_m;
+            double epsilon_m;
 
             double referenceEnergy() const {
-                return energyFromNorms(e_m.referenceL2_m, b_m.referenceL2_m);
+                return energyFromNorms(e_m.referenceL2_m, b_m.referenceL2_m, epsilon_m);
             }
         };
+
+        /// The periodic replay of E04; only the staggered configurations run it.
+        using OptionalControl = std::optional<E04PeriodicControl>;
 
         template <class Field, DipolePulseReference Reference>
         E03FieldNorms norms(Solver& state, Field& field, const Reference& ref, Quantity quantity,
                             long long step) {
             return measureE03Field(field, ref, state.levelContract(), quantity,
-                                   state.labelTime(quantity, step));
+                                   comparisonTime(state, quantity, step));
+        }
+
+        /// The B of E04.meas01 (E04FieldEnergy) at the electric comparison time.
+        template <DipolePulseReference Reference>
+        E03FieldNorms magneticNorms(Solver& state, E04FieldEnergy& energy, const Reference& ref,
+                                    long long step) {
+            return measureE03Field(energy.magnetic(state), ref, state.levelContract(),
+                                   Quantity::Magnetic,
+                                   comparisonTime(state, Quantity::Electric, step));
         }
 
         /// The constraint scales and energy denominator are fixed at initialization.
         template <DipolePulseReference Reference>
-        InitialNorms initialNorms(Solver& state, const Reference& ref) {
+        InitialNorms initialNorms(Solver& state, const Reference& ref, E04FieldEnergy& energy,
+                                  double epsilon) {
             return {norms(state, state.electricField(), ref, Quantity::Electric, 0),
-                    norms(state, state.magneticField(), ref, Quantity::Magnetic, 0),
-                    norms(state, state.A_n, ref, Quantity::VectorPotential, 0)};
+                    magneticNorms(state, energy, ref, 0),
+                    norms(state, state.A_n, ref, Quantity::VectorPotential, 0), epsilon};
         }
 
-        /// At startup and eta=2 compare with both the exact pulse and the periodic replay.
-        inline void compareControl(Solver& state, const E04PeriodicControl& control, E04Csv& csv,
+        /// At startup and eta=2 compare with the exact pulse and, if it ran, the periodic replay.
+        inline void compareControl(Solver& state, const OptionalControl& control, E04Csv& csv,
                                    const Observation& at, const E03FieldNorms& e,
                                    const E03FieldNorms& b) {
-            const auto difference = control.difference(state, at.step_m);
             csv.row("E04.control", "E_continuum_L2", "box", at, e.errorL2_m, e.referenceL2_m);
             csv.row("E04.control", "B_continuum_L2", "box", at, b.errorL2_m, b.referenceL2_m);
+            if (!control)
+                return;
+            const auto difference = control->difference(state, at.step_m);
             csv.row("E04.control", "E_periodic_L2", "box", at, difference[0], e.referenceL2_m);
             csv.row("E04.control", "B_periodic_L2", "box", at, difference[1], b.referenceL2_m);
         }
 
         /// Observe the field difference before the outgoing continuum support leaves the cube.
         template <DipolePulseReference Reference>
-        void observeFields(Solver& state, const Reference& ref, const E04PeriodicControl& control,
-                           E04Csv& csv, const Observation& at, double U0h) {
+        void observeFields(Solver& state, const Reference& ref, const OptionalControl& control,
+                           E04Csv& csv, const Observation& at, const InitialNorms& initial,
+                           E04FieldEnergy& energy) {
             const auto e = norms(state, state.electricField(), ref, Quantity::Electric, at.step_m);
-            const auto b = norms(state, state.magneticField(), ref, Quantity::Magnetic, at.step_m);
+            const auto b = magneticNorms(state, energy, ref, at.step_m);
             if (at.targetEta_m == 2) {
                 compareControl(state, control, csv, at, e, b);
                 return;
             }
-            const double error = std::sqrt(energyFromNorms(e.errorL2_m, b.errorL2_m));
-            csv.row("E04.meas01", "e_field", "box", at, error, std::sqrt(U0h));
+            const double error =
+                std::sqrt(energyFromNorms(e.errorL2_m, b.errorL2_m, initial.epsilon_m));
+            csv.row("E04.meas01", "e_field", "box", at, error,
+                    std::sqrt(initial.referenceEnergy()));
         }
 
         /** @brief Save E04.meas03 at one native time with residual-specific availability.
@@ -164,13 +185,14 @@ namespace chdr::experiments::e04 {
         template <bool Gauss>
         void observeConstraint(Solver& state, E04Csv& csv, const Observation& at,
                                const InitialNorms& initial) {
+            const double epsilon = initial.epsilon_m;
             const double l2Scale =
-                Gauss ? E03Epsilon * initial.e_m.referenceL2_m : initial.a_m.referenceL2_m;
+                Gauss ? epsilon * initial.e_m.referenceL2_m : initial.a_m.referenceL2_m;
             const double maxScale =
-                Gauss ? E03Epsilon * initial.e_m.referenceLinf_m : initial.a_m.referenceLinf_m;
+                Gauss ? epsilon * initial.e_m.referenceLinf_m : initial.a_m.referenceLinf_m;
             for (auto region : {ConstraintRegion::Interior, ConstraintRegion::Boundary}) {
-                const auto residual = Gauss ? measureE03Gauss(state, E03Epsilon, region)
-                                            : measureE03Gauge(state, E03Epsilon, region);
+                const auto residual = Gauss ? measureE03Gauss(state, epsilon, region)
+                                            : measureE03Gauge(state, epsilon, region);
                 const char* name = region == ConstraintRegion::Interior ? "interior" : "boundary";
                 csv.row("E04.meas03", Gauss ? "Q_L2" : "G_L2", name, at, residual.l2_m, l2Scale / w,
                         residual.count_m, residual.unavailable_m);
@@ -186,7 +208,7 @@ namespace chdr::experiments::e04 {
 
         inline Observation observation(Solver& state, Quantity quantity, long long step, double v,
                                        double targetEta) {
-            const double time = state.labelTime(quantity, step);
+            const double time = comparisonTime(state, quantity, step);
             return {step, time, v * time / w, targetEta};
         }
 
@@ -203,19 +225,20 @@ namespace chdr::experiments::e04 {
 
         /// Evaluate only the target observables selected by this state.
         template <DipolePulseReference Reference>
-        void observeTargets(Solver& state, const Reference& ref, const E04PeriodicControl& control,
-                            E04Csv& csv, const InitialNorms& initial,
+        void observeTargets(Solver& state, const Reference& ref, const OptionalControl& control,
+                            E04Csv& csv, const InitialNorms& initial, E04FieldEnergy& energy,
                             const std::array<Checkpoint, targets.size()>& points, long long step) {
+            const bool constraints = energy.staggered();  // operators of the staggered layout
             for (const auto& point : points) {
                 if (step == point.fieldStep_m) {
                     const auto at =
                         observation(state, Quantity::Electric, step, ref.v_m, point.eta_m);
                     if (point.eta_m <= 8)
-                        observeFields(state, ref, control, csv, at, initial.referenceEnergy());
-                    if (point.eta_m != 5)
+                        observeFields(state, ref, control, csv, at, initial, energy);
+                    if (point.eta_m != 5 && constraints)
                         observeConstraint<true>(state, csv, at, initial);
                 }
-                if (step == point.gaugeStep_m && point.eta_m != 5) {
+                if (step == point.gaugeStep_m && point.eta_m != 5 && constraints) {
                     const auto at =
                         observation(state, Quantity::VectorPotential, step, ref.v_m, point.eta_m);
                     observeConstraint<false>(state, csv, at, initial);
@@ -247,6 +270,12 @@ namespace chdr::experiments::e04 {
             bool planeFrames_m;
         };
 
+        /// The target of the periodic replay; the node argument is a handle into the record.
+        inline void recordPeriodicControl(conduit_cpp::Node node, int controlStep) {
+            node["target_eta"]        = 2.0;
+            node["target_field_step"] = controlStep;
+        }
+
         template <DipolePulseReference Reference>
         void recordE04(const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, Solver& state,
@@ -259,86 +288,139 @@ namespace chdr::experiments::e04 {
             snapshots.record(record);
             auto& node                             = record.effective_m;
             node["protocol_steps"]                 = values.protocolSteps_m;
-            node["material/relative_permittivity"] = E03Epsilon;
+            node["material/relative_permittivity"] = experiment.relativePermittivity_m;
             ref.record(node["analytic_reference"]);
             node["boundary/mur_mask"]                = state.boundary().murMask();
             node["boundary/kernel_speed"]            = state.boundary().speed[0];
             node["boundary/potential_ghost_closure"] = "Quadratic extrapolation";
             recordMurLayers(node["boundary/potential_layers_centred"], state, grid.spacing_m[0]);
-            node["initial_reference_energy"]           = values.U0h_m;
-            node["periodic_control/target_eta"]        = 2.0;
-            node["periodic_control/target_field_step"] = values.controlStep_m;
+            node["initial_reference_energy"] = values.U0h_m;
+            if (experiment.solver_m.staggered())  // the only configurations with the replay
+                recordPeriodicControl(node["periodic_control"], values.controlStep_m);
             if (values.planeFrames_m)
                 node["plane/file"] = "plane-z0.csv";
             output::writeRunRecord(request.outputDirectory_m, request, record,
                                    state.A_n.getLayout().comm);
         }
 
-        /// Collect the dense E04.meas01/02 histories at the common R2 half-step.
+        /// Collect the dense E04.meas01/02 histories at the electric comparison time.
         inline void observeTraces(Solver& state, const material::MaterialOwner& owner, E04Csv& csv,
-                                  long long step, int firstMonitorStep, double v, double U0h) {
+                                  long long step, int firstMonitorStep, double v, double U0h,
+                                  E04FieldEnergy& energy) {
             const auto at         = observation(state, Quantity::Electric, step, v, 0);
-            const double fraction = diagnostics::alignedFieldEnergy(state, owner) / U0h;
+            const double fraction = energy.energy(state, owner) / U0h;
             csv.energy(at, fraction);
             if (!std::isfinite(fraction))
                 throw std::runtime_error("Nonfinite E04 electromagnetic energy");
-            if (step >= firstMonitorStep)
+            if (step >= firstMonitorStep && energy.staggered())  // staggered layout only
                 csv.monitor(at, measureE04Monitor(state, v, U0h));
         }
 
         /// Bracket the exact endpoints without duplicating the R2 half-step offset.
         inline int bracketStep(Solver& state, double eta, double v, bool upper) {
             const double step =
-                (eta * w / v - state.labelTime(Quantity::Electric, 0)) / state.getDt();
+                (eta * w / v - comparisonTime(state, Quantity::Electric, 0)) / state.getDt();
             return static_cast<int>(upper ? std::ceil(step) : std::floor(step));
         }
 
         /// Save the startup control, field and constraint rows before the first update.
         template <DipolePulseReference Reference>
-        void observeStartup(Solver& state, const Reference& ref, const E04PeriodicControl& control,
-                            E04Csv& csv, const InitialNorms& initial) {
+        void observeStartup(Solver& state, const Reference& ref, const OptionalControl& control,
+                            E04Csv& csv, const InitialNorms& initial, bool constraints) {
             compareControl(state, control, csv,
                            observation(state, Quantity::Electric, 0, ref.v_m, 0), initial.e_m,
                            initial.b_m);
+            if (!constraints)
+                return;
             observeConstraint<true>(state, csv,
                                     observation(state, Quantity::Electric, 0, ref.v_m, 0), initial);
             observeConstraint<false>(
                 state, csv, observation(state, Quantity::VectorPotential, 0, ref.v_m, 0), initial);
         }
 
+        /** @brief E12.meas02: save the parts of the initial energy beside their continuum parts.
+         * @details Each row holds one part of the reconstructed fields before the first update
+         * and, as its scale, the same part of the continuum fields at the electric comparison
+         * time. The parameter `write_energy_parts` enables the rows.
+         */
+        inline void observeEnergyParts(Solver& state, E04Csv& csv, const InitialNorms& initial,
+                                       E04FieldEnergy& energy, double v) {
+            const auto at    = observation(state, Quantity::Electric, 0, v, 0);
+            const auto parts = energy.parts(state);
+            const double electric =
+                energyFromNorms(initial.e_m.referenceL2_m, 0, initial.epsilon_m);
+            const double magnetic =
+                energyFromNorms(0, initial.b_m.referenceL2_m, initial.epsilon_m);
+            csv.row("E12.meas02", "electric_energy", "box", at, parts.electric_m, electric);
+            csv.row("E12.meas02", "magnetic_energy", "box", at, parts.magnetic_m, magnetic);
+            csv.row("E12.meas02", "raw_magnetic_energy", "box", at, parts.rawMagnetic_m, magnetic);
+        }
+
+        /// The steps of one run: targets, run length, periodic replay and monitor start.
+        struct E04Schedule {
+            std::array<Checkpoint, targets.size()> points_m;
+            int fullSteps_m, steps_m, controlStep_m, firstMonitorStep_m;
+        };
+
+        /// The protocol steps of E04.typ on this mesh and the requested run length.
+        inline E04Schedule e04Schedule(Solver& state, const input::ChdrYamlRunInput& request,
+                                       double v, const char* name) {
+            const auto points   = checkpoints(state, v);
+            const int fullSteps = bracketStep(state, finalEta, v, true);
+            return {points, fullSteps, sphericalRunSteps(request, fullSteps, name),
+                    points.front().fieldStep_m, bracketStep(state, precursorStart, v, false)};
+        }
+
+        /// The periodic replay for the staggered configurations; none for the collocated one.
+        template <DipolePulseReference Reference>
+        OptionalControl periodicControl(const simulation::ChdrCartesianGridSettings& grid,
+                                        const Reference& ref, const SphericalExperiment& experiment,
+                                        const E04Schedule& schedule) {
+            OptionalControl control;
+            if (experiment.solver_m.staggered())
+                control.emplace(grid, ref, experiment,
+                                std::min(schedule.steps_m, schedule.controlStep_m),
+                                schedule.controlStep_m);
+            return control;
+        }
+
         template <DipolePulseReference Reference>
         void evolveE04(SphericalSimulation& run, const input::ChdrYamlRunInput& request,
                        const simulation::ChdrCartesianGridSettings& grid, const Reference& ref,
                        const SphericalExperiment& experiment) {
-            auto& state           = run.solver();
-            const auto points     = checkpoints(state, ref.v_m);
-            const int fullSteps   = bracketStep(state, finalEta, ref.v_m, true);
-            const int steps       = sphericalRunSteps(request, fullSteps, "E04");
-            const int controlStep = points.front().fieldStep_m;
+            auto& state     = run.solver();
+            const auto plan = e04Schedule(state, request, ref.v_m, experiment.name_m);
+            const int steps = plan.steps_m;
             E04Csv csv(request.outputDirectory_m, state.A_n.getLayout().comm);
-            E04PeriodicControl control(grid, ref, std::min(steps, controlStep), controlStep);
-            const auto initial         = initialNorms(state, ref);
-            const double U0h           = initial.referenceEnergy();
-            const int firstMonitorStep = bracketStep(state, precursorStart, ref.v_m, false);
-            observeStartup(state, ref, control, csv, initial);
+            E04FieldEnergy energy(state, experiment.relativePermittivity_m);
+            const auto control = periodicControl(grid, ref, experiment, plan);
+            const auto initial =
+                initialNorms(state, ref, energy, experiment.relativePermittivity_m);
+            const double U0h = initial.referenceEnergy();
+            observeStartup(state, ref, control, csv, initial, energy.staggered());
+            if (input::booleanParameter(request, "write_energy_parts", false))
+                observeEnergyParts(state, csv, initial, energy, ref.v_m);
             SphericalFieldSnapshots snapshots(request, grid, state);
             const SphericalPlaneFrames planes(request);
             run.advance(steps, [&](long long step, Solver& solver, const auto& owner) {
-                observeTraces(solver, owner, csv, step, firstMonitorStep, ref.v_m, U0h);
-                observeTargets(solver, ref, control, csv, initial, points, step);
+                observeTraces(solver, owner, csv, step, plan.firstMonitorStep_m, ref.v_m, U0h,
+                              energy);
+                observeTargets(solver, ref, control, csv, initial, energy, plan.points_m, step);
                 snapshots.observe(step, solver, steps);
                 planes.observe(step, solver, ref, steps);
             });
             csv.finish();
             snapshots.finish();
-            recordE04(request, grid, state, {steps, fullSteps, U0h, controlStep, planes.writes()},
-                      ref, experiment, snapshots);
+            recordE04(request, grid, state,
+                      {steps, plan.fullSteps_m, U0h, plan.controlStep_m, planes.writes()}, ref,
+                      experiment, snapshots);
         }
     }  // namespace e04RunDetail
 
     /** @brief Compare periodic propagation and matched-speed Mur exit as specified in E04.typ.
-     * @param ref Continuum sampler of the spherical pulse, for example e03::E03Reference.
-     * @param experiment Names for the run record.
+     * @param ref Continuum sampler of the spherical pulse in the experiment's medium, for example
+     * e03::E03Reference.
+     * @param experiment Names, medium and solver configuration of the run.
      * @pre The caller has validated the experiment's parameter names.
      */
     template <DipolePulseReference Reference>
@@ -346,7 +428,7 @@ namespace chdr::experiments::e04 {
                 const e03::SphericalExperiment& experiment) {
         e03::validateSphericalRun(request);
         const auto grid = e03::sphericalGrid(e03::sphericalCells(request), false);
-        auto run        = e03::makeSphericalSimulation(grid, ref);
+        auto run        = e03::makeSphericalSimulation(grid, ref, experiment);
         run.load(ref);
         e04RunDetail::evolveE04(run, request, grid, ref, experiment);
     }

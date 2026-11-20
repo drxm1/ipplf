@@ -88,9 +88,10 @@ namespace chdr::experiments::e01e02 {
      * an even transverse count, the contract places Ax, Ex and By at
      * \f$x=1/2,\ y=(N_y-1)/(2N_y)\f$: \f$y=7/16\f$ for eight cells and
      * \f$y=15/32\f$ for sixteen. Actual coordinates use LevelContract's component offsets
-     * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)]. By is half a longitudinal
-     * cell beyond Ax/Ex; its last owned point is at the geometric z endpoint, not a ghost.
-     * The caller supplies R2 magneticField() and the selected native profile times.
+     * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)]. In the staggered layout By is
+     * half a longitudinal cell beyond Ax/Ex; its last owned point is at the geometric z
+     * endpoint, not a ghost. In the collocated layout all three are at the cell centers.
+     * The caller supplies magneticField() and the selected native profile times.
      * @pre A nonempty output directory has already been prepared collectively. An empty
      * directory disables profiles, preserving the error-only CSV on standard output.
      * @tparam Reference Plane-pulse continuum sampler, for example E01Reference.

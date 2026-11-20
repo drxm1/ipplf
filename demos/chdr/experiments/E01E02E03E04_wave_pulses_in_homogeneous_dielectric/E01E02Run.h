@@ -25,6 +25,7 @@
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Profiles.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E01E02Protocol.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E02Diagnostics.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/SolverConfiguration.h"
 
 namespace chdr::experiments::e01e02 {
     using PulseSimulation = simulation::ChDRSimulationManager<PulseSolver>;
@@ -65,13 +66,30 @@ namespace chdr::experiments::e01e02 {
         return value;
     }
 
+    /// The solver configuration of a run: from the input if the protocol allows it, else O1VS.
+    inline SolverConfiguration pulseSolverConfiguration(const input::ChdrYamlRunInput& request,
+                                                        const PulseProtocol& protocol) {
+        return protocol.selectableSolver_m ? solverConfiguration(request) : O1VSConfiguration;
+    }
+
+    /// Accept `solver_configuration` only for the protocols that let the input select it.
+    inline void validatePulseParameters(const input::ChdrYamlRunInput& request,
+                                        const PulseProtocol& protocol) {
+        if (protocol.selectableSolver_m)
+            input::validateParameters(
+                request, {"cells_per_pulse", "transverse_cells_per_axis", "solver_configuration"});
+        else
+            input::validateParameters(request, {"cells_per_pulse", "transverse_cells_per_axis"});
+        pulseSolverConfiguration(request, protocol);
+    }
+
     /// Validate common input choices before allocating fields or opening output.
     inline void validatePulseInput(const input::ChdrYamlRunInput& request,
                                    const PulseProtocol& protocol) {
         if (request.caseName_m != protocol.name_m || request.units_m.system_m != "normalized")
             throw std::invalid_argument(std::string(protocol.name_m)
                                         + " requires its named case and normalized units");
-        input::validateParameters(request, {"cells_per_pulse", "transverse_cells_per_axis"});
+        validatePulseParameters(request, protocol);
         input::validateObservationNames(request, {"fields"});
         pulseCellsPerPulse(request, protocol);
         pulseTransverseCells(request, protocol);
@@ -103,11 +121,13 @@ namespace chdr::experiments::e01e02 {
         /** @brief Select the nearest available state using the actual sampling contract.
          * @details The fixed-step labels are supplied by LevelContract. Subtracting the
          * zero-state label before rounding inverts that map without duplicating its offsets.
+         * The plane pulse has \f$\phi=0\f$, so its R1 electric field has the unique label of
+         * the A difference (LevelContract, phiIsZero); R2 does not use this declaration.
          */
         inline int nearestObservationStep(double target, Quantity quantity,
                                           const LevelContract& contract, double dt) {
             return static_cast<int>(
-                std::floor((target - contract.labelTime(quantity, 0, dt)) / dt + 0.5));
+                std::floor((target - contract.labelTime(quantity, 0, dt, true)) / dt + 0.5));
         }
 
         /// Convert an experiment target using the reference speed and the actual level contract.
@@ -228,12 +248,12 @@ namespace chdr::experiments::e01e02 {
             profiles.write(state.A_n, Quantity::VectorPotential, checkpoint, target, step, time);
         }
 
-        /// Measure E01.meas01-03 using each reconstructed field's actual R2 time label.
+        /// Measure E01.meas01-03 using each reconstructed field's own time label.
         template <PlanePulseReference Reference>
         void observeFields(PulseSolver& state, const Reference& reference, const char* checkpoint,
                            double target, long long step, ErrorCsv& csv,
                            PulseProfileCsv<Reference>& profiles, bool continuumErrors = true) {
-            const double electricTime = state.labelTime(Quantity::Electric, step);
+            const double electricTime = state.labelTime(Quantity::Electric, step, true);  // phi = 0
             const double magneticTime = state.labelTime(Quantity::Magnetic, step);
             if (continuumErrors) {
                 const auto electric =
@@ -326,7 +346,8 @@ namespace chdr::experiments::e01e02 {
         }
 
         /// Keep the prescribed schedule visible even when a partial run stops before its targets.
-        inline void recordSchedule(output::RunRecordDescription& description, const RunPlan& plan) {
+        inline void recordSchedule(output::RunRecordDescription& description, const RunPlan& plan,
+                                   const PulseSolver& state) {
             recordTargets(description, plan, "error_observations", true);
             recordTargets(description, plan, "profile_observations", false);
             description.effective_m["protocol_steps"] = plan.fullSteps_m;
@@ -335,7 +356,7 @@ namespace chdr::experiments::e01e02 {
             node["partial_final"]       = plan.steps_m < plan.fullSteps_m;
             node["file"]                = "errors.csv";
             node["norms"]               = "A_L2,E_L2,E_Linf,B_L2; full-domain relative errors";
-            node["magnetic_convention"] = "R2 averaged magnetic field";
+            node["magnetic_convention"] = magneticConvention(state);
         }
 
         /// Export native comparison times so analysis need not duplicate LevelContract rules.
@@ -346,14 +367,14 @@ namespace chdr::experiments::e01e02 {
                                         Quantity::Magnetic};
             const std::array names{"A", "E", "B"};
             for (unsigned c = 0; c < quantities.size(); ++c) {
-                std::vector<double> times{state.labelTime(quantities[c], 0)};
+                std::vector<double> times{state.labelTime(quantities[c], 0, true)};  // phi = 0
                 for (const auto& checkpoint : plan.checkpoints_m) {
                     if (errorsOnly && !checkpoint.continuumErrors_m)
                         continue;
                     const int step = quantities[c] == Quantity::VectorPotential
                                          ? checkpoint.potentialStep_m
                                          : checkpoint.fieldStep_m;
-                    times.push_back(state.labelTime(quantities[c], step));
+                    times.push_back(state.labelTime(quantities[c], step, true));
                 }
                 description.effective_m[std::string(key) + "/sample_times/" + names[c]].set(times);
             }
@@ -361,14 +382,24 @@ namespace chdr::experiments::e01e02 {
 
         /// Identify the fixed native line and its connection to the error observations.
         inline void recordProfiles(output::RunRecordDescription& description,
-                                   const simulation::ChdrCartesianGridSettings& grid) {
+                                   const simulation::ChdrCartesianGridSettings& grid,
+                                   const PulseSolver& state) {
             auto profiles                   = description.effective_m["profiles"];
             profiles["file"]                = "profiles.csv";
             profiles["global_cell_i"]       = pulseProfileDetail::lineCell(grid.cells_m[0]);
             profiles["global_cell_j"]       = pulseProfileDetail::lineCell(grid.cells_m[1]);
             profiles["components"]          = "Ax,Ex,By";
-            profiles["magnetic_convention"] = "R2 averaged magnetic field";
+            profiles["magnetic_convention"] = magneticConvention(state);
             profiles["schedule"] = "profile_observations supplies native targets and times";
+        }
+
+        /// The units of the Mur kernel speeds: Homogeneous advances with the scaled step.
+        inline const char* kernelSpeedUnits(const PulseSolver& state) {
+            return state.formulationParameters().formulation_m
+                           == solver::MaterialFormulation::Homogeneous
+                       ? "units of the scaled step h_t/sqrt(eps_r) for Homogeneous; "
+                         "periodic-face entries unused"
+                       : "physical solver units for O1VS; periodic-face entries unused";
         }
 
         /// Record the actual face mask and kernel speeds resolved by the constructed solver.
@@ -380,7 +411,7 @@ namespace chdr::experiments::e01e02 {
             node["mur_mask"]     = boundary.murMask();
             node["kernel_speeds"].set(
                 std::vector<double>(boundary.speed.begin(), boundary.speed.end()));
-            node["speed_units"] = "physical solver units for O1VS; periodic-face entries unused";
+            node["speed_units"] = kernelSpeedUnits(state);
         }
 
         /** @brief Publish the common provenance record only after the selected run and CSVs finish.
@@ -402,10 +433,10 @@ namespace chdr::experiments::e01e02 {
                 run.material().homogeneousValue();
             reference.record(description.effective_m["analytic_reference"], protocol.name_m);
             recordBoundary(description, run.solver());
-            recordSchedule(description, plan);
+            recordSchedule(description, plan, run.solver());
             recordSampleTimes(description, run.solver(), plan, "error_observations", true);
             recordSampleTimes(description, run.solver(), plan, "profile_observations", false);
-            recordProfiles(description, grid);
+            recordProfiles(description, grid, run.solver());
             snapshots.record(description);
             if (diagnostics)
                 diagnostics->record(description);
@@ -469,13 +500,14 @@ namespace chdr::experiments::e01e02 {
      * \f$1/\sqrt{\epsilon_r}\f$ [chew2014generalizedgauge, Eq. (13)], so the
      * unscaled kernel default of one is not the E02 boundary speed.
      */
-    inline simulation::ChdrSolverSettings pulseSolverSettings(double dt, double speed,
-                                                              const PulseProtocol& protocol) {
-        return {.reconstruction_m = EBReconstructionConvention::R2,
-                .spatial_m        = SpatialDiscretization::Staggered,
+    inline simulation::ChdrSolverSettings pulseSolverSettings(
+        double dt, double speed, const PulseProtocol& protocol,
+        const SolverConfiguration& configuration) {
+        return {.reconstruction_m = configuration.reconstruction_m,
+                .spatial_m        = configuration.spatial_m,
                 .formulation_m =
-                    solver::FormulationParameters{
-                        .formulation_m = solver::MaterialFormulation::O1VS, .alpha_m = 1.0},
+                    solver::FormulationParameters{.formulation_m = configuration.formulation_m,
+                                                  .alpha_m       = 1.0},
                 .murSpeed_m = protocol.periodicZ_m ? solver::MurSpeed::matched()
                                                    : solver::MurSpeed::physical(speed),
                 .timeStep_m = dt};
@@ -485,21 +517,25 @@ namespace chdr::experiments::e01e02 {
      * setup.
      * @tparam Reference Plane-pulse continuum sampler selected by the caller, for example
      * E01Reference. The run constructs it with the domain length, the initial center
-     * \f$z_0=2w\f$, the dielectric speed and the protocol's periodicity.
+     * \f$z_0=2w\f$, the speed \f$1/\sqrt{\varepsilon_r}\f$ of the protocol's medium and the
+     * protocol's periodicity. The solver configuration is O1VS unless the protocol lets the
+     * input select it.
      */
     template <PlanePulseReference Reference = E01Reference>
     void runPulse(const input::ChdrYamlRunInput& request, const PulseProtocol& protocol) {
         validatePulseInput(request, protocol);
-        const auto grid = pulseGrid(request, protocol);
-        const Reference reference{grid.lengths()[2], 2.0, 1.0 / std::sqrt(2.13),
+        const auto grid           = pulseGrid(request, protocol);
+        const double permittivity = protocol.relativePermittivity_m;
+        const Reference reference{grid.lengths()[2], 2.0, 1.0 / std::sqrt(permittivity),
                                   protocol.periodicZ_m};
         const auto homogeneousDielectric =
             KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
             marked = false;
-            return 2.13;
+            return permittivity;
         };
         PulseSimulation run{grid, homogeneousDielectric,
-                            pulseSolverSettings(grid.spacing_m[2] / 2, reference.v_m, protocol)};
+                            pulseSolverSettings(grid.spacing_m[2] / 2, reference.v_m, protocol,
+                                                pulseSolverConfiguration(request, protocol))};
         run.load(reference);
         evolvePulse(run, request, grid, reference, protocol);
     }
