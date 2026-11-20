@@ -8,8 +8,11 @@
 #include <stdexcept>
 #include <string>
 
+#include "core/input/RunInput.h"
 #include "core/simulation/ChDRSimulationManager.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/PulseReferenceConcepts.h"
 
 namespace chdr::experiments::e03 {
     using SphericalSimulation = simulation::ChDRSimulationManager<>;
@@ -51,36 +54,57 @@ namespace chdr::experiments::e03 {
 
     /// The dipole pulse of E03.typ, centred in the translated mesh coordinates.
     inline E03Reference sphericalReference(double sharpness = 1) {
-        return {1 / std::sqrt(E03Epsilon), E03BoxCentre, sharpness};
+        return {1 / std::sqrt(E03Epsilon), E03BoxCentre, {sharpness}};
     }
 
     /** @brief Select the same bulk update for periodic propagation and Mur exit.
-     * @details O1VS advances in physical time. The Mur coefficient sees the dielectric
-     * speed [chew2014generalizedgauge, Eq. (13), mur1981AbsorbingBoundaryFdtd, Eq. (16)].
+     * @details The experiment selects the medium and the solver configuration. O1VS advances
+     * in physical time. The Mur coefficient sees the dielectric speed
+     * [chew2014generalizedgauge, Eq. (13), mur1981AbsorbingBoundaryFdtd, Eq. (16)]; for the
+     * Homogeneous formulation the solver converts it to the speed of its scaled step.
      */
-    inline SphericalSimulation makeSphericalSimulation(
-        const simulation::ChdrCartesianGridSettings& grid, const E03Reference& ref) {
+    template <DipolePulseReference Reference>
+    SphericalSimulation makeSphericalSimulation(const simulation::ChdrCartesianGridSettings& grid,
+                                                const Reference& ref,
+                                                const SphericalExperiment& experiment) {
+        const double permittivity = experiment.relativePermittivity_m;
         const auto dielectric =
             KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
             marked = false;
-            return E03Epsilon;
+            return permittivity;
         };
         const auto speed =
             grid.periodic_m[0] ? solver::MurSpeed::matched() : solver::MurSpeed::physical(ref.v_m);
+        const auto& solver = experiment.solver_m;
         return SphericalSimulation{
-            grid, dielectric, {.murSpeed_m = speed, .timeStep_m = grid.spacing_m[0] / 2}};
+            grid,
+            dielectric,
+            {.reconstruction_m = solver.reconstruction_m,
+             .spatial_m        = solver.spatial_m,
+             .formulation_m    = solver::FormulationParameters{solver.formulation_m, 1.0},
+             .murSpeed_m       = speed,
+             .timeStep_m       = grid.spacing_m[0] / 2}};
     }
 
-    /// Invert LevelContract's label map to select the nearest native observation.
+    /// The requested `run.steps`, or the full protocol; a limit outside the protocol is an error.
+    inline int sphericalRunSteps(const input::ChdrYamlRunInput& request, int fullSteps,
+                                 const std::string& experiment) {
+        const int steps = request.steps_m.value_or(fullSteps);
+        if (steps < 0 || steps > fullSteps)
+            throw std::invalid_argument(experiment + " run.steps must fit the prescribed interval");
+        return steps;
+    }
+
+    /// Invert the label map of comparisonTime to select the nearest native observation.
     inline int nearestSphericalStep(SphericalSimulation::Solver& state, Quantity quantity,
                                     double target) {
         return static_cast<int>(
-            std::floor((target - state.labelTime(quantity, 0)) / state.getDt() + 0.5));
+            std::floor((target - comparisonTime(state, quantity, 0)) / state.getDt() + 0.5));
     }
 
-    /// The only optional observation is `fields`: full-volume frames for visualization.
+    /// The optional observations are visualization only: full frames and z=0 sections.
     inline void validateSphericalRun(const input::ChdrYamlRunInput& request) {
-        input::validateObservationNames(request, {"fields"});
+        input::validateObservationNames(request, {"fields", "plane"});
         if (request.units_m.system_m != "normalized" || request.duration_m
             || request.outputDirectory_m.empty())
             throw std::invalid_argument(

@@ -14,4 +14,24 @@
   #include "./E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.typ"
 
   #include "./E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E04.typ"
+
+  #include "./E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/E05.typ"
+
+  #include "./E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/E06.typ"
+
+  #include "./E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/E07.typ"
+
+  #include "./E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/E08.typ"
+
+  #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E09.typ"
+
+  #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E10.typ"
+
+  #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E11.typ"
+
+  #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E12.typ"
+
+  #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E13.typ"
+
+  #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E14.typ"
 ]

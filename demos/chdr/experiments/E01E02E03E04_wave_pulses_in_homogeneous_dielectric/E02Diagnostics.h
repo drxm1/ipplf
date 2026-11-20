@@ -29,7 +29,9 @@ namespace chdr::experiments::e01e02 {
                        const simulation::ChdrCartesianGridSettings& grid)
             : communicator_m(state.A_n.getLayout().comm)
             , initialSquared_m{squaredFields(state)}
-            , initialTime_m(state.labelTime(Quantity::Electric, 0)) {
+            , initialTimes_m{state.labelTime(Quantity::Electric, 0, true),  // phi = 0
+                             state.labelTime(Quantity::Magnetic, 0)}
+            , magneticConvention_m(magneticConvention(state)) {
             MPI_Comm_rank(communicator_m, &rank_m);
             for (double value : initialSquared_m)
                 if (value <= 0)
@@ -47,8 +49,9 @@ namespace chdr::experiments::e01e02 {
             writeProbe(step, state);
             if (step == finalStep) {
                 const bool complete = finalStep == protocolSteps;
-                writeResiduals(step, state, complete ? "final" : "partial_final",
-                               complete ? finalTarget : state.labelTime(Quantity::Electric, step));
+                writeResiduals(
+                    step, state, complete ? "final" : "partial_final",
+                    complete ? finalTarget : state.labelTime(Quantity::Electric, step, true));
             }
         }
 
@@ -71,15 +74,17 @@ namespace chdr::experiments::e01e02 {
             probe["every"]        = 1;
             auto norms            = description.effective_m["residuals"];
             norms["file"]         = "residuals.csv";
-            norms["initial_time"] = initialTime_m;
+            norms["initial_time"] = initialTimes_m[0];
+            if (initialTimes_m[1] != initialTimes_m[0])
+                norms["initial_magnetic_time"] = initialTimes_m[1];
             norms["initial_l2"].set(std::vector<double>{std::sqrt(initialSquared_m[0]),
                                                         std::sqrt(initialSquared_m[1])});
             norms["definition"] = "owned-vector L2 norm relative to its initialized numerical norm";
-            norms["magnetic_convention"] = "R2 averaged magnetic field";
+            norms["magnetic_convention"] = magneticConvention_m;
         }
 
     private:
-        /// E and magneticField() share the R2 half-step time but have independent native norms.
+        /// Independent native norms of E and magneticField() (same time under R2, not under R1).
         static std::array<double, 2> squaredFields(PulseSolver& state) {
             return {pulseSquaredNorm(state.electricField()),
                     pulseSquaredNorm(state.magneticField())};
@@ -143,7 +148,7 @@ namespace chdr::experiments::e01e02 {
                 return;
             if (!std::isfinite(value))
                 throw std::runtime_error("E02 probe contains a nonfinite field value");
-            probe_m << step << ',' << state.labelTime(Quantity::Electric, step);
+            probe_m << step << ',' << state.labelTime(Quantity::Electric, step, true);  // phi = 0
             for (unsigned d = 0; d < 3; ++d)
                 probe_m << ',' << globalCell_m[d];
             for (unsigned d = 0; d < 3; ++d)
@@ -165,14 +170,17 @@ namespace chdr::experiments::e01e02 {
             const std::array quantities{Quantity::Electric, Quantity::Magnetic};
             for (unsigned c = 0; c < names.size(); ++c)
                 residuals_m << names[c] << ',' << checkpoint << ',' << target << ',' << step << ','
-                            << state.labelTime(quantities[c], step) << ',' << initialTime_m << ','
-                            << std::sqrt(initialSquared_m[c]) << ',' << std::sqrt(squared[c]) << ','
+                            << state.labelTime(quantities[c], step, true) << ','
+                            << initialTimes_m[c] << ',' << std::sqrt(initialSquared_m[c]) << ','
+                            << std::sqrt(squared[c]) << ','
                             << std::sqrt(squared[c] / initialSquared_m[c]) << '\n';
         }
 
         MPI_Comm communicator_m;
         std::array<double, 2> initialSquared_m;
-        double initialTime_m;
+        /// Times of the initial E and B; they differ under R1, where B belongs to \f$t_0\f$.
+        std::array<double, 2> initialTimes_m;
+        const char* magneticConvention_m;
         int rank_m       = 0;
         bool ownsProbe_m = false;
         ippl::Vector<int, 3> globalCell_m{}, localCell_m{};

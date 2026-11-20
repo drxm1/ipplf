@@ -15,5 +15,7 @@ namespace chdr::experiments::e01e02 {
         PulseTarget{"final", 7.5, false, true}};
 
     /// E02 fixes eight transverse cells and saves relative errors only before boundary contact.
-    inline constexpr PulseProtocol E02{"E02", 3, false, 8, E02CellsPerPulseLevels, E02Targets, 5};
+    inline constexpr PulseProtocol E02{
+        "E02", 3,    false, 8, E02CellsPerPulseLevels, E02Targets, 5, true, WavePulsesApplication,
+        2.13,  false};
 }  // namespace chdr::experiments::e01e02

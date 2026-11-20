@@ -1,0 +1,14 @@
+schema_version: 1
+case: E10-study
+units: {system: normalized}
+parameters:
+  # Paths are relative to the directory from which the executable is invoked.
+  input_files:
+    - ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/inputs/E10-Standard-n32.yaml
+    - ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/inputs/E10-Standard-n64.yaml
+    - ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/inputs/E10-Standard-n128.yaml
+    - ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/inputs/E10-Standard-n256.yaml
+    - ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/inputs/E10-Standard-n512.yaml
+    - ippl/demos/chdr/experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/inputs/E10-Standard-n1024.yaml
+output:
+  directory: build/results/e10-study-Standard

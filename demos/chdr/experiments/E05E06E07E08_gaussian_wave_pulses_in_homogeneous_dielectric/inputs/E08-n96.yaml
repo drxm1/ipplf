@@ -1,0 +1,5 @@
+schema_version: 1
+case: E08
+units: {system: normalized}
+parameters: {cells_per_axis: 96}
+output: {directory: n96}

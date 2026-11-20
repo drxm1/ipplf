@@ -7,6 +7,7 @@
 
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <cmath>
+#include <concepts>
 #include <cstdint>
 #include <mpi.h>
 #include <stdexcept>
@@ -15,6 +16,7 @@
 
 #include "core/base/LevelContract.h"
 #include "core/solver/operators/StaggeredOperators.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/PulseReferenceConcepts.h"
 
 namespace chdr::experiments::e03 {
     /** @brief E03.meas01--05 absolute norms at one quantity's native time.
@@ -58,7 +60,7 @@ namespace chdr::experiments::e03 {
         };
 
         /// Scalar reference at a native position. Vector components use Cartesian indices.
-        template <class Reference>
+        template <DipolePulseReference Reference>
         KOKKOS_INLINE_FUNCTION double referenceValue(const Reference& reference, Quantity quantity,
                                                      double x, double y, double z, double time,
                                                      unsigned component) {
@@ -83,7 +85,7 @@ namespace chdr::experiments::e03 {
          * executes in the field's execution space. Native offsets follow
          * [ryu2016potentialfdtd, Appendix A, Eqs. (19)--(24)] and LevelContract.
          */
-        template <class Field, class Reference>
+        template <class Field, DipolePulseReference Reference>
         FieldReduction localFieldNorms(Field& field, Reference reference, LevelContract contract,
                                        Quantity quantity, double time) {
             const auto view = field.getView();
@@ -248,16 +250,37 @@ namespace chdr::experiments::e03 {
         }
     }  // namespace e03MeasurementDetail
 
-    /** @brief E03.meas01--05 native vector/scalar error and reference norms.
-     * @param field E, R2 B or four-potential storage appropriate to quantity.
-     * @param time Actual solver labelTime for this quantity and observed state.
-     * @details Phi reads slot zero. A reads slots one through three. The continuum
-     * evaluator receives LevelContract's component positions. All ranks participate.
+    /// A solver whose LevelContract gives the time label of a quantity after a completed step.
+    template <class Solver>
+    concept TimeLabelledSolver = requires(const Solver& state, Quantity quantity, long long step) {
+        { state.labelTime(quantity, step, true) } -> std::convertible_to<double>;
+    };
+
+    /** @brief The time at which a quantity of the run is compared with the continuum pulse.
+     * @details This is the LevelContract label, except for the electric field of R1:
+     * its difference of A belongs to \f$t_{n-1/2}\f$ and its scalar gradient to \f$t_n\f$,
+     * so it has no unique label when \f$\phi\neq0\f$. It is compared at
+     * \f$t_{n-1/2}\f$, the time of the difference of A. LevelContract gives that time
+     * through the phiIsZero declaration, which is used here deliberately although
+     * \f$\phi\neq0\f$; the measured error then contains \f$-(h_t/2)\nabla\partial_t\phi\f$.
+     * R2 and R2Prime do not use the declaration: their electric label is unique, so E03 and
+     * E04 keep their labels.
      */
-    template <class Field, class Reference>
+    template <TimeLabelledSolver Solver>
+    double comparisonTime(const Solver& state, Quantity quantity, long long step) {
+        return state.labelTime(quantity, step, quantity == Quantity::Electric);
+    }
+
+    /** @brief E03.meas01--05 native vector/scalar error and reference norms.
+     * @param field E, B or four-potential storage appropriate to quantity.
+     * @param time Actual comparison time for this quantity and observed state (comparisonTime).
+     * @details Phi reads slot zero. A reads slots one through three. The continuum
+     * evaluator receives LevelContract's component positions, staggered or collocated,
+     * so the same measurement serves every solver configuration. All ranks participate.
+     */
+    template <class Field, DipolePulseReference Reference>
     E03FieldNorms measureE03Field(Field& field, const Reference& reference, LevelContract contract,
                                   Quantity quantity, double time) {
-        e03MeasurementDetail::requireE03Contract(contract);
         if (quantity != Quantity::Phi && quantity != Quantity::VectorPotential
             && quantity != Quantity::Electric && quantity != Quantity::Magnetic)
             throw std::invalid_argument("Unsupported E03 measured quantity");

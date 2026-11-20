@@ -9,6 +9,7 @@
 #include <limits>
 #include <vector>
 
+#include "core/base/FieldContainer.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Measurements.h"
 
@@ -40,14 +41,15 @@ namespace chdr::experiments::e03 {
         }
 
         /** @brief Interpolate the numerical sample and its native error separately.
-         * @details A centred z=0 plane is half a cell above its owner anchor. A and E use
-         * positive-face offsets and B uses edge offsets [ryu2016potentialfdtd, Appendix A].
+         * @details A centered z=0 plane is half a cell above its owner anchor. In the
+         * staggered layout A and E use positive-face offsets and B uses edge offsets
+         * [ryu2016potentialfdtd, Appendix A]; in the collocated layout all are at cell centers.
          * The native difference is formed before interpolation as prescribed by E03.typ.
          */
-        template <class View>
+        template <class View, DipolePulseReference Reference>
         KOKKOS_INLINE_FUNCTION ippl::Vector<double, 2> planeComponent(
             View view, Kokkos::Array<int, 3> anchor, ippl::Vector<double, 3> centre, double h,
-            LevelContract contract, const E03Reference& ref, Quantity quantity, double time,
+            LevelContract contract, const Reference& ref, Quantity quantity, double time,
             unsigned c) {
             const auto offset = contract.positionOffset(quantity, c);
             return trilinear<ippl::Vector<double, 2>>(
@@ -63,9 +65,9 @@ namespace chdr::experiments::e03 {
         }
 
         /// Use one z slab and transfer only the requested plane, including the seam halo.
-        template <class Field, class Plane>
+        template <class Field, class Plane, DipolePulseReference Reference>
         void samplePlane(Field& field, Plane plane, int columns, LevelContract contract,
-                         E03Reference ref, Quantity quantity, double time) {
+                         Reference ref, Quantity quantity, double time) {
             field.fillHalo();
             const auto local = field.getLayout().getLocalNDIndex();
             const int n = plane.extent_int(0), centreBelow = n / 2 - 1;
@@ -112,21 +114,24 @@ namespace chdr::experiments::e03 {
         }
     }  // namespace planeDetail
 
-    /** @brief Export E and R2 B on one physical z=0 plane with the z-only MPI layout.
+    /** @brief Export E and B on one physical z=0 plane with the z-only MPI layout.
      * @details Each point is owned by the rank holding the lower central z cell. Ghosts
-     * supply bracket samples but never contribute as additional plotting points.
+     * supply bracket samples but never contribute as additional plotting points. Each error
+     * uses the comparison time of its own field; the time column holds that of E. Under R2
+     * both times agree; under R1, B belongs to \f$t_n\f$ and E to \f$t_{n-1/2}\f$.
      */
-    template <class Solver>
-    void writeE03Plane(Solver& state, const E03Reference& ref, const std::string& directory,
+    template <class Solver, DipolePulseReference Reference>
+    void writeE03Plane(Solver& state, const Reference& ref, const std::string& directory,
                        long long step) {
         auto& e      = state.electricField();
         const int n  = e.getLayout().getDomain()[0].length();
         using Device = typename EMFieldsType::view_type::device_type;
         Kokkos::View<double***, Kokkos::LayoutRight, Device> plane("E03 field section", n, n, 12);
-        const double time = state.labelTime(Quantity::Electric, step);
+        const double time = comparisonTime(state, Quantity::Electric, step);
         planeDetail::samplePlane(e, plane, 0, state.levelContract(), ref, Quantity::Electric, time);
         planeDetail::samplePlane(state.magneticField(), plane, 6, state.levelContract(), ref,
-                                 Quantity::Magnetic, time);
+                                 Quantity::Magnetic,
+                                 comparisonTime(state, Quantity::Magnetic, step));
         Kokkos::fence();
         const auto host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace{}, plane);
         const auto comm = e.getLayout().comm;

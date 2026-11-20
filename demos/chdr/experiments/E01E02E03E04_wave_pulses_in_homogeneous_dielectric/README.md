@@ -348,6 +348,14 @@ the E03.meas01–06 observations. The executable accepts `case: E03` and
 adds the initial and final central sections. `inputs/E03-n96.yaml` is a
 single-run example.
 
+`write_native_lines: true` (launcher flag `--write-native-lines`) adds `native-lines.csv`.
+It holds \(\mathbf A\), \(\phi\), \(\mathbf E\) and \(\mathbf B\) along the three grid lines
+through the cell with the index \(N/2-1\) in every direction, for the initial state and the final target.
+Each row is one component at its own position (`x,y,z` relative to the pulse center),
+with the numerical value and the continuum value at that position and at the comparison time of the quantity.
+Nothing is interpolated. Each quantity uses the state that its own clock selects,
+and \(\mathbf B\) uses the state of \(\mathbf E\), as in `measurements.csv`.
+
 E03 runs one pulse: the pulse of an electric dipole (a TM_r field in the multipole terminology).
 Its scalar and vector potentials are both nonzero.
 The first study also ran the dual pulse of a magnetic dipole (TE_r),
@@ -424,12 +432,29 @@ Single precision keeps about seven significant digits and is meant for pictures 
 The study launchers pass these settings with `--fields-every` (one value for all levels,
 or one per level in ascending order) and `--single-precision-fields`.
 
+For two-dimensional videos, an `observations: plane: {every: K}` block writes the \(z=0\) section of E03's
+`write_plane` every K steps and at the final state, appended to `plane-z0.csv`, instead of full frames.
+The launchers pass it with `--plane-every`. In E04, the first row and column of a section
+interpolate with samples outside the Mur box and are not physical.
+
 ## Code organization
 
 `E01.h` and `E02.h` contain the named experiment protocols.
-Their code lives in `chdr::experiments::e01e02`; the shared files implement E01 and E02 only.
+Their code lives in `chdr::experiments::e01e02`.
 `E01AnalyticContinuumReference.h` defines E01's analytic reference, reused by E02 with periodic wrapping disabled.
 The `E01E02…` measurement, profile, snapshot, run and study components implement the common path.
 `E02Diagnostics.h` contains only E02's residual and probe observations.
-`E03E04FieldSnapshots.h` schedules the optional field frames of E03 and E04.
-The entry point dispatches `E01`, `E02`, `E01-study` and `E02-study` explicitly.
+`E03Run.h` and `E04Run.h` run E03 and E04, and `E03E04FieldSnapshots.h` schedules their optional field frames.
+The entry point dispatches `E01`, `E02`, `E03`, `E04`, `E01-study` and `E02-study` explicitly.
+
+Both run paths take the analytic reference sampler as a template parameter,
+and both samplers take their pulse profile as a template parameter.
+Named concepts constrain these parameters: `PlanePulseReference` and `DipolePulseReference`
+(`PulseReferenceConcepts.h`) for the samplers of the two run paths,
+`PlanePulseProfile` and `RadialPulseProfile` for their profiles.
+The entry point builds the sampler and validates the parameter names of each experiment.
+Another experiment directory can therefore reuse these run paths with a different profile.
+`../E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/` does this for the Gaussian pulse of E05 to E08.
+`SolverConfiguration.h` lists the solver configurations (O1VS for E01 to E08), and `E04FieldEnergy.h`
+gives E04.meas01 for the staggered and the collocated layout.
+`../E09E10E11E12E13E14_comparison_with_ippl_standard_solver/` uses both to compare with IPPL's Standard solver.

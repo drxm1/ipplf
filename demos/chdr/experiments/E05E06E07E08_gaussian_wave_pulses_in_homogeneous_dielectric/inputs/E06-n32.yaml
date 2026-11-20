@@ -1,0 +1,7 @@
+schema_version: 1
+case: E06
+units: {system: normalized}
+parameters: {cells_per_pulse: 32, transverse_cells_per_axis: 8}
+observations:
+  fields: {every: 2}
+output: {directory: n32}

@@ -29,6 +29,8 @@ namespace chdr::experiments::e01e02 {
             std::filesystem::path sourceInput_m, copiedInput_m;
             std::string directory_m;
             int cellsPerPulse_m, transverseCells_m;
+            /// Name of the solver configuration, the same on every level of a study.
+            std::string solver_m;
         };
 
         /// Resolved study choices; level settings remain in their individual YAML files.
@@ -88,8 +90,12 @@ namespace chdr::experiments::e01e02 {
             if (cells != protocol.resolutions_m[index])
                 throw std::invalid_argument(
                     "Pulse study refinement levels must follow the agreed ladder");
-            return {source, std::filesystem::path("inputs") / (std::to_string(index + 1) + ".yaml"),
-                    selected.outputDirectory_m, cells, pulseTransverseCells(selected, protocol)};
+            return {source,
+                    std::filesystem::path("inputs") / (std::to_string(index + 1) + ".yaml"),
+                    selected.outputDirectory_m,
+                    cells,
+                    pulseTransverseCells(selected, protocol),
+                    pulseSolverConfiguration(selected, protocol).name_m};
         }
 
         /// Preflight every real input file before creating any study output.
@@ -102,6 +108,9 @@ namespace chdr::experiments::e01e02 {
                 auto level = inspectLevel(values[i].get<std::string>(), i, protocol);
                 if (!result.empty() && level.transverseCells_m != result.front().transverseCells_m)
                     throw std::invalid_argument("Pulse study must keep the transverse mesh fixed");
+                if (!result.empty() && level.solver_m != result.front().solver_m)
+                    throw std::invalid_argument(
+                        "Pulse study must keep the solver configuration fixed");
                 if (!directories.insert(level.directory_m).second)
                     throw std::invalid_argument(
                         "Pulse study level output directories must be distinct");
@@ -113,7 +122,7 @@ namespace chdr::experiments::e01e02 {
         /// E02 comparisons use an existing completed E01 study, never a new control run.
         inline std::filesystem::path e01ReferenceDirectory(const input::ChdrYamlRunInput& request,
                                                            const PulseProtocol& protocol) {
-            if (protocol.periodicZ_m)
+            if (!protocol.bundlesE01Reference_m)
                 return {};
             if (!request.parameters_m.has_path("e01_reference_directory")
                 || !request.parameters_m["e01_reference_directory"].dtype().is_string())
@@ -135,7 +144,7 @@ namespace chdr::experiments::e01e02 {
             if (request.outputDirectory_m.empty() || request.steps_m || request.duration_m)
                 throw std::invalid_argument(
                     "Pulse study requires output.directory and full runs without run limits");
-            if (protocol.periodicZ_m)
+            if (!protocol.bundlesE01Reference_m)
                 input::validateParameters(request, {"input_files"});
             else
                 input::validateParameters(request, {"input_files", "e01_reference_directory"});

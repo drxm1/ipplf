@@ -1,24 +1,29 @@
 /** @file E03E04FieldSnapshots.h
- * @brief Optional full-volume field frames of the spherical pulse runs, for visualization.
+ * @brief Optional full-volume frames and z=0 sections of the spherical pulse runs.
  */
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "core/input/RunInput.h"
 #include "core/output/FieldOutput.h"
 #include "core/output/RunRecord.h"
 #include "core/simulation/SimulationConfig.h"
 #include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03E04Setup.h"
+#include "experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/E03Plane.h"
 
 namespace chdr::experiments::e03 {
-    /** @brief Write E and R2 B of selected states of a spherical pulse run as a ParaView series.
+    /** @brief Write E and B of selected states of a spherical pulse run as a ParaView series.
      * @details The frames are a visualization product. They do not enter any measurement,
      * and they are disabled unless the input enables the `fields` observation, because one
      * frame of the finest mesh holds \f$2\cdot3\cdot324^3\f$ values. The arrays are the
-     * reconstructed fields that the measurements use, at their native staggered positions;
+     * reconstructed fields that the measurements use, at their native positions;
      * the shared writer records each array's time and component positions from the
      * solver's LevelContract. With `single_precision_fields: true` the values are stored as
      * 4-byte numbers, which halves the size of a frame.
@@ -86,5 +91,44 @@ namespace chdr::experiments::e03 {
         simulation::ObservationSchedule schedule_m;
         bool enabled_m, singlePrecision_m;
         std::unique_ptr<output::FieldOutput> writer_m;
+    };
+
+    /** @brief Write the z=0 sections of E and B at prescribed and scheduled states.
+     * @details E03's `write_plane` prescribes the initial state and its final field target.
+     * A `plane` block in `observations` adds a schedule for two-dimensional videos; its
+     * `every` defaults to one section per step, and the final state is always included.
+     * writeE03Plane appends each section to `plane-z0.csv`: \f$N^2\f$ rows instead of the
+     * \f$N^3\f$ cells of a full frame. Like the full frames, the sections enter no measurement.
+     * @pre The run directory has been prepared collectively. All ranks observe every step.
+     */
+    class SphericalPlaneFrames {
+    public:
+        SphericalPlaneFrames(const input::ChdrYamlRunInput& request,
+                             std::vector<int> prescribedSteps = {})
+            : directory_m(request.outputDirectory_m)
+            , prescribedSteps_m(std::move(prescribedSteps))
+            , schedule_m(input::observationSchedule(request, "plane",
+                                                    {.every_m = 1, .includeFinal_m = true}))
+            , enabled_m(input::observationEnabled(request, "plane",
+                                                  request.observations_m.count("plane") > 0)) {}
+
+        /// True if the run writes `plane-z0.csv`.
+        bool writes() const { return enabled_m || !prescribedSteps_m.empty(); }
+
+        /// Write the section of this state if it is prescribed or scheduled.
+        template <class Solver, DipolePulseReference Reference>
+        void observe(long long step, Solver& state, const Reference& ref, int finalStep) const {
+            const bool prescribed =
+                std::find(prescribedSteps_m.begin(), prescribedSteps_m.end(), step)
+                != prescribedSteps_m.end();
+            if (prescribed || (enabled_m && schedule_m.selects(step, finalStep)))
+                writeE03Plane(state, ref, directory_m, step);
+        }
+
+    private:
+        std::string directory_m;
+        std::vector<int> prescribedSteps_m;
+        simulation::ObservationSchedule schedule_m;
+        bool enabled_m;
     };
 }  // namespace chdr::experiments::e03
