@@ -24,9 +24,10 @@
 - Keep an eye on parallel efficiency at least on the openmp level
 
 ## Layout and standards of this directory
-- README.md maps the directory: `core/` (the code that no experiment, test or optional measurement owns), `opt-in/` (measurements and output that nothing in `core/` depends on), `apps/` (the programs), `tests/` (one directory per unit of the code it tests), `testing/` (shared test support).
+- README.md maps the directory: `core/` (the code that no experiment, test or optional measurement owns), `opt-in/` (measurements and output that nothing in `core/` depends on), `apps/` (the programs), `experiments/` (one directory per group of experiments, each experiment with its specification `E<nn>.typ` and its program. `experiments/experimentDefinitions.typ` assembles the specifications as a chapter of the manual), `tests/` (one directory per unit of the code it tests), `testing/` (shared test support).
+- An experiment starts as its specification `E<nn>.typ`: the question, the reference and its source, and every measurement with an identifier, its formula with explicit indices and time levels, and the name of the output that the solver writes.
 - Include every header by its path from this directory, for example `#include "core/solver/ChdrSolver.h"`. Bare includes do not compile.
-- No file under `core/` includes a file from `apps/`, `opt-in/`, `tests/` or `testing/`.
+- No file under `core/` includes a file from `apps/`, `experiments/`, `opt-in/`, `tests/` or `testing/`.
 - Name exactly what is meant: the executable, the file, the class, the quantity. Avoid general words such as "the driver", "demo" or "the shell" for a named thing.
 - Internal identifiers that you are using belong to the project records, not to code, comments, CMake files, READMEs or anywhere else in ippl's source control.
 - Prefer functions of 20 lines or fewer; extract coherent helpers from longer routines. Do not sacrifice good code-comments or physical correctness to achieve under 20 LOC functions. Functions that call kokkos loops/reductions should be under 20 LOC if the kokkos reduction call's lambda function's lines are not counted, and any other function must be 20 LOC or less in almost any case.

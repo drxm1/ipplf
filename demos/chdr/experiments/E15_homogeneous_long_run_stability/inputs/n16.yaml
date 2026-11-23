@@ -1,0 +1,5 @@
+schema_version: 1
+case: E15
+units: {system: normalized}
+parameters: {cells_per_axis: 16}
+output: {directory: n16}

@@ -27,8 +27,8 @@ mesh entries `chdr.mesh.mpi2` and `chdr.mesh.brick.mpi2` use two threads per
 rank and declare four processors).
 CTest counts the declared processors of each entry against `--parallel`.
 
-The current registration has 215 enabled entries; 166 belong to the fast
-selection above. All 215 passed in the full run of 2026-11-03, with
+The full configuration with MPI registers 216 enabled entries. The fast selection includes 167.
+All 215 entries registered on 2026-11-03 passed in that day's full run, with
 `--parallel 16`, in 703.94 s of wall time on a 16-core AMD Ryzen 9 9950X3D
 (RelWithDebInfo, GCC 15.3, Open MPI 5.0.10, Kokkos 5.2.2). The timing columns
 give individual entry times from that run. A pair `a / b` gives serial and
@@ -94,7 +94,7 @@ with a rank seam at the interface. Their rows give the individual checks.
 | `core/solver/mur` | 23 | 15, 2250 | 652 / 67 |
 | `core/solver/formulation` | 2 | 1, 204 | 4 / 4 |
 | `opt-in/diagnostics` | 11 | 7, 1512 | 22 / 22 |
-| `apps/vacuum-wave` | 12 | 13, 2096 | 71 / 71 |
+| `apps/vacuum-wave` | 13 | 13, 2096 | 71 / 71 |
 | `apps/planar-interface` | 5 | 2, 406 | 705 / 8 |
 | `apps/interface-movies` | 3 | 1, 140 | 17 / 17 |
 | `../mesh` | 7 | 2, 714 | 7 / 7 |
@@ -464,6 +464,7 @@ Run them with `ctest --test-dir build -R '^chdr\.vacuum\.' --output-on-failure`.
 |---|---|---|---|---|---|
 | `chdr.vacuum.unit.{serial,mpi2}` | `test_first_step.cpp` (331), `test_setup.cpp` (196), `test_diagnostics.cpp` (362), `test_policy.cpp` (136) · 22 tests | Initial histories and one solve match an independent host oracle to `1e-10`, the relative \f$L^2\f$ error against the continuum wave is at most 0.01, a 128-step scalar recurrence matches to `1e-12`, and domain errors and injected faults are refused on all ranks. The two-rank entry shuffles the test order with the same fixed seed on both ranks. | exact lattice value; continuum analytic; refusal | `unit`, `mpi` | 1.7 / 1.6 |
 | `chdr.vacuum.output.{serial,mpi2}` | `output_fixture.cpp` (202), `read_output_fixture.py` (176) | A three-frame synthetic fixture written under a comma-decimal locale reads back through VTK and ParaView bit-exact, with exactly the owned cells and the series times. | exact lattice value (fixture formula) | `output`, `reader`, `mpi` | 5.7 / 5.0 |
+| `chdr.vacuum.output.single` | `output_fixture.cpp` (211), `read_output_fixture.py` (209) | One rank writes three binary32 frames. VTK and ParaView read back every field component at the expected binary32 value. | exact lattice value (fixture formula rounded to binary32) | `output`, `reader` | — |
 | `chdr.vacuum.output.failure.{piece,wrapper,series,nonfinite}` | `output_fixture.cpp` (202), `read_output_fixture.py` (176) | A publication failure or a NaN on one of two ranks reaches every rank and leaves a readable series of the earlier frame. | refusal | `output`, `reader`, `mpi` | 4.9, 4.9, 4.9, 4.9 |
 | `chdr.vacuum.propagation` | `run_wave_checks.py` (132), `wave_checks.py` (99) | Three runs (coarse, fine, coarse on two ranks): CSV errors at most `1e-10`, phase speed within 0.002 of 1, relative \f$L^2\f$ errors at most 0.01 and 0.003 with coarse-to-fine ratio in [3, 5], two ranks equal to one rank within `1e-11`. | continuum analytic (second order); exact lattice value; one against two ranks | `integration`, `mpi` | 6.2 |
 | `chdr.vacuum.cli` | `run_cli_checks.py` | YAML runs, including initialization-only and one-step output, accept IPPL options; missing or unknown input selectors and invalid YAML settings fail, including an excessive step count on two ranks. | refusal; smoke | `integration`, `mpi` | 21.3 |
