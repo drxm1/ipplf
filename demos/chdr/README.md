@@ -8,6 +8,7 @@ This directory holds the ChDR code of my master's project:
   - `vacuum-wave`: test evolving a vacuum wave for one period,
   - `planar-interface`: a few simple interface cases,
   - `interface-movies`: some videos of ring/annulus-shaped initialized fields hitting a few different dielectric geometries,
+- my pulse studies in a homogeneous dielectric (E01 to E04), their Gaussian versions (E05 to E08), and my comparison with IPPL's Standard solver (E09 to E14) under `experiments/`,
 - tests (to be organized and documented better),
 - the mesh geometry for comparison against the meep simulation under `mesh/` that was provided to me,
 - a one-dimensional Python code for later 1d comparisons (`1d/`) and a literature review (`ideas-lit-research/`) which were also provided to me.
@@ -24,6 +25,7 @@ This directory holds the ChDR code of my master's project:
 | `apps/vacuum-wave/` | `chdr-vacuum-wave`: the vacuum plane wave in a periodic box, the benchmark of the inherited vacuum update | [`apps/vacuum-wave/README.md`](apps/vacuum-wave/README.md), [`ViewingGuide.org`](apps/vacuum-wave/ViewingGuide.org) |
 | `apps/planar-interface/` | `planar-interface`: one planar dielectric in a periodic box; the plane-pulse reflection measurement and the packet cases | [`apps/planar-interface/README.md`](apps/planar-interface/README.md) |
 | `apps/interface-movies/` | `interface-movies`: an open box with Mur faces, ring starts and eight movie cases; `render_movie.py`, which renders the output of both interface programs | [`apps/interface-movies/README.md`](apps/interface-movies/README.md) |
+| `experiments/` | Each group has one directory with a program and an `E<nn>.typ` specification for each experiment. `experimentDefinitions.typ` assembles the specifications into a chapter that `manual.typ` imports. | [`experimentDefinitions.typ`](experiments/experimentDefinitions.typ), [E01 to E04](experiments/E01E02E03E04_wave_pulses_in_homogeneous_dielectric/README.md), [E05 to E08](experiments/E05E06E07E08_gaussian_wave_pulses_in_homogeneous_dielectric/README.md), [E09 to E14](experiments/E09E10E11E12E13E14_comparison_with_ippl_standard_solver/README.md) |
 | `tests/` | One directory per unit of the code it tests: `core/<unit>`, `opt-in/diagnostics`, `apps/<program>`, `1d`, and `src/<component>` for the IPPL library changes made for ChDR (per-axis periodic layouts in `src/FieldLayout`, Mur faces in `src/MaxwellSolvers`) | [`tests/README.md`](tests/README.md) (every CTest entry, what it checks and against which reference); `tests/src/MaxwellSolvers/HaloOrder.md` and `OpenFaceClosure.md` |
 | `testing/` | Shared test support: the GoogleTest main `TestMain.cpp` and `Util.h`, included as `testing/Util.h` | |
 | `mesh/` | `mesh-1`: the supervisor's distributed mesh and dielectric radiator example with Catalyst output, and its geometry test | [`mesh/README.md`](mesh/README.md), [`mesh/StudentGuide.md`](mesh/StudentGuide.md) |
@@ -48,6 +50,7 @@ directory as their include root:
 | `chdr-run-output` | interface | `opt-in/output/` |
 | `chdr-testing` | interface | `testing/`; compiles the GoogleTest main into each test executable |
 | `chdr-vacuum-wave`, `planar-interface`, `interface-movies`, `mesh-1` | executables | The programs |
+| `experiments-wave-pulses-in-homogeneous-dielectric`, `experiments-gaussian-wave-pulses-in-homogeneous-dielectric`, `experiments-comparison-with-ippl-standard-solver` | executables | One program per experiment group |
 
 The namespaces follow the directories. `core/base/` declares its names in
 `chdr` (`Util.h` in `chdr::util`); `core/solver/` with its subdirectories in
