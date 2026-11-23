@@ -1,0 +1,5 @@
+schema_version: 1
+case: E17
+units: {system: normalized}
+parameters: {cells_per_pulse: 1024, carrier_wavelength: 0.25}
+output: {directory: E17-n1024}
