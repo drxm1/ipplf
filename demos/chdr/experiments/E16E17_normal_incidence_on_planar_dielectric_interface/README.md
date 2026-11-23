@@ -30,3 +30,7 @@ Each input writes a directory named after the experiment and mesh level.
 `profiles.csv` holds the numerical and continuum samples along one line.
 The three frames in `fields/` contain the full electric field, R2 magnetic field and raw magnetic field.
 `run.json` records the input, build, MPI decomposition and effective solver configuration.
+
+The two `n512` inputs also write `movie-profiles.csv`.
+It contains the numerical and continuum electric and magnetic profiles at step zero,
+every 16 steps and at the final field observation.

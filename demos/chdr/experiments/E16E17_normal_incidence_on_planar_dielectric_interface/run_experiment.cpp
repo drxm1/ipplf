@@ -104,7 +104,7 @@ namespace chdr::experiments::e16e17 {
     void recordRun(Simulation& simulation, const input::ChdrYamlRunInput& request,
                    const simulation::ChdrCartesianGridSettings& grid, const Reference& reference,
                    const std::array<Checkpoint, 3>& points, int steps, int stride,
-                   const FieldSnapshots& snapshots) {
+                   const FieldSnapshots& snapshots, const MovieProfiles& movie) {
         auto description = output::describeRun("chdr-experiment-e16-e17", grid, simulation.solver(),
                                                steps, request.caseName_m + " normal incidence");
         reference.record(description.effective_m["analytic_reference"], request.caseName_m);
@@ -116,6 +116,7 @@ namespace chdr::experiments::e16e17 {
         description.effective_m["profiles/file"]            = "profiles.csv";
         recordTargets(description, simulation.solver(), points, stride);
         snapshots.record(description);
+        movie.record(description);
         output::writeRunRecord(request.outputDirectory_m, request, description,
                                simulation.solver().A_n.getLayout().comm);
     }
@@ -133,14 +134,17 @@ namespace chdr::experiments::e16e17 {
         ProfileCsv<Reference> profiles(request.outputDirectory_m, reference, solver.levelContract(),
                                        comm);
         FieldSnapshots snapshots(request, grid, solver, snapshotSteps(points));
+        MovieProfiles movie(request, reference, solver.levelContract(), comm, pulseCells / 32);
         simulation.advance(steps, [&](long long step, Solver& state, const auto& material) {
             observe(state, material, reference, points, step, stride, csv, profiles);
             snapshots.observe(step, state);
+            movie.observe(step, state, steps);
         });
         csv.finish();
         profiles.finish();
         snapshots.finish();
-        recordRun(simulation, request, grid, reference, points, steps, stride, snapshots);
+        movie.finish();
+        recordRun(simulation, request, grid, reference, points, steps, stride, snapshots, movie);
     }
 
     /// Load continuum potential histories using the solver's spatial and temporal contract.

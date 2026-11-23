@@ -423,6 +423,12 @@ Each run writes the following files, and `run.json` with its configuration.
   ],
 )
 
+// Additional output requested by the user on 2026-11-23.
+For a movie of each direction, the level $N_"pulse" = 512$ also saves
+the numerical and continuum $E_x$ and $B_y$ profiles in `movie-profiles.csv`.
+We use the initial state, every 16th step and the final state.
+Each frame uses the actual R2 sample time.
+
 == Experiment E16 analysis
 The main result is $rho_1$ and $rho_2$ at $T$ on each level, with their relative deviations $delta_1$ and $delta_2$ (@E16-energy-deviations).
 For each pair of successive levels we report the observed order

@@ -143,13 +143,13 @@ namespace chdr::experiments::e16e17 {
     class ProfileCsv {
     public:
         ProfileCsv(const std::string& directory, const Reference& reference, LevelContract contract,
-                   MPI_Comm communicator)
+                   MPI_Comm communicator, const char* filename = "profiles.csv")
             : reference_m(reference)
             , contract_m(contract) {
             MPI_Comm_rank(communicator, &rank_m);
             if (rank_m == 0)
                 outputDetail::openCsv(
-                    file_m, directory, "profiles.csv",
+                    file_m, directory, filename,
                     "component,checkpoint,target_time,step,actual_time,k,x,y,z,numerical,analytic");
         }
 
@@ -196,6 +196,64 @@ namespace chdr::experiments::e16e17 {
         LevelContract contract_m;
         int rank_m = 0;
         std::ofstream file_m;
+    };
+
+    /** @brief Save an optional sequence of native Ex and R2 By profiles for movies.
+     * @details Movie frames use the same sampling and CSV layout as the three prescribed
+     * profiles. Each field's actual time is also its target time. The initial state and
+     * final state are included, together with the configured cadence. The separate file
+     * lets the analysis retain its three prescribed observations.
+     */
+    class MovieProfiles {
+        using FieldSolver = solver::ChdrSolver<solver::StandardSolverPeriodic>;
+
+    public:
+        MovieProfiles(const input::ChdrYamlRunInput& request,
+                      const E16E17AnalyticContinuumReferenceSampler& reference,
+                      LevelContract contract, MPI_Comm communicator, int defaultEvery)
+            : schedule_m(input::observationSchedule(
+                  request, "movie_profiles", {.every_m = defaultEvery, .includeFinal_m = true}))
+            , enabled_m(input::observationEnabled(
+                  request, "movie_profiles", request.observations_m.contains("movie_profiles"))) {
+            if (enabled_m)
+                profiles_m =
+                    std::make_unique<ProfileCsv<>>(request.outputDirectory_m, reference, contract,
+                                                   communicator, "movie-profiles.csv");
+        }
+
+        /// Save the numerical and continuum fields at each selected native half-step.
+        void observe(long long step, FieldSolver& state, int finalStep) {
+            if (!enabled_m || (step != 0 && !schedule_m.selects(step, finalStep)))
+                return;
+            const double electricTime = state.labelTime(Quantity::Electric, step);
+            const double magneticTime = state.labelTime(Quantity::Magnetic, step);
+            profiles_m->write(state.electricField(), Quantity::Electric, "movie", electricTime,
+                              step, electricTime);
+            profiles_m->write(state.magneticField(), Quantity::Magnetic, "movie", magneticTime,
+                              step, magneticTime);
+        }
+
+        /// Close the optional movie source before publishing the completed run record.
+        void finish() {
+            if (profiles_m)
+                profiles_m->finish();
+        }
+
+        /// Record the effective movie cadence and its native field convention.
+        void record(output::RunRecordDescription& description) const {
+            if (!enabled_m)
+                return;
+            output::recordObservation(description, "movie_profiles", schedule_m, enabled_m);
+            auto node                 = description.effective_m["movie_profiles"];
+            node["file"]              = "movie-profiles.csv";
+            node["components"]        = "Ex,By";
+            node["sampling_metadata"] = "derived from solver LevelContract";
+        }
+
+    private:
+        simulation::ObservationSchedule schedule_m;
+        bool enabled_m;
+        std::unique_ptr<ProfileCsv<>> profiles_m;
     };
 
     /** @brief Save E, R2 B and raw B at the three prescribed field observations.

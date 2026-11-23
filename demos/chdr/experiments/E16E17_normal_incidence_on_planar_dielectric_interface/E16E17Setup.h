@@ -43,12 +43,22 @@ namespace chdr::experiments::e16e17 {
 
     /// Retain the prescribed three snapshots while allowing storage to be disabled for checks.
     inline void validateFieldOptions(const input::ChdrYamlRunInput& request) {
-        input::validateObservationNames(request, {"fields"});
         if (!request.observations_m.contains("fields"))
             return;
         const auto& fields = request.observations_m.at("fields");
         if (fields.every_m || fields.first_m || fields.last_m || fields.includeFinal_m)
             throw std::invalid_argument("E16/E17 fields accepts only enabled, with fixed targets");
+    }
+
+    /// Movie profiles keep the initial and final states with an optional positive cadence.
+    inline void validateMovieOptions(const input::ChdrYamlRunInput& request) {
+        if (!request.observations_m.contains("movie_profiles"))
+            return;
+        const auto& movie = request.observations_m.at("movie_profiles");
+        if (movie.first_m || movie.last_m || movie.includeFinal_m
+            || (movie.every_m && *movie.every_m <= 0))
+            throw std::invalid_argument(
+                "E16/E17 movie_profiles accepts enabled and positive every");
     }
 
     /// Validate the named physical case before allocation or creation of output files.
@@ -59,7 +69,9 @@ namespace chdr::experiments::e16e17 {
             throw std::invalid_argument(
                 "E16/E17 requires its named case, normalized units and output");
         input::validateParameters(request, {"cells_per_pulse", "carrier_wavelength"});
+        input::validateObservationNames(request, {"fields", "movie_profiles"});
         validateFieldOptions(request);
+        validateMovieOptions(request);
     }
 
     /// Exchange the two media for E17, with the same incident profile and face position.
