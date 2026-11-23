@@ -223,7 +223,7 @@ namespace chdr::experiments::e16e17 {
 
         /// Save the numerical and continuum fields at each selected native half-step.
         void observe(long long step, FieldSolver& state, int finalStep) {
-            if (!enabled_m || (step != 0 && !schedule_m.selects(step, finalStep)))
+            if (!enabled_m || !schedule_m.selects(step, finalStep))
                 return;
             const double electricTime = state.labelTime(Quantity::Electric, step);
             const double magneticTime = state.labelTime(Quantity::Magnetic, step);

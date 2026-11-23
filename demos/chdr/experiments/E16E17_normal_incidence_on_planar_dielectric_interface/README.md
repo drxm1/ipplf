@@ -27,6 +27,8 @@ done
 
 Each input writes a directory named after the experiment and mesh level.
 `measurements.csv` holds the squared field errors, reference norms squared and energies for each side.
+The two `initial` energy rows give the denominator for both energy fractions.
+The time history includes every energy row, including those at the three named observations.
 `profiles.csv` holds the numerical and continuum samples along one line.
 The three frames in `fields/` contain the full electric field, R2 magnetic field and raw magnetic field.
 `run.json` records the input, build, MPI decomposition and effective solver configuration.

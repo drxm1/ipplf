@@ -108,9 +108,11 @@ namespace chdr::experiments::e16e17 {
         auto description = output::describeRun("chdr-experiment-e16-e17", grid, simulation.solver(),
                                                steps, request.caseName_m + " normal incidence");
         reference.record(description.effective_m["analytic_reference"], request.caseName_m);
-        description.effective_m["material/epsilon_side1"]   = reference.epsilon1_m;
-        description.effective_m["material/epsilon_side2"]   = reference.epsilon2_m;
-        description.effective_m["material/interface_z"]     = reference.zf_m;
+        description.effective_m["material/epsilon_side1"] = reference.epsilon1_m;
+        description.effective_m["material/epsilon_side2"] = reference.epsilon2_m;
+        description.effective_m["material/interface_z"]   = reference.zf_m;
+        description.effective_m["material/side2_cell_count"] =
+            simulation.material().statistics().marked_m;
         description.effective_m["measurements/file"]        = "measurements.csv";
         description.effective_m["measurements/identifiers"] = "E16.meas01,E16.meas02,E16.meas03";
         description.effective_m["profiles/file"]            = "profiles.csv";
