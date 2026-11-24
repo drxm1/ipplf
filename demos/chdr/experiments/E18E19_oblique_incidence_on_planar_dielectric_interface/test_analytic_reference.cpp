@@ -244,8 +244,10 @@ namespace {
         expectClose(settings.timeStep_m.has_value(), !safety, 0, "explicit time-step selection");
         Simulation simulation(grid, materialMap(), settings);
         auto& solver = simulation.solver();
-        expectClose(safety ? solver.safetyFactor() : solver.getDt(), safety ? 0.99 : 0.5 / cells,
-                    2e-15, "configured solver time step");
+        if (safety)
+            expectClose(solver.safetyFactor(), 0.99, 2e-15, "configured solver safety factor");
+        const double expectedDt = (safety ? 0.99 / std::sqrt(3.0) : 0.5) / cells;
+        expectClose(solver.getDt(), expectedDt, 1e-15, "configured solver time step");
         checkRequestedSteps(request, solver, cells, safety ? safetySteps : 56 * cells);
         if (safety)
             checkDisabledSnapshots(request, grid, solver);

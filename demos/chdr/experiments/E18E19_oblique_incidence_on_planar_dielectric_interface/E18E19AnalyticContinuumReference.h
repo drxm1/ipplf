@@ -247,18 +247,18 @@ namespace chdr::experiments::e18e19 {
          * @details E19 assigns A_z on the face to the vacuum branch for initialization.
          * The field formulas and all other components use the transmitted branch
          * on the face, as stated in E19-analytic-EB. The window measurement selects
-         * vacuumFace for the vacuum expression prescribed in E19-S.meas04.
+         * the vacuum expression for all its side-1 samples, including the face,
+         * from the storing cell's side as prescribed in E19-S.meas04.
          */
         std::complex<double> amplitude(double z, double time, unsigned component, Sample quantity,
-                                       bool vacuumFace = false) const {
+                                       bool useVacuumBranch = false) const {
             // TE has A and E along y. TM has B along y.
             const bool polarizedAlongY = quantity == Sample::Magnetic ? tm_m : !tm_m;
             if ((component == 1) != polarizedAlongY)
                 return 0;
             const bool vacuum =
-                z < INTERFACE_Z
-                || (z == INTERFACE_Z
-                    && (vacuumFace || (component == 2 && quantity == Sample::Potential)));
+                useVacuumBranch || z < INTERFACE_Z
+                || (z == INTERFACE_Z && component == 2 && quantity == Sample::Potential);
             std::complex<double> result = 0;
             for (const auto& mode : modes_m) {
                 if (vacuum)
