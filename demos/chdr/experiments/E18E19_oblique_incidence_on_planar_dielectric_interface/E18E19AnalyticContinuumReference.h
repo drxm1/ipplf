@@ -124,6 +124,19 @@ namespace chdr::experiments::e18e19 {
             return amplitude(z, time, component, Sample::Potential);
         }
 
+        /** @brief Complex field amplitude for the vacuum sums of E18-S/E19-S.meas04.
+         * @details Use the same differentiated modes as referenceE and referenceB.
+         * The magnetic sample on the face uses the vacuum expression of E19S.typ.
+         * Its continuity follows from [ellingson2020ElectromagneticsVol2,
+         * Eq. (5.187)], with the magnetic reflection sign stated in E19.typ.
+         * @pre The caller supplies a sample on the vacuum side or on its interface.
+         */
+        std::complex<double> vacuumFieldAmplitude(double z, double time, unsigned component,
+                                                  bool magnetic) const {
+            return amplitude(z, time, component, magnetic ? Sample::Magnetic : Sample::Electric,
+                             true);
+        }
+
         /// Preserve the prescribed geometry and continuum prediction beside the solver input.
         void record(conduit_cpp::Node node, const std::string& experiment) const {
             node["name"]         = experiment + " oblique-incidence continuum packet";
@@ -233,17 +246,19 @@ namespace chdr::experiments::e18e19 {
         /** @brief Sum the selected branches at one normal position and physical time.
          * @details E19 assigns A_z on the face to the vacuum branch for initialization.
          * The field formulas and all other components use the transmitted branch
-         * on the face, as stated in E19-analytic-EB.
+         * on the face, as stated in E19-analytic-EB. The window measurement selects
+         * vacuumFace for the vacuum expression prescribed in E19-S.meas04.
          */
-        std::complex<double> amplitude(double z, double time, unsigned component,
-                                       Sample quantity) const {
+        std::complex<double> amplitude(double z, double time, unsigned component, Sample quantity,
+                                       bool vacuumFace = false) const {
             // TE has A and E along y. TM has B along y.
             const bool polarizedAlongY = quantity == Sample::Magnetic ? tm_m : !tm_m;
             if ((component == 1) != polarizedAlongY)
                 return 0;
             const bool vacuum =
                 z < INTERFACE_Z
-                || (z == INTERFACE_Z && component == 2 && quantity == Sample::Potential);
+                || (z == INTERFACE_Z
+                    && (vacuumFace || (component == 2 && quantity == Sample::Potential)));
             std::complex<double> result = 0;
             for (const auto& mode : modes_m) {
                 if (vacuum)

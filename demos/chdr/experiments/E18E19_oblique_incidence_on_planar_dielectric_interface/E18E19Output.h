@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <memory>
 #include <mpi.h>
 #include <stdexcept>
 #include <string>
@@ -119,16 +120,40 @@ namespace chdr::experiments::e18e19 {
                                          origin[2] + (k + 0.5 + offset[2]) * spacing[2]};
         }
 
+        /// Reject undefined ratios before publishing either numerical or continuum sums.
+        inline double reflectionRatio(double incident, double reflected) {
+            if (!std::isfinite(incident) || incident <= 0 || !std::isfinite(reflected)
+                || reflected < 0 || !std::isfinite(reflected / incident))
+                throw std::runtime_error("Invalid Fourier amplitudes in reflection.csv");
+            return reflected / incident;
+        }
+
+        /// Preserve the original columns and append the continuum window only for the S cases.
+        inline std::string reflectionHeader(bool windowReference) {
+            std::string header =
+                "q,angle_degrees,incident_magnitude,reflected_magnitude,"
+                "reflection_magnitude,reference_magnitude";
+            if (windowReference)
+                header +=
+                    ",reference_incident_magnitude,reference_reflected_magnitude,"
+                    "window_reference_magnitude";
+            return header;
+        }
+
+        /// Append both saved continuum magnitudes and their checked ratio.
+        inline void referenceReflectionRow(std::ofstream& file, double incident, double reflected) {
+            file << ',' << incident << ',' << reflected << ','
+                 << reflectionRatio(incident, reflected);
+        }
+
         /// Write one measured Fourier ratio with the reference at precisely the same q.
         inline void reflectionRow(std::ofstream& file,
                                   const E18E19AnalyticContinuumReference& reference, double q,
                                   double incident, double reflected) {
-            if (!std::isfinite(incident) || incident <= 0 || !std::isfinite(reflected)
-                || reflected < 0 || !std::isfinite(reflected / incident))
-                throw std::runtime_error("Invalid Fourier amplitudes in reflection.csv");
+            const double ratio = reflectionRatio(incident, reflected);
             const double angle = std::atan(reference.KX / q) * 180 / Kokkos::numbers::pi;
-            file << q << ',' << angle << ',' << incident << ',' << reflected << ','
-                 << reflected / incident << ',' << std::abs(reference.reflection(q)) << '\n';
+            file << q << ',' << angle << ',' << incident << ',' << reflected << ',' << ratio << ','
+                 << std::abs(reference.reflection(q));
         }
     }  // namespace outputDetail
 
@@ -160,16 +185,24 @@ namespace chdr::experiments::e18e19 {
     inline void writeReflection(const std::string& directory,
                                 const E18E19AnalyticContinuumReference& reference,
                                 const std::array<double, 12>& incident,
-                                const std::array<double, 12>& reflected, MPI_Comm communicator) {
+                                const std::array<double, 12>& reflected, MPI_Comm communicator,
+                                const std::array<double, 12>* referenceIncident  = nullptr,
+                                const std::array<double, 12>* referenceReflected = nullptr) {
         outputDetail::onRoot(communicator, [&] {
+            if (bool(referenceIncident) != bool(referenceReflected))
+                throw std::invalid_argument("Continuum Fourier output requires both endpoints");
             std::ofstream file;
             outputDetail::openCsv(file, directory, "reflection.csv",
-                                  "q,angle_degrees,incident_magnitude,reflected_magnitude,"
-                                  "reflection_magnitude,reference_magnitude");
+                                  outputDetail::reflectionHeader(bool(referenceIncident)).c_str());
             const auto wavenumbers = reference.measuredWavenumbers();
-            for (std::size_t index = 0; index < wavenumbers.size(); ++index)
+            for (std::size_t index = 0; index < wavenumbers.size(); ++index) {
                 outputDetail::reflectionRow(file, reference, wavenumbers[index], incident[index],
                                             reflected[index]);
+                if (referenceIncident)
+                    outputDetail::referenceReflectionRow(file, (*referenceIncident)[index],
+                                                         (*referenceReflected)[index]);
+                file << '\n';
+            }
             file.close();
         });
     }
@@ -298,14 +331,17 @@ namespace chdr::experiments::e18e19 {
                        const simulation::ChdrCartesianGridSettings& grid, FieldSolver& state,
                        std::vector<int> prescribedSteps)
             : steps_m(std::move(prescribedSteps))
-            , writer_m(std::filesystem::path(request.outputDirectory_m) / "fields",
-                       output::OutputGeometry{grid.cells_m, {0, 0, 0}, grid.spacing_m},
-                       state.A_n.getLayout().comm, "fields", true,
-                       output::fieldOutputScales(request.units_m)) {}
+            , writer_m(request.caseName_m == "E18-S" || request.caseName_m == "E19-S"
+                           ? nullptr
+                           : std::make_unique<output::FieldOutput>(
+                                 std::filesystem::path(request.outputDirectory_m) / "fields",
+                                 output::OutputGeometry{grid.cells_m, {0, 0, 0}, grid.spacing_m},
+                                 state.A_n.getLayout().comm, "fields", true,
+                                 output::fieldOutputScales(request.units_m))) {}
 
         /// Write the existing reconstructed arrays when the step is a prescribed checkpoint.
         void observe(long long step, FieldSolver& state) {
-            if (std::find(steps_m.begin(), steps_m.end(), step) == steps_m.end())
+            if (!writer_m || std::find(steps_m.begin(), steps_m.end(), step) == steps_m.end())
                 return;
             const std::array fields{
                 output::VectorFieldSnapshot{"E", state.electricField(), Quantity::Electric, 1.0},
@@ -314,16 +350,21 @@ namespace chdr::experiments::e18e19 {
             const output::FrameRecord frame{static_cast<int>(step),
                                             state.labelTime(Quantity::VectorPotential, step),
                                             state.getDt()};
-            writer_m.writeFrame(frame, state.levelContract(), fields);
+            writer_m->writeFrame(frame, state.levelContract(), fields);
         }
 
         /// Publish the complete ParaView series after its last frame.
-        void finish() { writer_m.writeSeries(); }
+        void finish() {
+            if (writer_m)
+                writer_m->writeSeries();
+        }
 
         /// Record the exact step selection and the native field conventions.
         void record(output::RunRecordDescription& description) const {
             auto node       = description.effective_m["field_snapshots"];
-            node["enabled"] = true;
+            node["enabled"] = bool(writer_m);
+            if (!writer_m)
+                return;
             node["prescribed_steps"].set(steps_m);
             node["arrays"]            = "E,B_R2";
             node["sampling_metadata"] = "derived from solver LevelContract";
@@ -332,6 +373,6 @@ namespace chdr::experiments::e18e19 {
 
     private:
         std::vector<int> steps_m;
-        output::FieldOutput writer_m;
+        std::unique_ptr<output::FieldOutput> writer_m;
     };
 }  // namespace chdr::experiments::e18e19
