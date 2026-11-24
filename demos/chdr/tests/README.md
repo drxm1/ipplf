@@ -58,6 +58,13 @@ uses the `record` label. It checks the continuum sampler in both incident media
 by differentiating the potential, checking the tangential fields at the interface
 and integrating the two energy fractions.
 
+The E18/E19 reference check differentiates the TE and TM potentials,
+checks the interface conditions and Brewster zero, and samples both initial histories.
+It uses the `record` label. [Continuum reference check](../experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/test_analytic_reference.cpp)
+The E18/E19 measurement checks use prescribed fields to verify the Fourier phases,
+side energies and extrema in serial and on two MPI ranks.
+They use the `unit` label. [Measurement checks](../experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/test_measurements.cpp)
+
 "Reference" names what the test compares the code with:
 
 | Reference | Meaning |
