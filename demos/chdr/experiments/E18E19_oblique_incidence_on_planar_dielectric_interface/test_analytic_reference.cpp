@@ -10,6 +10,7 @@
 #include <string>
 
 #include "experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/E18E19InitialSampler.h"
+#include "experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/E18E19Setup.h"
 
 namespace {
     using Reference = chdr::experiments::e18e19::E18E19AnalyticContinuumReference;
@@ -159,14 +160,18 @@ namespace {
                 }
     }
 
-    /// The normal potential sample lies exactly on the prescribed face at each mesh level.
+    /// Check the normal potential tie using the same mesh construction as the study.
     void checkFaceCoordinates() {
         const chdr::LevelContract contract{chdr::EBReconstructionConvention::R2,
                                            chdr::SpatialDiscretization::Staggered};
         const double offset = contract.positionOffset(chdr::Quantity::VectorPotential, 2)[2];
         for (int cells : {24, 48, 96, 192}) {
+            const auto grid    = chdr::experiments::e18e19::makeGrid(cells);
+            auto box           = chdr::solver::makeBoxFieldContainer(grid.cells_m, grid.lengths(),
+                                                                     grid.splitAxis_m, grid.periodic_m);
             const int faceCell = 28 * cells - 1;
-            const double face  = (faceCell + 0.5 + offset) * (1.0 / cells);
+            const double face  = box.getMesh().getOrigin()[2]
+                                + (faceCell + 0.5 + offset) * box.getMesh().getMeshSpacing()[2];
             expectClose(face, Reference::INTERFACE_Z, 0, "exact interface coordinate");
         }
     }
@@ -188,15 +193,17 @@ namespace {
 }  // namespace
 
 int main(int argc, char** argv) {
-    Kokkos::ScopeGuard kokkos(argc, argv);
+    ippl::initialize(argc, argv);
+    int status = 0;
     try {
         checkFaceCoordinates();
         checkExperiment(false);
         checkExperiment(true);
         std::cout << "E18/E19 continuum reference and history tables passed\n";
-        return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
-        return 1;
+        status = 1;
     }
+    ippl::finalize();
+    return status;
 }

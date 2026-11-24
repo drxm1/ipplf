@@ -126,20 +126,23 @@ namespace chdr::experiments::e18e19 {
 
         /// Preserve the prescribed geometry and continuum prediction beside the solver input.
         void record(conduit_cpp::Node node, const std::string& experiment) const {
-            node["name"]                       = experiment + " oblique-incidence continuum packet";
-            node["polarization"]               = tm_m ? "TM" : "TE";
-            node["epsilon_side1"]              = 1.0;
-            node["epsilon_side2"]              = DIELECTRIC_EPSILON;
-            node["interface_z"]                = INTERFACE_Z;
-            node["initial_center_z"]           = INITIAL_CENTER_Z;
-            node["tangential_wavenumber"]      = KX;
-            node["normal_wavenumber_center"]   = KX;
-            node["spectrum_half_width"]        = SPECTRUM_HALF_WIDTH;
-            node["spectrum_sharpness"]         = SPECTRUM_SHARPNESS;
-            node["train_period"]               = TRAIN_PERIOD;
-            node["mode_spacing"]               = MODE_SPACING;
-            node["mode_count"]                 = static_cast<int>(modes_m.size());
-            node["reflection_energy_fraction"] = reflectedEnergyFraction();
+            node["name"]         = experiment + " oblique-incidence continuum packet";
+            node["polarization"] = tm_m ? "TM" : "TE";
+            node["signed_reflection_convention"] =
+                tm_m ? "B_y reflected / incident (R in E19, negative of Ellingson's Gamma_TM)"
+                     : "A_y reflected / incident (Gamma in E18, Ellingson's Gamma_TE)";
+            node["epsilon_side1"]                = 1.0;
+            node["epsilon_side2"]                = DIELECTRIC_EPSILON;
+            node["interface_z"]                  = INTERFACE_Z;
+            node["initial_center_z"]             = INITIAL_CENTER_Z;
+            node["tangential_wavenumber"]        = KX;
+            node["normal_wavenumber_center"]     = KX;
+            node["spectrum_half_width"]          = SPECTRUM_HALF_WIDTH;
+            node["spectrum_sharpness"]           = SPECTRUM_SHARPNESS;
+            node["train_period"]                 = TRAIN_PERIOD;
+            node["mode_spacing"]                 = MODE_SPACING;
+            node["mode_count"]                   = static_cast<int>(modes_m.size());
+            node["reflection_energy_fraction"]   = reflectedEnergyFraction();
             node["transmission_energy_fraction"] = 1 - reflectedEnergyFraction();
         }
 
