@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Run E18 (TE) and E19 (TM) on each of the four specified meshes.
+# Run E18/E19, or their S cases, on each of the four specified meshes.
 set -euo pipefail
 
-if (( $# != 2 )); then
-    echo "Usage: bash run_study.sh EXECUTABLE NEW_STUDY_DIRECTORY" >&2
+if (( $# < 2 || $# > 3 )) || [[ ${3:-} != "" && ${3:-} != --s ]]; then
+    echo "Usage: bash run_study.sh EXECUTABLE NEW_STUDY_DIRECTORY [--s]" >&2
     exit 2
+fi
+
+experiments=(E18 E19)
+if [[ ${3:-} == --s ]]; then
+    experiments=(E18-S E19-S)
 fi
 
 executable=$(realpath -e -- "$1")
@@ -17,7 +22,7 @@ sha256sum -- "$executable" > executable.sha256
 export OMP_NUM_THREADS=4 OMP_PLACES=threads OMP_PROC_BIND=spread
 
 for cells in 24 48 96 192; do
-    for experiment in E18 E19; do
+    for experiment in "${experiments[@]}"; do
         name="$experiment-n$cells"
         echo "Starting $name"
         mpiexec -n 8 --map-by slot:PE=4:HWTCPUS --bind-to hwthread --report-bindings \
