@@ -17,13 +17,16 @@ namespace chdr::experiments::e15 {
     int resolution(const input::ChdrYamlRunInput& request) {
         input::validateParameters(request, {"cells_per_axis", "save_slices"});
         input::validateObservationNames(request, {});
-        if (request.caseName_m != "E15" || request.units_m.system_m != "normalized"
-            || request.duration_m || request.outputDirectory_m.empty()
+        if ((request.caseName_m != "E15" && request.caseName_m != "E15-S")
+            || request.units_m.system_m != "normalized" || request.duration_m
+            || request.outputDirectory_m.empty()
             || !request.parameters_m.has_path("cells_per_axis"))
             throw std::invalid_argument(
                 "E15 requires cells_per_axis, normalized units and an output directory");
         const auto value = request.parameters_m["cells_per_axis"];
         if (value.dtype().is_number() && value.number_of_elements() == 1) {
+            if (request.caseName_m == "E15-S" && value.to_float64() != 16)
+                throw std::invalid_argument("E15-S requires 16 cells per axis");
             for (int allowed : {16, 32, 64})
                 if (value.to_float64() == allowed)
                     return allowed;
@@ -99,38 +102,22 @@ namespace chdr::experiments::e15 {
                     rows.push_back(std::move(measurement));
             }
             if (rank == 0 && step > 0 && step % 10000 == 0)
-                std::cout << "E15 step " << step << '/' << steps << std::endl;
+                std::cout << request.caseName_m << " step " << step << '/' << steps << std::endl;
         });
         return rows;
     }
 
-    /// Run the specified refinement level, or the independently initialized extended coarse run.
-    void run(const input::ChdrYamlRunInput& request) {
-        const int n = resolution(request);
-        const Wave wave(n);
-        const double h = 1.0 / n, period = TwoPi / wave.omega_m;
-        const simulation::ChdrCartesianGridSettings grid{
-            {n, n, n}, {h, h, h}, 0, {true, true, true}, 2};
-        const auto medium = KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
-            marked = false;
-            return Epsilon;
-        };
-        Simulation simulation(grid, medium, {.timeStep_m = wave.dt_m});
-        auto& solver    = simulation.solver();
-        const int steps = request.steps_m.value_or(nearestStep(solver, 1000 * period));
-        if (steps < 0 || steps > (n == 16 ? 1000000 : nearestStep(solver, 1000 * period)))
-            throw std::invalid_argument("E15 step count outside the specified interval");
-        const bool slices   = input::booleanParameter(request, "save_slices", false);
+    /// Save the same E15.meas01–03 history and run record for either choice of time step.
+    void writeResults(const input::ChdrYamlRunInput& request,
+                      const simulation::ChdrCartesianGridSettings& grid, Solver& solver,
+                      const Wave& wave, int steps, Json rows) {
         const MPI_Comm comm = solver.A_n.getLayout().comm;
-        output::prepareRunDirectory(request.outputDirectory_m, comm);
-        simulation.load(wave);
-        auto rows = evolve(simulation, wave, request, steps, period, slices);
         int rank;
         MPI_Comm_rank(comm, &rank);
         if (rank == 0)
             writeJson(fs::path(request.outputDirectory_m) / "results.json",
-                      {{"N", n},
-                       {"period", period},
+                      {{"N", wave.cells_m},
+                       {"period", TwoPi / wave.omega_m},
                        {"kappa_E", wave.kappaE_m},
                        {"kappa_B", wave.kappaB_m},
                        {"phase_lag_rate", wave.omega_m - wave.discreteOmega_m},
@@ -140,6 +127,44 @@ namespace chdr::experiments::e15 {
         record.effective_m["material/relative_permittivity"] = Epsilon;
         record.effective_m["measurements/file"]              = "results.json";
         output::writeRunRecord(request.outputDirectory_m, request, record, comm);
+    }
+
+    /// Default to 1000 continuum periods for E15 and one million steps for E15-S.
+    int runSteps(const input::ChdrYamlRunInput& request, Solver& solver, const Wave& wave) {
+        const int refinementSteps = nearestStep(solver, 1000 * (TwoPi / wave.omega_m));
+        const int steps =
+            request.steps_m.value_or(request.caseName_m == "E15-S" ? 1000000 : refinementSteps);
+        if (steps < 0 || steps > (wave.cells_m == 16 ? 1000000 : refinementSteps))
+            throw std::invalid_argument("E15 step count outside the specified interval");
+        return steps;
+    }
+
+    /** @brief Launch the prescribed diagonal mode on a periodic cubic mesh.
+     * @details For E15-S only, select the homogeneous dielectric endpoint before loading
+     * histories. The checked O1VS step uses the vacuum bound. See E15-S.typ and
+     * Fallahi (2020), Eqs. (3.17) and (3.20), with the dielectric wave speed.
+     */
+    void run(const input::ChdrYamlRunInput& request) {
+        const int n    = resolution(request);
+        const double h = 1.0 / n;
+        const simulation::ChdrCartesianGridSettings grid{
+            {n, n, n}, {h, h, h}, 0, {true, true, true}, 2};
+        const auto medium = KOKKOS_LAMBDA(material::CellIndex, material::Position, bool& marked) {
+            marked = false;
+            return Epsilon;
+        };
+        Simulation simulation(grid, medium, {.timeStep_m = h / 2});
+        auto& solver = simulation.solver();
+        if (request.caseName_m == "E15-S")
+            solver.setTimeStepUnchecked(h * std::sqrt(Epsilon / 3.0));
+        const Wave wave(n, solver.getDt());
+        const double period = TwoPi / wave.omega_m;
+        const int steps     = runSteps(request, solver, wave);
+        const bool slices   = input::booleanParameter(request, "save_slices", false);
+        output::prepareRunDirectory(request.outputDirectory_m, solver.A_n.getLayout().comm);
+        simulation.load(wave);
+        writeResults(request, grid, solver, wave, steps,
+                     evolve(simulation, wave, request, steps, period, slices));
     }
 }  // namespace chdr::experiments::e15
 

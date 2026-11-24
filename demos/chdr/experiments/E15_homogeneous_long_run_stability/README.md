@@ -25,3 +25,8 @@ and `run.json` (input, solver, build and MPI layout).
 The middle mesh also writes four `slice-<step>.json` files with the native
 electric field component `Ex`, its coordinates and its R2 sample time.
 The million-step run starts independently from the same wave as `n16`.
+
+For [E15-S](E15-S.typ), run the same executable and MPI command from a separate
+study directory with `--input "$inputs/n16-million-endpoint.yaml"`.
+The case name selects the homogeneous dielectric Courant limit for both the
+update and the initial histories. Its output directory is also `n16-million`.
