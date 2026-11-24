@@ -1,5 +1,5 @@
 /** @file run_experiment.cpp
- * @brief E16 and E17 normal incidence at one planar dielectric face.
+ * @brief E16, E17 and E16-S normal incidence at one planar dielectric face.
  */
 #include <algorithm>
 #include <array>
@@ -155,7 +155,7 @@ namespace chdr::experiments::e16e17 {
         const auto reference = makeReference(request);
         const int pulseCells = cellsPerPulse(request);
         const auto grid      = makeGrid(pulseCells);
-        Simulation simulation(grid, materialMap(reference), {.timeStep_m = grid.spacing_m[2] / 2});
+        Simulation simulation(grid, materialMap(reference), solverSettings(request, grid));
         simulation.load(reference);
         evolve(simulation, request, grid, reference, pulseCells);
     }

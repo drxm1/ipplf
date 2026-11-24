@@ -270,7 +270,8 @@ namespace chdr::experiments::e16e17 {
                        const simulation::ChdrCartesianGridSettings& grid, FieldSolver& state,
                        std::vector<int> prescribedSteps)
             : steps_m(std::move(prescribedSteps))
-            , enabled_m(input::observationEnabled(request, "fields", true)) {
+            , enabled_m(
+                  input::observationEnabled(request, "fields", request.caseName_m != "E16-S")) {
             if (!enabled_m)
                 return;
             writer_m = std::make_unique<output::FieldOutput>(
