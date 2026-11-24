@@ -34,4 +34,12 @@
   #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E13.typ"
 
   #include "./E09E10E11E12E13E14_comparison_with_ippl_standard_solver/E14.typ"
+
+  #include "./E16E17_normal_incidence_on_planar_dielectric_interface/E16.typ"
+
+  #include "./E16E17_normal_incidence_on_planar_dielectric_interface/E17.typ"
+
+  #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E18.typ"
+
+  #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E19.typ"
 ]

@@ -52,6 +52,12 @@ its variants' labels. The timeout is 180 s for `medium.Convergence.*`,
 
 ## How to read the tables
 
+The experiment-owned CTest entry
+[`chdr.experiments.e16-e17.reference`](../experiments/E16E17_normal_incidence_on_planar_dielectric_interface/test_analytic_reference.cpp)
+uses the `record` label. It checks the continuum sampler in both incident media
+by differentiating the potential, checking the tangential fields at the interface
+and integrating the two energy fractions.
+
 "Reference" names what the test compares the code with:
 
 | Reference | Meaning |

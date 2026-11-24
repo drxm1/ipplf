@@ -1,0 +1,7 @@
+schema_version: 1
+case: E16
+units: {system: normalized}
+parameters: {cells_per_pulse: 512, carrier_wavelength: 0.25}
+observations:
+  movie_profiles: {enabled: true, every: 16}
+output: {directory: E16-n512}
