@@ -3,6 +3,7 @@
  */
 #pragma once
 
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -21,6 +22,11 @@ namespace chdr::experiments::e18e19 {
         return 56 * cellsPerPeriod;
     }
 
+    /// E18-S and E19-S select the solver time step through the safety factor.
+    inline bool usesSafetyFactor(const input::ChdrYamlRunInput& request) {
+        return request.caseName_m == "E18-S" || request.caseName_m == "E19-S";
+    }
+
     /// Read the tangential resolution shared by the TE and TM refinement series.
     inline int cellsPerPeriod(const input::ChdrYamlRunInput& request) {
         if (request.parameters_m.has_path("cells_per_period")) {
@@ -35,16 +41,16 @@ namespace chdr::experiments::e18e19 {
 
     /// Each input specifies one full study level, with the fixed duration and all observations.
     inline int validateInput(const input::ChdrYamlRunInput& request) {
-        if ((request.caseName_m != "E18" && request.caseName_m != "E19")
+        if ((request.caseName_m != "E18" && request.caseName_m != "E19"
+             && !usesSafetyFactor(request))
             || request.units_m.system_m != "normalized" || request.outputDirectory_m.empty())
             throw std::invalid_argument(
                 "E18/E19 requires its named case, normalized units and output");
         input::validateParameters(request, {"cells_per_period"});
         input::validateObservationNames(request, {});
-        const int cells = cellsPerPeriod(request);
-        if (request.duration_m || (request.steps_m && *request.steps_m != finalStep(cells)))
-            throw std::invalid_argument("E18/E19 requires run.steps = 56 * cells_per_period");
-        return cells;
+        if (request.duration_m)
+            throw std::invalid_argument("E18/E19 uses its prescribed final step, not run.duration");
+        return cellsPerPeriod(request);
     }
 
     /// Cubic cells, two layers along y, and decomposition along the interface normal.
@@ -55,6 +61,34 @@ namespace chdr::experiments::e18e19 {
                 0,
                 {true, true, true},
                 2};
+    }
+
+    /** @brief Select the time step prescribed by E18.typ, E19.typ, E18S.typ or E19S.typ.
+     * @details The S cases delegate their stability bound to ChdrSolver through its checked
+     * safety factor. The selected step is set before loading the potential histories.
+     */
+    inline simulation::ChdrSolverSettings solverSettings(
+        const input::ChdrYamlRunInput& request, const simulation::ChdrCartesianGridSettings& grid) {
+        if (usesSafetyFactor(request))
+            return {.safetyFactor_m = 0.99};
+        return {.timeStep_m = grid.spacing_m[0] / 2};
+    }
+
+    /** @brief Select the last reconstructed field sample prescribed by the experiment.
+     * @details E18S.typ and E19S.typ use the E01 nearest-time rule at time 28.
+     * Invert the constructed LevelContract through labelTime(), choosing the later sample
+     * in a tie. E18 and E19 retain their original final step.
+     */
+    inline int selectedSteps(const input::ChdrYamlRunInput& request, const Solver& solver,
+                             int cells) {
+        const int steps =
+            usesSafetyFactor(request)
+                ? static_cast<int>(std::floor(
+                      (28.0 - solver.labelTime(Quantity::Electric, 0)) / solver.getDt() + 0.5))
+                : finalStep(cells);
+        if (request.steps_m && *request.steps_m != steps)
+            throw std::invalid_argument("E18/E19 run.steps must equal its prescribed final step");
+        return steps;
     }
 
     /// Vacuum occupies the lower part of the periodic box, up to the specified cell face.
