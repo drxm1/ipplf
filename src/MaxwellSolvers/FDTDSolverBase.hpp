@@ -161,11 +161,9 @@ namespace ippl {
             A_nm1.getFieldBC().apply(A_nm1);
             A_np1.getFieldBC().apply(A_np1);
         } else {
-            Vector<uint32_t, Dim> true_nr = nr_m;
-            true_nr += (A_n.getNghost() * 2);
             second_order_mur_boundary_conditions bcs{};
-            bcs.apply(A_n, A_nm1, A_np1, this->dt, true_nr, layout_mp->getLocalNDIndex(),
-                      boundary_m.murMask(), boundary_m.kernelSpeeds<scalar>(), murCellSpeeds_m);
+            bcs.apply(A_n, A_nm1, A_np1, this->dt, murGlobalExtents(), layout_mp->getLocalNDIndex(),
+                      boundary_m.murMask(), boundary_m.kernelSpeeds<scalar>(), murLayerSpeeds_m);
         }
     }
 
@@ -178,23 +176,20 @@ namespace ippl {
         int invalid      = 0;
         for (unsigned d = 0; d < 3; ++d)
             invalid |= speeds.extent(d) != field.extent(d);
+        MurLayerSpeeds layers;
         if (!invalid) {
-            // NaN fails both comparisons. The bound is the one of validateBoundary.
-            Kokkos::parallel_reduce(
-                "Check Mur cell speeds", ippl::getRangePolicy(speeds, 1),
-                KOKKOS_LAMBDA(size_t i, size_t j, size_t k, int& count) {
-                    const scalar speed = speeds(i, j, k);
-                    count += !(speed > 0 && speed < Kokkos::sqrt(scalar(2)));
-                },
-                invalid);
+            layers = second_order_mur_boundary_conditions::boundaryLayers<SourceField, scalar>(
+                speeds, murGlobalExtents(), layout_mp->getLocalNDIndex(), boundary_m.murMask());
+            for (unsigned face = 0; face < 6; ++face)
+                invalid += countInadmissibleMurSpeeds(layers[face]);
         }
         MPI_Allreduce(MPI_IN_PLACE, &invalid, 1, MPI_INT, MPI_MAX,
                       layout_mp->comm.getCommunicator());
         if (invalid)
             throw IpplException("FDTDSolverBase::setMurCellSpeeds",
-                                "Mur cell speeds need the field extents and owned values in "
+                                "Mur cell speeds need the field extents and boundary values in "
                                 "(0, sqrt(2))");
-        murCellSpeeds_m = speeds;
+        murLayerSpeeds_m = layers;
     }
 
     /**

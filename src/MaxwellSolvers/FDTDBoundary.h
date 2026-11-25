@@ -22,11 +22,12 @@
 #define IPPL_FDTD_BOUNDARY_H
 
 #include <array>
-#include <cmath>
+#include <concepts>
 
 #include "Types/Vector.h"
 
 #include "Utility/IpplException.h"
+#include "Utility/ParallelDispatch.h"
 
 #include "FieldLayout/FieldLayout.h"
 
@@ -174,11 +175,47 @@ namespace ippl {
     }
 
     /**
+     * @brief Test whether a Mur speed in kernel units is admissible.
+     *
+     * The bounds follow Trefethen and Halpern, "Well-posedness of one-way wave equations
+     * and absorbing boundary conditions", Math. Comp. 47 (1986), 421-435, Theorem 2,
+     * p. 424. They are not a discrete stability guarantee. A NaN or an infinite value
+     * fails one of the two comparisons, so the test also requires a finite speed.
+     * validateBoundary applies this test to each face speed, and
+     * countInadmissibleMurSpeeds to each cell speed that Mur reads.
+     */
+    template <std::floating_point Scalar>
+    KOKKOS_INLINE_FUNCTION bool isAdmissibleMurSpeed(Scalar speed) {
+        return speed > 0 && speed < Kokkos::sqrt(Scalar(2));
+    }
+
+    /**
+     * @brief Count the owned entries of one layer of Mur cell speeds that are not admissible.
+     *
+     * The layer has one ghost entry at each end of both axes. Mur does not read these
+     * entries, so they are not counted. An empty layer gives zero. The count is local
+     * to this rank; the caller reduces it over the ranks.
+     * @tparam LayerView Rank-2 Kokkos view of Mur speeds in kernel units.
+     */
+    template <typename LayerView>
+        requires(Kokkos::is_view_v<LayerView> && LayerView::rank() == 2)
+    int countInadmissibleMurSpeeds(const LayerView& layer) {
+        int count = 0;
+        if (layer.is_allocated())
+            Kokkos::parallel_reduce(
+                "Check Mur layer speeds", getRangePolicy(layer, 1),
+                KOKKOS_LAMBDA(size_t a, size_t b, int& sum) {
+                    sum += !isAdmissibleMurSpeed(layer(a, b));
+                },
+                count);
+        return count;
+    }
+
+    /**
      * @brief Validate the storage, face kinds and constant speed on each Mur face.
      *
-     * Periodic faces ignore their speed. The bounds on each active speed follow
-     * Trefethen and Halpern, Math. Comp. 47 (1986), Theorem 2, p. 424.
-     * Discrete stability requires a separate check. Intersecting open faces use a
+     * Periodic faces ignore their speed. Each active speed must pass
+     * isAdmissibleMurSpeed(). Intersecting open faces use a
      * common speed matched by the caller to the bulk wave equation used to
      * eliminate the normal derivatives in the compatibility equations
      * [bamberger1987SecondOrderCorner, section II, equations (2.10)-(2.11)].
@@ -197,7 +234,7 @@ namespace ippl {
             if (boundary.kind[face] == FaceKind::periodic)
                 continue;
             const double speed = boundary.speed[face];
-            if (!std::isfinite(speed) || speed <= 0 || speed >= std::sqrt(2.0))
+            if (!isAdmissibleMurSpeed(speed))
                 throw IpplException("validateBoundary",
                                     "Mur speed must be finite, positive and below sqrt(2)");
             if (commonSpeed == 0)

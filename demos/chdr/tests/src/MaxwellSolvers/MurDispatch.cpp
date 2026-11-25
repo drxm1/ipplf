@@ -11,7 +11,8 @@
  * weights of the structs. In one more run per pattern, setMurCellSpeeds() gives every cell its
  * own speed between 0.55 and 0.95, and each face, edge and corner row must use the speed of
  * the cell that it writes. CellSpeedRefusals checks that the setter refuses a view with other
- * extents and a zero speed.
+ * extents and a zero speed in one boundary cell, and that it accepts a zero speed in an
+ * interior cell, which Mur does not read.
  *
  * Reference: self-consistency (routing against an independent mask). CTest entries:
  * chdr.src.MurDispatch.serial and chdr.src.MurDispatch.mpi2.
@@ -212,16 +213,34 @@ TEST(MurDispatch, DirectSelectedFaces) {
     }
 }
 
-/// setMurCellSpeeds refuses a view with other extents and a zero owned speed on all ranks.
+/** @brief setMurCellSpeeds refuses a view with other extents, and on all ranks a zero speed
+ * in the lower-x boundary cell (0, 2, 1) that one rank owns. It accepts a zero speed in the
+ * interior cell (2, 2, 1), because Mur does not read that cell.
+ */
 TEST(MurDispatch, CellSpeedRefusals) {
     fdtd_test::Fields fields({6, 5, 4}, {1, 1.25, .5}, {false, false, false});
     Solver solver(fields.source, fields.electric, fields.magnetic,
                   ippl::FDTDBoundary::fromLayout(fields.layout));
     EXPECT_THROW(solver.setMurCellSpeeds(Solver::MurCellSpeedView::non_const_type("s", 2, 2, 2)),
                  IpplException);
-    auto speeds = cellSpeedView(solver.A_n);
-    Kokkos::deep_copy(speeds, 0.0);
-    EXPECT_THROW(solver.setMurCellSpeeds(speeds), IpplException);
+    const auto local = fields.layout.getLocalNDIndex();
+    for (const int x : {2, 0}) {
+        SCOPED_TRACE(x);
+        const std::array<int, 3> cell{x, 2, 1};
+        bool owned = true;
+        for (unsigned d = 0; d < 3; ++d)
+            owned &= local[d].first() <= cell[d] && cell[d] <= local[d].last();
+        auto speeds = cellSpeedView(solver.A_n);
+        if (owned)
+            Kokkos::deep_copy(
+                Kokkos::subview(speeds, cell[0] + 1 - local[0].first(),
+                                cell[1] + 1 - local[1].first(), cell[2] + 1 - local[2].first()),
+                0.0);
+        if (x == 0)
+            EXPECT_THROW(solver.setMurCellSpeeds(speeds), IpplException);
+        else
+            EXPECT_NO_THROW(solver.setMurCellSpeeds(speeds));
+    }
 }
 
 int main(int argc, char* argv[]) {

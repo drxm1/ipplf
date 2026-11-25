@@ -123,6 +123,32 @@ namespace chdr::solver {
     using NonStandardSolverPeriodic =
         ippl::NonStandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::configured>;
 
+    /** @brief Return \f$1/\sqrt{\varepsilon_r}\f$ of each local cell for MurSpeed::local().
+     * @details The view has the extents of the permittivity field, which shares the
+     * potential layout and its single ghost layer. setMurCellSpeeds copies only the
+     * boundary layers that Mur reads, so this view can be released after that call.
+     * The permittivity is at least one, so each speed lies in (0, 1] and passes
+     * ippl::isAdmissibleMurSpeed(). The material owner may be destroyed after this call.
+     * This is a free function because NVCC refuses an extended device lambda in a
+     * private member function or in a function with a deduced return type.
+     * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
+     * supplies the type of the view.
+     */
+    template <class PotentialSolverBase>
+        requires(std::is_same_v<PotentialSolverBase, StandardSolverPeriodic>
+                 || std::is_same_v<PotentialSolverBase, NonStandardSolverPeriodic>)
+    typename PotentialSolverBase::MurCellSpeedView::non_const_type localMurSpeeds(
+        const material::MaterialOwner& owner) {
+        const auto epsilon = owner.epsilon();
+        typename PotentialSolverBase::MurCellSpeedView::non_const_type speeds(
+            "Mur cell speeds", epsilon.extent(0), epsilon.extent(1), epsilon.extent(2));
+        Kokkos::parallel_for(
+            "Mur cell speeds", ippl::getRangePolicy(epsilon), KOKKOS_LAMBDA(int i, int j, int k) {
+                speeds(i, j, k) = 1 / Kokkos::sqrt(epsilon(i, j, k));
+            });
+        return speeds;
+    }
+
     /** @brief Own the solve count and reconstruction choice, preserving base slot storage.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
      * supplies the potential wave update, three history slots and caller-owned E/B bindings.
@@ -218,7 +244,7 @@ namespace chdr::solver {
                                             : std::numeric_limits<double>::quiet_NaN();
             formulationParameters_m   = parameters;
             if (murSpeed.isLocal() && parameters.formulation_m == MaterialFormulation::O1VS)
-                this->setMurCellSpeeds(localMurSpeeds(owner));
+                this->setMurCellSpeeds(localMurSpeeds<PotentialSolverBase>(owner));
         }
 
         /// The service adapter borrows this solver's address; bindings cannot be copied or moved.
@@ -494,24 +520,6 @@ namespace chdr::solver {
                     || stencil() != Stencil::Standard))
                 throw IpplException("ChdrSolver",
                                     "Staggered reading requires R2 and the Standard stencil");
-        }
-
-        /** @brief Return \f$1/\sqrt{\varepsilon_r}\f$ of each local cell for MurSpeed::local().
-         * @details The view has the extents of the permittivity field, which shares the
-         * potential layout and its single ghost layer. Mur reads owned cells only. The
-         * permittivity is at least one, so each speed lies in (0, 1] and passes the bound
-         * of setMurCellSpeeds. The material owner may be destroyed after this call.
-         */
-        static auto localMurSpeeds(const material::MaterialOwner& owner) {
-            const auto epsilon = owner.epsilon();
-            typename PotentialSolverBase::MurCellSpeedView::non_const_type speeds(
-                "Mur cell speeds", epsilon.extent(0), epsilon.extent(1), epsilon.extent(2));
-            Kokkos::parallel_for(
-                "Mur cell speeds", ippl::getRangePolicy(epsilon),
-                KOKKOS_LAMBDA(int i, int j, int k) {
-                    speeds(i, j, k) = 1 / Kokkos::sqrt(epsilon(i, j, k));
-                });
-            return speeds;
         }
 
         /** @brief Validate material metadata, then convert the requested Mur speed.

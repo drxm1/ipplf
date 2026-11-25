@@ -84,15 +84,23 @@ namespace ippl {
         using MurCellSpeedView =
             second_order_mur_boundary_conditions::cell_speed_view<SourceField, scalar>;
 
+        /// Mur speeds of the owned boundary layers; see second_order_mur_boundary_conditions.
+        using MurLayerSpeeds =
+            second_order_mur_boundary_conditions::layer_speeds<SourceField, scalar>;
+
         /** @brief Use one Mur speed per cell in place of the six face speeds.
          * @details Available only for configured. Every face, edge and corner row then uses
          * the speed of the cell that it writes; second_order_mur_boundary_conditions::apply
          * gives the reason. The face speeds of boundary() remain stored but Mur ignores them.
-         * Each owned speed must satisfy the bound that validateBoundary applies to a face
-         * speed. The check is collective, so all ranks throw together. The solver keeps a
-         * reference to the view; initialize() preserves it.
+         * The solver copies only the outermost owned layer at each Mur face of this rank
+         * and keeps no reference to speeds. Its storage thus grows with the boundary area,
+         * not with the volume. Each owned cell in these layers must pass
+         * isAdmissibleMurSpeed(); Mur does not read the other cells, so they are not checked.
+         * The check is collective, so all ranks throw together. initialize() preserves the
+         * layers.
          * @param speeds Kernel-unit speeds with the extents of the local A_n view.
-         * @throws IpplException If the extents differ or an owned speed is not admissible.
+         * @throws IpplException If the extents differ or a speed that Mur reads is not
+         * admissible.
          */
         void setMurCellSpeeds(const MurCellSpeedView& speeds)
             requires(boundary_conditions == configured);
@@ -174,7 +182,14 @@ namespace ippl {
         void configurePotentialBoundaryConditions();
 
         const FDTDBoundary boundary_m;
-        MurCellSpeedView murCellSpeeds_m;  // Empty unless setMurCellSpeeds() selected it.
+        MurLayerSpeeds murLayerSpeeds_m;  // Empty unless setMurCellSpeeds() selected them.
+
+        /// Global cell count per axis with one ghost cell on each side, as Mur expects it.
+        Vector<uint32_t, Dim> murGlobalExtents() const {
+            Vector<uint32_t, Dim> extents = nr_m;
+            extents += A_n.getNghost() * 2;
+            return extents;
+        }
 
         typename SourceField::Mesh_t* mesh_mp;  // Pointer to the mesh.
         FieldLayout<Dim>* layout_mp;            // Pointer to the layout
