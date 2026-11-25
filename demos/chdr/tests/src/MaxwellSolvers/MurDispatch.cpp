@@ -2,7 +2,7 @@
  * @brief Dispatch of the Mur face, edge and corner updates to the owned boundary cells of a
  * StandardFDTDSolver with a configured FDTDBoundary.
  * @details The box has 6 by 5 by 4 cells of spacing (1, 1.25, 0.5) and splits along \f$z\f$.
- * For all 8 axis patterns, the test loads all three potential levels with an integer
+ * For all 8 axis patterns, the test loads distinct potential histories with an integer
  * polynomial of the global cell index and calls applyBCs() once. Every owned cell with oracle
  * mask 0 (murFaceMask() in BoundaryOracles.h) must keep its loaded value. Every face, edge and
  * corner cell must equal exactly the output of the Mur struct that its mask selects. In the
@@ -14,6 +14,7 @@
  * chdr.src.MurDispatch.serial and chdr.src.MurDispatch.mpi2.
  */
 #include <gtest/gtest.h>
+#include <optional>
 
 #include "BoundaryOracles.h"
 #include "HaloOrderTest.h"
@@ -24,13 +25,14 @@ namespace {
      * its row, while MurSpeed checks the primitive's weights separately.
      */
     template <class Visit>
-    void faces(Visit visit, ippl::Vector<double, 3> h, double dt, double speed) {
-        visit(1u, second_order_abc_face<double, 0, 1, 2>(h, dt, 1, speed));
-        visit(2u, second_order_abc_face<double, 0, 1, 2>(h, dt, -1, speed));
-        visit(4u, second_order_abc_face<double, 1, 0, 2>(h, dt, 1, speed));
-        visit(8u, second_order_abc_face<double, 1, 0, 2>(h, dt, -1, speed));
-        visit(16u, second_order_abc_face<double, 2, 0, 1>(h, dt, 1, speed));
-        visit(32u, second_order_abc_face<double, 2, 0, 1>(h, dt, -1, speed));
+    void faces(Visit visit, ippl::Vector<double, 3> h, double dt,
+               const std::array<double, 2>& endSpeeds) {
+        visit(1u, second_order_abc_face<double, 0, 1, 2>(h, dt, 1, endSpeeds[0]));
+        visit(2u, second_order_abc_face<double, 0, 1, 2>(h, dt, -1, endSpeeds[1]));
+        visit(4u, second_order_abc_face<double, 1, 0, 2>(h, dt, 1, endSpeeds[0]));
+        visit(8u, second_order_abc_face<double, 1, 0, 2>(h, dt, -1, endSpeeds[1]));
+        visit(16u, second_order_abc_face<double, 2, 0, 1>(h, dt, 1, endSpeeds[0]));
+        visit(32u, second_order_abc_face<double, 2, 0, 1>(h, dt, -1, endSpeeds[1]));
     }
 
     /// Edge masks pair the two inward normals; the remaining axis runs along the edge.
@@ -69,28 +71,44 @@ namespace {
         using Base::Base;
     };
 
+    /// Distinguish spatial index, time level and component in each owned sample.
+    double label(int i, int j, int k, unsigned component, int level) {
+        return 1 + i * i + 3 * j * j + 5 * k * k + component * (i + j + k + 1)
+               + level * (16.0 + i + 2 * j + k + component);
+    }
+
+    void loadLevels(Solver& solver) {
+        int level = 0;
+        for (auto* field : {&solver.A_nm1, &solver.A_n, &solver.A_np1}) {
+            fdtd_test::load(*field, [level](int i, int j, int k, unsigned q) {
+                return label(i, j, k, q, level);
+            });
+            ++level;
+        }
+        solver.prepareHistories();
+    }
+
     /** @brief Check all owned samples against their independent paired face mask.
      * The negative control executes the dispatcher with all faces open. Mixed
      * layouts must expose both changed periodic samples and wrong open-face values.
      */
-    void checkDispatch(unsigned pattern, bool raw = false, double speed = 1) {
+    void checkDispatch(unsigned pattern, bool raw = false, std::array<double, 2> endSpeeds = {1, 1},
+                       std::optional<unsigned> selected = std::nullopt) {
         const std::array<bool, 3> periodic{bool(pattern & 1), bool(pattern & 2), bool(pattern & 4)};
         fdtd_test::Fields fields({6, 5, 4}, {1, 1.25, .5}, periodic);
-        auto boundary = ippl::FDTDBoundary::fromLayout(fields.layout, speed);
-        for (unsigned axis = 0; axis < 3; ++axis)
-            if (periodic[axis])
-                boundary.speed[2 * axis] = boundary.speed[2 * axis + 1] = -1;
+        auto boundary = ippl::FDTDBoundary::fromLayout(fields.layout);
+        for (unsigned face = 0; face < 6; ++face)
+            boundary.speed[face] = periodic[face / 2] ? -1 : endSpeeds[face % 2];
         Solver solver(fields.source, fields.electric, fields.magnetic, boundary);
-        for (auto* field : {&solver.A_n, &solver.A_nm1, &solver.A_np1}) {
-            fdtd_test::load(*field, [](int i, int j, int k, unsigned q) {
-                return 1 + i * i + 3 * j * j + 5 * k * k + q * (i + j + k);
-            });
-        }
-        solver.prepareHistories();
+        loadLevels(solver);
         if (raw) {
             second_order_mur_boundary_conditions{}.apply(solver.A_n, solver.A_nm1, solver.A_np1,
                                                          solver.getDt(), {8, 7, 6},
                                                          fields.layout.getLocalNDIndex(), 63);
+        } else if (selected) {
+            second_order_mur_boundary_conditions{}.apply(
+                solver.A_n, solver.A_nm1, solver.A_np1, solver.getDt(), {8, 7, 6},
+                fields.layout.getLocalNDIndex(), *selected, boundary.kernelSpeeds<double>());
         } else {
             solver.applyBCs();
         }
@@ -103,14 +121,16 @@ namespace {
         const auto local = fields.layout.getLocalNDIndex();
         unsigned errors[2]{};
         fdtd_test::owned(solver.A_np1, [&](int i, int j, int k, auto actual) {
-            const auto mask = open_boundary_oracle::murFaceMask(
-                {i + 1, j + 1, k + 1}, {6, 5, 4}, {periodic[0], periodic[1], periodic[2]});
+            const auto mask =
+                selected.value_or(63u)
+                & open_boundary_oracle::murFaceMask({i + 1, j + 1, k + 1}, {6, 5, 4},
+                                                    {periodic[0], periodic[1], periodic[2]});
             const ippl::Vector<uint32_t, 3> p{unsigned(i + 1 - local[0].first()),
                                               unsigned(j + 1 - local[1].first()),
                                               unsigned(k + 1 - local[2].first())};
             if (mask == 0) {
                 for (unsigned q = 0; q < 4; ++q) {
-                    errors[0] += actual[q] != 1 + i * i + 3 * j * j + 5 * k * k + q * (i + j + k);
+                    errors[0] += actual[q] != label(i, j, k, q, 2);
                 }
             }
             auto check = [&](unsigned required, auto operation) {
@@ -121,9 +141,9 @@ namespace {
                     }
                 }
             };
-            faces(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
-            edges(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
-            corners(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
+            faces(check, fields.mesh.getMeshSpacing(), solver.getDt(), endSpeeds);
+            edges(check, fields.mesh.getMeshSpacing(), solver.getDt(), endSpeeds[0]);
+            corners(check, fields.mesh.getMeshSpacing(), solver.getDt(), endSpeeds[0]);
         });
         unsigned globalErrors[2]{};
         MPI_Allreduce(errors, globalErrors, 2, MPI_UNSIGNED, MPI_SUM,
@@ -136,6 +156,7 @@ namespace {
                       << " wrong open components=" << globalErrors[1] << '\n';
         }
     }
+
 }  // namespace
 
 /// For all 8 axis patterns, interior cells keep their values and boundary cells equal the
@@ -145,10 +166,20 @@ TEST(MurDispatch, EveryOpenFaceEdgeAndCorner) {
         SCOPED_TRACE(pattern);
         checkDispatch(pattern);
         if (pattern == 0 || pattern == 1 || pattern == 2 || pattern == 4)
-            checkDispatch(pattern, false, .8);
+            checkDispatch(pattern, false, {.8, .8});
+        if (pattern == 3 || pattern == 5 || pattern == 6)
+            checkDispatch(pattern, false, {.8, 1.2});
         if (pattern != 0 && pattern != 7) {
             checkDispatch(pattern, true);
         }
+    }
+}
+
+/// Check direct calls with paired, one-sided, upper-only and empty selections.
+TEST(MurDispatch, DirectSelectedFaces) {
+    for (unsigned selected : {63u, 1u | 8u | 32u, 32u, 0u}) {
+        SCOPED_TRACE(selected);
+        checkDispatch(0, false, {.8, .8}, selected);
     }
 }
 

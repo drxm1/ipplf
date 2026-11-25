@@ -460,35 +460,27 @@ struct second_order_mur_boundary_conditions {
         const unsigned activeMask      = toDispatchMask(openFaces);
         const scalar intersectionSpeed = selectedIntersectionSpeed(openFaces, speeds);
 
-        constexpr uint32_t min_abc_boundary     = 1;
-        constexpr uint32_t max_abc_boundary_sub = min_abc_boundary + 1;
+        unsigned localFaces = activeMask;
+        for (unsigned d = 0; d < 3; ++d) {
+            if (lDom[d].first() != 0)
+                localFaces &= ~(1u << d);
+            if (uint32_t(lDom[d].last()) != true_nr[d] - 3)
+                localFaces &= ~(8u << d);
+        }
 
-        // Apply second-order ABC to faces
-        Kokkos::parallel_for(
-            ippl::getRangePolicy(A_n, 1), KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
-                // Get the global indices of the current point
-                uint32_t ig = i + lDom.first()[0];
-                uint32_t jg = j + lDom.first()[1];
-                uint32_t kg = k + lDom.first()[2];
-
-                // Check on how many boundaries of the local domain the current point is located
-                uint32_t lval = uint32_t(i == 0) + (uint32_t(j == 0) << 1) + (uint32_t(k == 0) << 2)
-                                + (uint32_t(i == local_nr[0] - 1) << 3)
-                                + (uint32_t(j == local_nr[1] - 1) << 4)
-                                + (uint32_t(k == local_nr[2] - 1) << 5);
-
-                // Exits current iteration if the point is on an edge or corner of the local domain
-                if (Kokkos::popcount(lval) > 1)
-                    return;
-
-                // Check on how many boundaries of the global domain the current point is located
-                uint32_t val = uint32_t(ig == min_abc_boundary)
-                               + (uint32_t(jg == min_abc_boundary) << 1)
-                               + (uint32_t(kg == min_abc_boundary) << 2)
-                               + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
-                               + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
-                               + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
-                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
+        // Each group contains the owned points with exactly these incident open axes.
+        using Policy =
+            Kokkos::MDRangePolicy<typename decltype(A_n)::execution_space, Kokkos::Rank<3>>;
+        auto applyGroup = [&](unsigned axes) {
+            Kokkos::Array<uint32_t, 3> begin{}, end{};
+            if (!groupBounds(axes, localFaces, local_nr, begin, end))
+                return;
+            const auto update = KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
+                ippl::Vector<uint32_t, 3> point{i, j, k};
+                const unsigned val = boundaryPoint(axes, local_nr, point);
+                i                  = point[0];
+                j                  = point[1];
+                k                  = point[2];
 
                 // Exactly one incident Mur face selects a face update, even at a periodic wrap.
                 if (Kokkos::popcount(val) == 1) {
@@ -523,35 +515,6 @@ struct second_order_mur_boundary_conditions {
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                 }
-            });
-        Kokkos::fence();
-
-        // Apply second-order ABC to edges
-        Kokkos::parallel_for(
-            ippl::getRangePolicy(A_n, 1), KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
-                // Get the global indices of the current point
-                uint32_t ig = i + lDom.first()[0];
-                uint32_t jg = j + lDom.first()[1];
-                uint32_t kg = k + lDom.first()[2];
-
-                // Check on how many boundaries of the local domain the current point is located
-                uint32_t lval = uint32_t(i == 0) + (uint32_t(j == 0) << 1) + (uint32_t(k == 0) << 2)
-                                + (uint32_t(i == local_nr[0] - 1) << 3)
-                                + (uint32_t(j == local_nr[1] - 1) << 4)
-                                + (uint32_t(k == local_nr[2] - 1) << 5);
-
-                // Exits current iteration if the point is on a corner of the local domain
-                if (Kokkos::popcount(lval) > 2)
-                    return;
-
-                // Check on how many boundaries of the global domain the current point is located
-                uint32_t val = uint32_t(ig == min_abc_boundary)
-                               + (uint32_t(jg == min_abc_boundary) << 1)
-                               + (uint32_t(kg == min_abc_boundary) << 2)
-                               + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
-                               + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
-                               + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
-                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
                 // An edge update requires two incident Mur faces, not merely two domain faces.
                 if (Kokkos::popcount(val) == 2) {
@@ -613,25 +576,6 @@ struct second_order_mur_boundary_conditions {
                         assert(false);
                     }
                 }
-            });
-        Kokkos::fence();
-
-        // Apply second-order ABC to corners
-        Kokkos::parallel_for(
-            ippl::getRangePolicy(A_n, 1), KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
-                // Get the global indices of the current point
-                uint32_t ig = i + lDom.first()[0];
-                uint32_t jg = j + lDom.first()[1];
-                uint32_t kg = k + lDom.first()[2];
-
-                // Check on how many boundaries of the global domain the current point is located
-                uint32_t val = uint32_t(ig == min_abc_boundary)
-                               + (uint32_t(jg == min_abc_boundary) << 1)
-                               + (uint32_t(kg == min_abc_boundary) << 2)
-                               + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
-                               + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
-                               + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
-                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
                 // A corner update requires three incident Mur faces.
                 if (Kokkos::popcount(val) == 3) {
@@ -669,11 +613,66 @@ struct second_order_mur_boundary_conditions {
                         assert(false);
                     }
                 }
-            });
+            };
+            Kokkos::parallel_for("Mur boundary", Policy(begin, end), update);
+        };
+
+        constexpr unsigned x = 1, y = 2, z = 4;
+        // Apply second-order ABC to faces
+        applyGroup(x);
+        applyGroup(y);
+        applyGroup(z);
+        Kokkos::fence();
+
+        // Apply second-order ABC to edges
+        applyGroup(x | y);
+        applyGroup(x | z);
+        applyGroup(y | z);
+        Kokkos::fence();
+
+        // Apply second-order ABC to corners
+        applyGroup(x | y | z);
         Kokkos::fence();
     }
 
 private:
+    /** @brief Bounds of the locally owned face, edge or corner group with normal axes in axes.
+     * On a normal axis, iterate over the side labels 0 (lower) and 1 (upper) owned by this rank.
+     * On a free axis, omit the owned Mur endpoints. This assigns intersections to a single group
+     * and retains periodic wrap samples. local_nr includes one ghost cell on each side.
+     */
+    static bool groupBounds(unsigned axes, unsigned localFaces,
+                            const ippl::Vector<uint32_t, 3>& local_nr,
+                            Kokkos::Array<uint32_t, 3>& begin, Kokkos::Array<uint32_t, 3>& end) {
+        for (unsigned d = 0; d < 3; ++d) {
+            const bool lower  = localFaces & (1u << d);
+            const bool upper  = localFaces & (8u << d);
+            const bool normal = axes & (1u << d);
+            begin[d]          = normal ? unsigned(!lower) : 1u + lower;
+            end[d]            = normal ? 1u + upper : local_nr[d] - 1u - upper;
+            if (begin[d] >= end[d])
+                return false;
+        }
+        return true;
+    }
+
+    /** @brief Convert the side labels to owned allocation indices and incident Mur face bits.
+     * The resulting mask has the same lower-x,y,z then upper-x,y,z ordering as toDispatchMask().
+     */
+    KOKKOS_INLINE_FUNCTION static unsigned boundaryPoint(unsigned axes,
+                                                         const ippl::Vector<uint32_t, 3>& local_nr,
+                                                         ippl::Vector<uint32_t, 3>& point) {
+        unsigned val = 0;
+        for (unsigned d = 0; d < 3; ++d) {
+            if (axes & (1u << d)) {
+                const unsigned side = point[d];
+                val |= 1u << (d + 3 * side);
+                point[d] = side == 0 ? 1 : local_nr[d] - 2;
+            }
+        }
+        return val;
+    }
+
     /** @brief Return a selected speed without reading a periodic-face entry.
      * @details Intersection updates only run with at least two open axes,
      * when validation has established that all selected speeds are equal.
