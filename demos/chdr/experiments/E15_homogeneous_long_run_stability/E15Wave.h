@@ -19,12 +19,12 @@ namespace chdr::experiments::e15 {
         int cells_m;
         double dt_m, omega_m, discreteOmega_m, kappaE_m, kappaB_m;
 
-        explicit Wave(int cells)
+        Wave(int cells, double timeStep)
             : cells_m(cells)
-            , dt_m(0.5 / cells) {
+            , dt_m(timeStep) {
             omega_m         = TwoPi * std::sqrt(3.0 / Epsilon);
             const double x  = 0.5 * TwoPi / cells;
-            const double y  = std::asin(0.5 * std::sqrt(3.0 / Epsilon) * std::sin(x));
+            const double y  = std::asin((dt_m * cells) * std::sqrt(3.0 / Epsilon) * std::sin(x));
             discreteOmega_m = 2 * y / dt_m;
             kappaE_m        = std::sin(x) / x;
             kappaB_m        = kappaE_m * std::cos(y);

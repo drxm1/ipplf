@@ -48,11 +48,11 @@ namespace chdr::experiments::e18e19 {
          * Consequently, a magnetic sample on the interface is included in side 1.
          * The sign of normalWavenumber selects incident or reflected propagation.
          */
-        template <class Field>
+        template <class Field, class Sample>
         std::array<double, 2> localFourierSum(Field& field, LevelContract contract,
                                               Quantity quantity, double kx, double normalWavenumber,
-                                              double interfaceZ, std::uint64_t& nonfinite) {
-            const auto view = field.getView();
+                                              double interfaceZ, std::uint64_t& nonfinite,
+                                              Sample sample) {
             const auto h = field.get_mesh().getMeshSpacing(), origin = field.get_mesh().getOrigin();
             const auto first  = field.getLayout().getLocalNDIndex().first();
             const auto offset = contract.positionOffset(quantity, 1);
@@ -67,7 +67,7 @@ namespace chdr::experiments::e18e19 {
                         return;
                     const double x = origin[0] + (i + first[0] - ghost + 0.5 + offset[0]) * h[0];
                     const double z = centerZ + offset[2] * h[2];
-                    const double value = view(i, j, k)[1];
+                    const double value = sample(i, j, k, x);
                     const double phase = kx * x + normalWavenumber * z;
                     if (!Kokkos::isfinite(value) || !Kokkos::isfinite(phase)) {
                         ++invalid;
@@ -78,6 +78,46 @@ namespace chdr::experiments::e18e19 {
                 },
                 sums[0], sums[1], nonfinite);
             return sums;
+        }
+
+        /// Read the numerical field through the same sum used by the continuum samples.
+        template <class Field>
+        std::array<double, 2> localFourierSum(Field& field, LevelContract contract,
+                                              Quantity quantity, double kx, double normalWavenumber,
+                                              double interfaceZ, std::uint64_t& nonfinite) {
+            const auto view = field.getView();
+            return localFourierSum(
+                field, contract, quantity, kx, normalWavenumber, interfaceZ, nonfinite,
+                KOKKOS_LAMBDA(int i, int j, int k, double) { return view(i, j, k)[1]; });
+        }
+
+        /** @brief Tabulate the continuum amplitude at each owned vacuum z position.
+         * @details All modes share the tangential phase, as in E18-phases and the
+         * existing initial sampler. The reference sums its modes once per z position.
+         * Only this two-column table moves from host to the field's memory space.
+         * The Fourier kernel restores the tangential phase at each native sample.
+         */
+        template <class Field, class Reference>
+        auto referenceAmplitudes(Field& field, LevelContract contract, Quantity quantity,
+                                 const Reference& reference, double time) {
+            const auto local    = field.getLayout().getLocalNDIndex();
+            const double origin = field.get_mesh().getOrigin()[2];
+            const double h      = field.get_mesh().getMeshSpacing()[2];
+            const double offset = contract.positionOffset(quantity, 1)[2];
+            Kokkos::View<double* [2], typename Field::view_type::device_type> amplitudes(
+                "E18-S/E19-S continuum z amplitudes", local[2].length());
+            auto host = Kokkos::create_mirror_view(amplitudes);
+            for (std::size_t k = 0; k < local[2].length(); ++k) {
+                const double center = origin + (local[2].first() + k + 0.5) * h;
+                if (center >= Reference::INTERFACE_Z)
+                    continue;
+                const auto value = reference.vacuumFieldAmplitude(center + offset * h, time, 1,
+                                                                  quantity == Quantity::Magnetic);
+                host(k, 0)       = value.real();
+                host(k, 1)       = value.imag();
+            }
+            Kokkos::deep_copy(amplitudes, host);
+            return amplitudes;
         }
 
         /// Use the same cached positive-face coefficients as O1VS for the TM energy.
@@ -100,18 +140,19 @@ namespace chdr::experiments::e18e19 {
      * No field or halo is modified. Floating-point reduction order can vary with
      * the execution space and the MPI decomposition.
      */
-    template <class Field>
+    template <class Field, class Sample>
     std::array<double, 12> measureFourierMagnitude(Field& field, LevelContract contract,
                                                    Quantity quantity, double kx,
                                                    const std::array<double, 12>& normalWavenumbers,
-                                                   double interfaceZ, bool reflected) {
+                                                   double interfaceZ, bool reflected,
+                                                   Sample sample) {
         std::array<double, 24> sums{};
         std::uint64_t nonfinite = 0;
         for (unsigned index = 0; index < normalWavenumbers.size(); ++index) {
             std::uint64_t invalid = 0;
             const double q        = (reflected ? -1 : 1) * normalWavenumbers[index];
             const auto local = measurementDetail::localFourierSum(field, contract, quantity, kx, q,
-                                                                  interfaceZ, invalid);
+                                                                  interfaceZ, invalid, sample);
             sums[2 * index]  = local[0];
             sums[2 * index + 1] = local[1];
             nonfinite += invalid;
@@ -121,6 +162,44 @@ namespace chdr::experiments::e18e19 {
         for (unsigned index = 0; index < magnitudes.size(); ++index)
             magnitudes[index] = std::hypot(sums[2 * index], sums[2 * index + 1]);
         return magnitudes;
+    }
+
+    /// Select component y of the numerical field without copying or modifying any samples.
+    template <class Field>
+    std::array<double, 12> measureFourierMagnitude(Field& field, LevelContract contract,
+                                                   Quantity quantity, double kx,
+                                                   const std::array<double, 12>& normalWavenumbers,
+                                                   double interfaceZ, bool reflected) {
+        const auto view = field.getView();
+        return measureFourierMagnitude(
+            field, contract, quantity, kx, normalWavenumbers, interfaceZ, reflected,
+            KOKKOS_LAMBDA(int i, int j, int k, double) { return view(i, j, k)[1]; });
+    }
+
+    /** @brief Apply the numerical Fourier window to the continuum field at one endpoint.
+     * @details E18-S.meas04 and E19-S.meas04 use the same storing cells, contract
+     * positions, wavenumbers and MPI reduction as the numerical sums.
+     * The caller supplies the field time from LevelContract, including the initial
+     * half-step offset. Reference must provide the existing packet's complex
+     * vacuumFieldAmplitude, KX, INTERFACE_Z and measuredWavenumbers interface.
+     * No numerical field is read or changed. Only the local amplitude table is
+     * allocated, and the field execution space evaluates the Fourier sums.
+     */
+    template <class Field, class Reference>
+    std::array<double, 12> measureReferenceFourierMagnitude(Field& field, LevelContract contract,
+                                                            Quantity quantity,
+                                                            const Reference& reference, double time,
+                                                            bool reflected) {
+        const auto amplitudes =
+            measurementDetail::referenceAmplitudes(field, contract, quantity, reference, time);
+        const int ghost = field.getNghost();
+        const double kx = Reference::KX;
+        return measureFourierMagnitude(
+            field, contract, quantity, kx, reference.measuredWavenumbers(), Reference::INTERFACE_Z,
+            reflected, KOKKOS_LAMBDA(int, int, int k, double x) {
+                return amplitudes(k - ghost, 0) * Kokkos::cos(kx * x)
+                       - amplitudes(k - ghost, 1) * Kokkos::sin(kx * x);
+            });
     }
 
     /** @brief Return the sampled energies on side 1 and side 2 for E18.meas02 or E19.meas02.

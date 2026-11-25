@@ -163,7 +163,7 @@ namespace chdr::experiments::e16e17 {
 
         /** @brief Record the continuum coefficients and profile beside the solver input.
          * @param node Borrowed `analytic_reference` child returned by node indexing.
-         * @param experiment Experiment name, E16 or E17.
+         * @param experiment Experiment name, E16, E17 or E16-S.
          */
         void record(conduit_cpp::Node node, const std::string& experiment) const {
             node["name"]                         = experiment + " normal-incidence continuum pulse";

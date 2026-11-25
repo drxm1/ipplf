@@ -1,5 +1,5 @@
 /** @file E16E17Setup.h
- * @brief Fixed material, mesh and observation schedule of E16.typ and E17.typ.
+ * @brief Fixed material, mesh and observation schedule of E16.typ, E17.typ and E16S.typ.
  */
 #pragma once
 
@@ -63,11 +63,12 @@ namespace chdr::experiments::e16e17 {
 
     /// Validate the named physical case before allocation or creation of output files.
     inline void validateInput(const input::ChdrYamlRunInput& request) {
-        if ((request.caseName_m != "E16" && request.caseName_m != "E17")
+        if ((request.caseName_m != "E16" && request.caseName_m != "E17"
+             && request.caseName_m != "E16-S")
             || request.units_m.system_m != "normalized" || request.outputDirectory_m.empty()
             || request.duration_m)
             throw std::invalid_argument(
-                "E16/E17 requires its named case, normalized units and output");
+                "E16/E17/E16-S requires its named case, normalized units and output");
         input::validateParameters(request, {"cells_per_pulse", "carrier_wavelength"});
         input::validateObservationNames(request, {"fields", "movie_profiles"});
         validateFieldOptions(request);
@@ -81,13 +82,24 @@ namespace chdr::experiments::e16e17 {
                                       : 0.25;
         if (wavelength <= 0)
             throw std::invalid_argument("carrier_wavelength must be positive");
-        const bool fromVacuum = request.caseName_m == "E16";
+        const bool fromVacuum = request.caseName_m != "E17";
         return Reference(fromVacuum ? 1.0 : 2.13, fromVacuum ? 2.13 : 1.0, 2.5, 4.0, wavelength);
     }
 
     /// The transverse mesh is fixed and MPI partitions only the propagation direction.
     inline simulation::ChdrCartesianGridSettings makeGrid(int pulseCells) {
         return {{8, 8, 5 * pulseCells}, {0.125, 0.125, 2.0 / pulseCells}, 0, {true, true, true}, 2};
+    }
+
+    /** @brief Select the time step prescribed by E16.typ, E17.typ or E16S.typ.
+     * @details E16-S delegates its stability bound to ChdrSolver through the checked
+     * safety factor. The simulation sets this step before loading the potential histories.
+     */
+    inline simulation::ChdrSolverSettings solverSettings(
+        const input::ChdrYamlRunInput& request, const simulation::ChdrCartesianGridSettings& grid) {
+        if (request.caseName_m == "E16-S")
+            return {.safetyFactor_m = 0.99};
+        return {.timeStep_m = grid.spacing_m[2] / 2};
     }
 
     /// Sample the specified dielectric at cell centers, with its other face at the periodic wrap.

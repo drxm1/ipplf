@@ -81,7 +81,10 @@
   title: title,
 )[
   #manual-title(title)
-  #if contents { outline(title: [Contents], depth: 2) }
+  #if contents {
+    show outline.entry: set block(above: 0.5em)
+    outline(title: [Contents], depth: 2)
+  }
   #body
   #manual-references()
 ]

@@ -1,0 +1,5 @@
+schema_version: 1
+case: E18-S
+units: {system: normalized}
+parameters: {cells_per_period: 96}
+output: {directory: E18-S-n96}

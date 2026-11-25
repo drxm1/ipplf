@@ -1,4 +1,5 @@
 #import "../docs/manual/preamble.typ": *
+#import "./E15_homogeneous_long_run_stability/E15-S.typ" as e15s
 
 #let chapter = [
   = Experiment definitions <experiment-definitions>
@@ -42,4 +43,12 @@
   #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E18.typ"
 
   #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E19.typ"
+
+  #e15s.section
+
+  #include "./E16E17_normal_incidence_on_planar_dielectric_interface/E16S.typ"
+
+  #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E18S.typ"
+
+  #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E19S.typ"
 ]

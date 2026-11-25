@@ -5,6 +5,7 @@
 
 #include <Kokkos_MathematicalConstants.hpp>
 #include <cmath>
+#include <complex>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -111,6 +112,67 @@ namespace {
         }
     }
 
+    /// Prescribe a time-dependent complex amplitude with different electric and magnetic values.
+    struct ManufacturedReference {
+        static constexpr double KX          = 2 * Kokkos::numbers::pi;
+        static constexpr double INTERFACE_Z = 0.5;
+        bool reflected_m;
+
+        std::array<double, 12> measuredWavenumbers() const {
+            std::array<double, 12> result{};
+            for (unsigned index = 0; index < result.size(); ++index)
+                result[index] = 1.7 + index;
+            return result;
+        }
+
+        std::complex<double> vacuumFieldAmplitude(double z, double time, unsigned component,
+                                                  bool magnetic) const {
+            if (z > INTERFACE_Z || component != 1)
+                throw std::runtime_error(
+                    "Reference sampled outside the prescribed component/window");
+            return std::polar((magnetic ? 2.0 : 1.0) * (1 + z + time),
+                              (reflected_m ? -Q : Q) * z - 2 * time);
+        }
+    };
+
+    /** @brief Sum a prescribed real field directly on the complete small test mesh.
+     * @details The native positions and four vacuum layers are stated independently
+     * of LevelContract and the production sampler. In the magnetic case the last
+     * layer lies exactly on the interface. This is the finite sum of E18-S.meas04.
+     */
+    double directReferenceMagnitude(double q, double time, bool magnetic, bool reflected) {
+        std::complex<double> sum = 0;
+        const double sign = reflected ? -1 : 1, offset = magnetic ? 1 : 0.5;
+        for (int i = 0; i < 8; ++i)
+            for (int k = 0; k < 4; ++k) {
+                const double x = (i + offset) / 8, z = (k + offset) / 8;
+                const double value = (magnetic ? 2 : 1) * (1 + z + time)
+                                     * std::cos(KX * x + sign * Q * z - 2 * time);
+                sum += 2.0 * value * std::polar(1.0, -(KX * x + sign * q * z));
+            }
+        return std::abs(sum);
+    }
+
+    /// Check both endpoint times and polarizations without reading or evolving numerical fields.
+    template <class Field>
+    void checkReferenceMagnitude(Field& field, LevelContract contract) {
+        field = std::numeric_limits<double>::quiet_NaN();
+        for (bool magnetic : {false, true})
+            for (bool reflected : {false, true}) {
+                const auto quantity = magnetic ? Quantity::Magnetic : Quantity::Electric;
+                const double time   = contract.labelTime(quantity, reflected ? 7 : 0, 0.125);
+                const ManufacturedReference reference{reflected};
+                const auto magnitudes = measureReferenceFourierMagnitude(
+                    field, contract, quantity, reference, time, reflected);
+                const auto wavenumbers = reference.measuredWavenumbers();
+                for (unsigned index = 0; index < magnitudes.size(); ++index)
+                    expectNear(
+                        magnitudes[index],
+                        directReferenceMagnitude(wavenumbers[index], time, magnetic, reflected),
+                        "continuum window at native sample positions and time");
+            }
+    }
+
     /** @brief Check both energy quadratures against closed cell counts.
      * @details The prescribed E=(1,2,3), B=(4,5,6) give squared sums 14 and 77.
      * Each side contains 64 cells. Its 16 positive-z face samples use harmonic
@@ -189,6 +251,7 @@ namespace {
         checkGlobalCancellation(fields.getE(), contract);
         checkDirection(fields.getE(), contract, false);
         checkDirection(fields.getE(), contract, true);
+        checkReferenceMagnitude(fields.getE(), contract);
         checkEnergy(fields.getE(), fields.getB(), owner);
         checkPeak(fields.getE());
         checkNonfinite(fields.getE(), fields.getB(), owner, contract);

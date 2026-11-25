@@ -4,12 +4,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <complex>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <string>
 
 #include "experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/E18E19InitialSampler.h"
+#include "experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/E18E19Output.h"
 #include "experiments/E18E19_oblique_incidence_on_planar_dielectric_interface/E18E19Setup.h"
 
 namespace {
@@ -176,10 +179,95 @@ namespace {
         }
     }
 
+    /// Check the new vacuum amplitude against the existing full field sampler, including the face.
+    void checkVacuumFieldAmplitude(const Reference& reference) {
+        for (double z : {23.25, 27.75, Reference::INTERFACE_Z})
+            for (double time : {-0.01, 7.0, 28.0})
+                for (double x : {0.137, 0.41}) {
+                    const auto amplitude =
+                        reference.vacuumFieldAmplitude(z, time, 1, reference.tm_m);
+                    const double actual = std::real(std::polar(1.0, Reference::KX * x) * amplitude);
+                    const double expected = reference.tm_m ? reference.referenceB(x, 0, z, time, 1)
+                                                           : reference.referenceE(x, 0, z, time, 1);
+                    expectClose(actual, expected, 2e-14, "vacuum field amplitude");
+                }
+    }
+
+    /// Require an omitted or matching final step and reject an input that truncates the study.
+    void checkRequestedSteps(chdr::input::ChdrYamlRunInput request,
+                             const chdr::experiments::e18e19::Solver& solver, int cells,
+                             int expected) {
+        using chdr::experiments::e18e19::selectedSteps;
+        expectClose(selectedSteps(request, solver, cells), expected, 0, "selected final step");
+        request.steps_m = expected;
+        expectClose(selectedSteps(request, solver, cells), expected, 0, "explicit final step");
+        request.steps_m = expected - 1;
+        try {
+            selectedSteps(request, solver, cells);
+        } catch (const std::invalid_argument&) {
+            return;
+        }
+        throw std::runtime_error("Incorrect run.steps accepted");
+    }
+
+    /// Disabled field output must neither publish frames nor create its output directory.
+    void checkDisabledSnapshots(const chdr::input::ChdrYamlRunInput& request,
+                                const chdr::simulation::ChdrCartesianGridSettings& grid,
+                                chdr::experiments::e18e19::Solver& solver) {
+        if (std::filesystem::exists(request.outputDirectory_m))
+            throw std::runtime_error("Disabled-snapshot check requires an unused output path");
+        chdr::experiments::e18e19::FieldSnapshots snapshots(request, grid, solver, {0});
+        snapshots.observe(0, solver);
+        snapshots.finish();
+        chdr::output::RunRecordDescription description;
+        snapshots.record(description);
+        const bool created = std::filesystem::exists(request.outputDirectory_m);
+        if (created)
+            std::filesystem::remove_all(request.outputDirectory_m);
+        expectClose(created, false, 0, "disabled field output creates no directory");
+        expectClose(description.effective_m["field_snapshots/enabled"].to_int64(), 0, 0,
+                    "disabled field output record");
+    }
+
+    /// Use study spacings in small storage without loading histories or advancing the solver.
+    void checkSetupLevel(const std::string& name, int cells, int safetySteps) {
+        using namespace chdr::experiments::e18e19;
+        chdr::input::ChdrYamlRunInput request;
+        request.caseName_m                       = name;
+        request.outputDirectory_m                = "unused-setup-check";
+        request.units_m.system_m                 = "normalized";
+        request.parameters_m["cells_per_period"] = cells;
+        auto grid                                = makeGrid(validateInput(request));
+        grid.cells_m                             = {4, 2, 4};
+        const auto settings                      = solverSettings(request, grid);
+        const bool safety                        = name == "E18-S" || name == "E19-S";
+        expectClose(settings.timeStep_m.has_value(), !safety, 0, "explicit time-step selection");
+        Simulation simulation(grid, materialMap(), settings);
+        auto& solver = simulation.solver();
+        if (safety)
+            expectClose(solver.safetyFactor(), 0.99, 2e-15, "configured solver safety factor");
+        const double expectedDt = (safety ? 0.99 / std::sqrt(3.0) : 0.5) / cells;
+        expectClose(solver.getDt(), expectedDt, 1e-15, "configured solver time step");
+        checkRequestedSteps(request, solver, cells, safety ? safetySteps : 56 * cells);
+        if (safety)
+            checkDisabledSnapshots(request, grid, solver);
+        expectClose(solver.completedSolves(), 0, 0, "setup does not advance fields");
+    }
+
+    /// E18S.typ gives the four nearest-time endpoints; E18/E19 retain their original endpoints.
+    void checkSetup() {
+        constexpr std::array Cells{24, 48, 96, 192};
+        constexpr std::array SafetySteps{1176, 2352, 4703, 9406};
+        for (const std::string name : {"E18", "E19", "E18-S", "E19-S"})
+            for (unsigned level = 0; level < Cells.size(); ++level)
+                checkSetupLevel(name, Cells[level], SafetySteps[level]);
+    }
+
     /// Exercise incident, reflected and transmitted parts and each declared potential placement.
     void checkExperiment(bool tm) {
         const Reference reference(tm);
         checkSpectrum(reference);
+        checkVacuumFieldAmplitude(reference);
         checkDerivatives(reference, 23.13, 0);
         checkDerivatives(reference, 26.27, 10);
         checkDerivatives(reference, 29.53, 10);
@@ -197,6 +285,7 @@ int main(int argc, char** argv) {
     int status = 0;
     try {
         checkFaceCoordinates();
+        checkSetup();
         checkExperiment(false);
         checkExperiment(true);
         std::cout << "E18/E19 continuum reference and history tables passed\n";
