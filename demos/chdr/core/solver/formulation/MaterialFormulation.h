@@ -91,9 +91,9 @@ namespace chdr::solver {
      * identical on all ranks. The three-argument entry remains homogeneous-only.
      * Open axes require alpha = 1: otherwise transverse and longitudinal waves have
      * different speeds [chew2014generalizedgauge, section 2, text after Eq. (22)].
-     * The standard O1-VS Mur path assumes vacuum permittivity in the outer layers;
-     * face permittivity is not checked. Experimental boundary overrides must document
-     * their own speed matching and intersection limitations.
+     * With MurSpeed::matched(), O1-VS Mur assumes vacuum permittivity in the outer
+     * layers, and the outer permittivity is not checked. MurSpeed::local() gives each
+     * Mur row the speed of the cell that it writes.
      */
     inline void validateMaterialUpdate(const FormulationParameters& parameters,
                                        const material::MapStatistics& statistics,

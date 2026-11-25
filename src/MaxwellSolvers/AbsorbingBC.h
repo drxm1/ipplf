@@ -417,6 +417,11 @@ struct second_order_abc_corner {
  * @tparam dt_type     The type of the time step.
  */
 struct second_order_mur_boundary_conditions {
+    /// Read-only Mur speed of each local cell, in the memory space of the potential field.
+    template <typename field_type, typename dt_type>
+    using cell_speed_view =
+        Kokkos::View<const dt_type***, typename field_type::view_type::memory_space>;
+
     /*!
      * @brief Apply second-order Mur ABCs on the selected nonperiodic domain faces.
      * @details An open face here is a global domain face selected for Mur absorption,
@@ -435,14 +440,26 @@ struct second_order_mur_boundary_conditions {
      * the two opposing faces may have different validated speeds; they do not intersect.
      * With Mur faces on two or three axes, validateBoundary requires the same
      * speed on each selected face. The edge and corner updates use that speed.
+     * @param cellSpeeds Optional Mur speed of each cell in kernel units, with the extents of
+     * the local field view including ghosts. If it is allocated, the face, edge or corner row
+     * of an owned cell uses the speed of that cell, and speeds is ignored. One speed per cell
+     * satisfies the common-speed condition at every intersection. In a medium that varies
+     * along the boundary, each row thus uses the local speed. Engquist and Majda construct
+     * local absorbing conditions for variable coefficients with the coefficients at the
+     * boundary point [Engquist and Majda (1977), section 1.C, Eqs. (1.18)-(1.26)]. Their
+     * second approximation adds a term with the normal derivative of the coefficient,
+     * which is zero where the medium continues outward. This row omits the derivative
+     * terms (deduction; their Eq. (1.18) varies only the tangential coefficient).
      * @pre The caller has checked the face pairs, speeds and storage with validateBoundary.
      * The intersecting-face restriction follows the matched-speed contract documented
      * there [Bamberger, Joly and Roberts (1987), section II, Eqs. (2.10)-(2.11)].
+     * The caller has checked that each owned speed in cellSpeeds is admissible.
      */
     template <typename field_type, typename dt_type>
     void apply(field_type& FA_n, field_type& FA_nm1, field_type& FA_np1, dt_type dt,
                ippl::Vector<uint32_t, 3> true_nr, ippl::NDIndex<3> lDom, unsigned openFaces = 63,
-               ippl::Vector<dt_type, 6> speeds = ippl::Vector<dt_type, 6>(1)) {
+               ippl::Vector<dt_type, 6> speeds                        = ippl::Vector<dt_type, 6>(1),
+               const cell_speed_view<field_type, dt_type>& cellSpeeds = {}) {
         using scalar = decltype(dt);
 
         // Get the mesh spacing
@@ -457,8 +474,9 @@ struct second_order_mur_boundary_conditions {
         ippl::Vector<uint32_t, 3> local_nr{uint32_t(A_n.extent(0)), uint32_t(A_n.extent(1)),
                                            uint32_t(A_n.extent(2))};
 
-        const unsigned activeMask      = toDispatchMask(openFaces);
-        const scalar intersectionSpeed = selectedIntersectionSpeed(openFaces, speeds);
+        const unsigned activeMask             = toDispatchMask(openFaces);
+        const scalar uniformIntersectionSpeed = selectedIntersectionSpeed(openFaces, speeds);
+        const bool useCellSpeeds              = cellSpeeds.is_allocated();
 
         unsigned localFaces = activeMask;
         for (unsigned d = 0; d < 3; ++d) {
@@ -482,6 +500,13 @@ struct second_order_mur_boundary_conditions {
                 j                  = point[1];
                 k                  = point[2];
 
+                // A cell speed replaces the face and intersection speeds at this cell.
+                const scalar cellSpeed = useCellSpeeds ? cellSpeeds(i, j, k) : scalar(0);
+                const ippl::Vector<scalar, 6> faceSpeeds =
+                    useCellSpeeds ? ippl::Vector<scalar, 6>(cellSpeed) : speeds;
+                const scalar intersectionSpeed =
+                    useCellSpeeds ? cellSpeed : uniformIntersectionSpeed;
+
                 // Exactly one incident Mur face selects a face update, even at a periodic wrap.
                 if (Kokkos::popcount(val) == 1) {
                     const bool onLowerX = (val & 1u) != 0;
@@ -491,27 +516,27 @@ struct second_order_mur_boundary_conditions {
                     const bool onUpperY = (val & 16u) != 0;
                     const bool onUpperZ = (val & 32u) != 0;
                     if (onLowerX) {
-                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, 1, speeds[0]);
+                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, 1, faceSpeeds[0]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onLowerY) {
-                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, 1, speeds[2]);
+                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, 1, faceSpeeds[2]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onLowerZ) {
-                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, 1, speeds[4]);
+                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, 1, faceSpeeds[4]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onUpperX) {
-                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, -1, speeds[1]);
+                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, -1, faceSpeeds[1]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onUpperY) {
-                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, -1, speeds[3]);
+                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, -1, faceSpeeds[3]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onUpperZ) {
-                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, -1, speeds[5]);
+                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, -1, faceSpeeds[5]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                 }

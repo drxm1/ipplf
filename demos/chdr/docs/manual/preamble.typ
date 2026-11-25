@@ -52,7 +52,7 @@
 // heading is conditional; an unused bibliography contributes no visible text.
 #let manual-references() = context {
   // Temporary review markup for the added bibliography entries.
-  let proposed = cite.where(key: <xxxx>).or(cite.where(key: <yyyy>))
+  let proposed = cite.where(key: <engquist1977AbsorbingBoundaryWaves>).or(cite.where(key: <yyyy>))
   bibliography(
     "references.bib",
     style: "ieee",

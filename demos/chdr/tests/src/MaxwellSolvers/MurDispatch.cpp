@@ -8,7 +8,10 @@
  * corner cell must equal exactly the output of the Mur struct that its mask selects. In the
  * negative control, the dispatcher treats all 6 faces as open; on the 6 mixed patterns it must
  * change periodic cells and write wrong values into open cells. MurSpeed.cpp checks the
- * weights of the structs.
+ * weights of the structs. In one more run per pattern, setMurCellSpeeds() gives every cell its
+ * own speed between 0.55 and 0.95, and each face, edge and corner row must use the speed of
+ * the cell that it writes. CellSpeedRefusals checks that the setter refuses a view with other
+ * extents and a zero speed.
  *
  * Reference: self-consistency (routing against an independent mask). CTest entries:
  * chdr.src.MurDispatch.serial and chdr.src.MurDispatch.mpi2.
@@ -77,6 +80,26 @@ namespace {
                + level * (16.0 + i + 2 * j + k + component);
     }
 
+    /// Distinct admissible Mur speeds below one, indexed by the global owned cell.
+    double cellSpeed(int i, int j, int k) {
+        return .55 + .04 * ((i + 2 * j + 3 * k) % 11);
+    }
+
+    /// Load cellSpeed() into a view with the extents of the local A_n view.
+    Solver::MurCellSpeedView::non_const_type cellSpeedView(const fdtd_test::Potential& field) {
+        const auto first = field.getLayout().getLocalNDIndex().first();
+        Solver::MurCellSpeedView::non_const_type speeds(
+            "Mur cell speeds", field.getView().extent(0), field.getView().extent(1),
+            field.getView().extent(2));
+        auto host = Kokkos::create_mirror_view(speeds);
+        for (int a = 0; a < int(host.extent(0)); ++a)
+            for (int b = 0; b < int(host.extent(1)); ++b)
+                for (int c = 0; c < int(host.extent(2)); ++c)
+                    host(a, b, c) = cellSpeed(a - 1 + first[0], b - 1 + first[1], c - 1 + first[2]);
+        Kokkos::deep_copy(speeds, host);
+        return speeds;
+    }
+
     void loadLevels(Solver& solver) {
         int level = 0;
         for (auto* field : {&solver.A_nm1, &solver.A_n, &solver.A_np1}) {
@@ -91,9 +114,10 @@ namespace {
     /** @brief Check all owned samples against their independent paired face mask.
      * The negative control executes the dispatcher with all faces open. Mixed
      * layouts must expose both changed periodic samples and wrong open-face values.
+     * With perCell, every face, edge and corner row must use cellSpeed() of its own cell.
      */
     void checkDispatch(unsigned pattern, bool raw = false, std::array<double, 2> endSpeeds = {1, 1},
-                       std::optional<unsigned> selected = std::nullopt) {
+                       std::optional<unsigned> selected = std::nullopt, bool perCell = false) {
         const std::array<bool, 3> periodic{bool(pattern & 1), bool(pattern & 2), bool(pattern & 4)};
         fdtd_test::Fields fields({6, 5, 4}, {1, 1.25, .5}, periodic);
         auto boundary = ippl::FDTDBoundary::fromLayout(fields.layout);
@@ -101,6 +125,8 @@ namespace {
             boundary.speed[face] = periodic[face / 2] ? -1 : endSpeeds[face % 2];
         Solver solver(fields.source, fields.electric, fields.magnetic, boundary);
         loadLevels(solver);
+        if (perCell)
+            solver.setMurCellSpeeds(cellSpeedView(solver.A_n));
         if (raw) {
             second_order_mur_boundary_conditions{}.apply(solver.A_n, solver.A_nm1, solver.A_np1,
                                                          solver.getDt(), {8, 7, 6},
@@ -141,9 +167,11 @@ namespace {
                     }
                 }
             };
-            faces(check, fields.mesh.getMeshSpacing(), solver.getDt(), endSpeeds);
-            edges(check, fields.mesh.getMeshSpacing(), solver.getDt(), endSpeeds[0]);
-            corners(check, fields.mesh.getMeshSpacing(), solver.getDt(), endSpeeds[0]);
+            const double speed = perCell ? cellSpeed(i, j, k) : endSpeeds[0];
+            faces(check, fields.mesh.getMeshSpacing(), solver.getDt(),
+                  perCell ? std::array{speed, speed} : endSpeeds);
+            edges(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
+            corners(check, fields.mesh.getMeshSpacing(), solver.getDt(), speed);
         });
         unsigned globalErrors[2]{};
         MPI_Allreduce(errors, globalErrors, 2, MPI_UNSIGNED, MPI_SUM,
@@ -169,6 +197,7 @@ TEST(MurDispatch, EveryOpenFaceEdgeAndCorner) {
             checkDispatch(pattern, false, {.8, .8});
         if (pattern == 3 || pattern == 5 || pattern == 6)
             checkDispatch(pattern, false, {.8, 1.2});
+        checkDispatch(pattern, false, {1, 1}, std::nullopt, true);
         if (pattern != 0 && pattern != 7) {
             checkDispatch(pattern, true);
         }
@@ -181,6 +210,18 @@ TEST(MurDispatch, DirectSelectedFaces) {
         SCOPED_TRACE(selected);
         checkDispatch(0, false, {.8, .8}, selected);
     }
+}
+
+/// setMurCellSpeeds refuses a view with other extents and a zero owned speed on all ranks.
+TEST(MurDispatch, CellSpeedRefusals) {
+    fdtd_test::Fields fields({6, 5, 4}, {1, 1.25, .5}, {false, false, false});
+    Solver solver(fields.source, fields.electric, fields.magnetic,
+                  ippl::FDTDBoundary::fromLayout(fields.layout));
+    EXPECT_THROW(solver.setMurCellSpeeds(Solver::MurCellSpeedView::non_const_type("s", 2, 2, 2)),
+                 IpplException);
+    auto speeds = cellSpeedView(solver.A_n);
+    Kokkos::deep_copy(speeds, 0.0);
+    EXPECT_THROW(solver.setMurCellSpeeds(speeds), IpplException);
 }
 
 int main(int argc, char* argv[]) {

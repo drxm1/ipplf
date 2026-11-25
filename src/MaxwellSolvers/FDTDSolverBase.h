@@ -80,6 +80,23 @@ namespace ippl {
         /// Return the construction-time description; initialize() preserves it.
         const FDTDBoundary& boundary() const { return boundary_m; }
 
+        /// Mur speed of each cell in kernel units, on the local field view including ghosts.
+        using MurCellSpeedView =
+            second_order_mur_boundary_conditions::cell_speed_view<SourceField, scalar>;
+
+        /** @brief Use one Mur speed per cell in place of the six face speeds.
+         * @details Available only for configured. Every face, edge and corner row then uses
+         * the speed of the cell that it writes; second_order_mur_boundary_conditions::apply
+         * gives the reason. The face speeds of boundary() remain stored but Mur ignores them.
+         * Each owned speed must satisfy the bound that validateBoundary applies to a face
+         * speed. The check is collective, so all ranks throw together. The solver keeps a
+         * reference to the view; initialize() preserves it.
+         * @param speeds Kernel-unit speeds with the extents of the local A_n view.
+         * @throws IpplException If the extents differ or an owned speed is not admissible.
+         */
+        void setMurCellSpeeds(const MurCellSpeedView& speeds)
+            requires(boundary_conditions == configured);
+
         /** @brief Complete the ghosts after loading the two stored potential levels.
          * @details Exchange halos of A_n and A_nm1, then apply their periodic field conditions
          * or the absorbing-face extension. Owned samples and A_np1 remain unchanged; no Mur
@@ -157,6 +174,7 @@ namespace ippl {
         void configurePotentialBoundaryConditions();
 
         const FDTDBoundary boundary_m;
+        MurCellSpeedView murCellSpeeds_m;  // Empty unless setMurCellSpeeds() selected it.
 
         typename SourceField::Mesh_t* mesh_mp;  // Pointer to the mesh.
         FieldLayout<Dim>* layout_mp;            // Pointer to the layout

@@ -251,3 +251,27 @@ $
     + sum_d (D_d^- ((epsilon_d - 1) D_d^+ phi^(n+1/2)))_bold(i)
     + rho_bold(i)^(n+1/2) ]. #<equate:revoke>
 $
+
+=== Mur faces <sec-O1VS-mur>
+The Mur conditions of `AbsorbingBC.h` update the outermost owned layers with the physical time step $h_t$, because O1-VS does not rescale it.
+Their speed is therefore the physical speed of the medium at the face.
+With $mu = alpha = 1$, all four potentials propagate with the speed $1/sqrt(epsilon)$ in a uniform medium @chew2014generalizedgauge[Sec. 2, text after Eq. (22)].
+`MurSpeed::matched()` passes the speed one, which is correct only if the outermost cells contain vacuum.
+`MurSpeed::local()` gives the face, edge or corner update of the cell $bold(i)$ the speed $1/sqrt(epsilon_bold(i))$.
+`ChdrSolver` computes these speeds once from the material and passes them to `setMurCellSpeeds`.
+
+The speed of a cell assumes that its material continues outward beyond the box.
+A body that ends exactly at a Mur face is therefore not represented.
+For such a body, the box has to include exterior cells between the body and the face.
+
+Engquist and Majda construct local absorbing conditions for a variable coefficient with the coefficient at the boundary point @engquist1977AbsorbingBoundaryWaves[Sec. 1.C, Eqs. (1.18)–(1.26)].
+Their second approximation adds a term with the derivative of the coefficient normal to the boundary.
+This term vanishes if the medium continues outward.
+The Mur update with the speed of its cell omits it.
+This is a deduction, since their Eq. (1.18) varies only the coefficient of the tangential derivative.
+
+An edge or a corner cell has a single speed.
+The incident faces therefore have the common speed that the edge and corner conditions require @bamberger1987SecondOrderCorner[Sec. II, Eqs. (2.10)–(2.11)].
+
+*Open point:* where the material changes along a face, the tangential differences of the Mur update read cells of both materials.
+This junction is not treated separately, and its error in an experiment geometry is not yet measured.

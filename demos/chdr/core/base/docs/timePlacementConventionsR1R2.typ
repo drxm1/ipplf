@@ -88,7 +88,7 @@ The following table therefore lists *R1* as the time-convention (in demos/chdr I
   After each Mur update the solver exchanges the halos and then fills the exterior ghosts with the quadratic extrapolation $g = 3 u_0 - 3 u_1 + u_2$ (`OpenFaceClosure.h`), where $u_0$ is the outermost owned sample and $u_1$, $u_2$ are the next two samples inward.
   `prepareHistories()` does the same for loaded histories.
 
-  All four components use one Mur speed per face, which is why O1-VS with Mur faces requires $alpha = 1$ (see @sec-O1VS-implementation).
+  All four components use one Mur speed in each cell, set per face or, with `MurSpeed::local()`, per cell (see @sec-O1VS-mur), which is why O1-VS with Mur faces requires $alpha = 1$ (see @sec-O1VS-implementation).
   Applying the condition to each potential component does not guarantee that the gauge condition and Gauss's law hold at the boundary.
   @experiment-e04 measures these defects.
 
