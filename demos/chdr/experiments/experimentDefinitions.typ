@@ -44,6 +44,8 @@
 
   #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E19.typ"
 
+  #include "./E20_field_free_potential_pulse_on_planar_dielectric_interface/E20.typ"
+
   #e15s.section
 
   #include "./E16E17_normal_incidence_on_planar_dielectric_interface/E16S.typ"
