@@ -163,6 +163,23 @@ namespace ippl {
         void forEachPair(Functor&& f) const;
 
         /*!
+         * @brief Visits the same directed pairs as forEachPair(), one thread per owned particle.
+         *
+         * For every owned particle i, `pair(i, j, acc)` is called for all particles j != i (owned
+         * and ghost) of the 27 neighbouring search cells, with a thread-local accumulator `acc`
+         * that starts as `Accumulator(0)`; `finalize(i, acc)` then stores the result once. Only
+         * the thread of i writes to target i, so no atomics are needed. update() sorts the
+         * particles by cell, so neighbouring threads of a GPU warp usually share the cell and
+         * read the same sources j. Each unordered pair is evaluated twice, as in forEachPair().
+         * @tparam ExecutionSpace Space in which the kernel runs
+         * @tparam Accumulator Per-target sum, constructible from 0 and supporting +=
+         * @throws IpplException if the cells are outdated (call update() first)
+         */
+        template <typename ExecutionSpace, typename Accumulator, typename PairFunctor,
+                  typename FinalizeFunctor>
+        void forEachOwnedParticle(PairFunctor&& pair, FinalizeFunctor&& finalize) const;
+
+        /*!
          * @return the proxy of the particle neighbor list data needed to get particle neighbors
          */
         ParticleNeighborData getParticleNeighborData() const;
@@ -335,26 +352,15 @@ namespace ippl {
         void buildCells(ParticleContainer& pc);
 
         /*!
-         * @brief copies particles close to the boundary and offsets them to their closest periodic
-         *        image
+         * @brief appends ghost copies of particles within the cutoff of a periodic face, one per
+         *        neighboring periodic domain: one near a face, three near an edge, seven near a
+         *        corner
          * @param pc particle container of which to construct periodic ghost particles
          */
         template <class ParticleContainer>
         void createPeriodicGhostParticles(ParticleContainer& pc);
 
     protected:
-        /*!
-         * @brief determines whether a position is within overlap to the boundary of a region
-         * @param pos position to query
-         * @param region region of the position
-         * @param periodic vector determining which dimensions to consider (as they are periodic)
-         * @param overlap distance to consider as close
-         */
-        template <std::size_t... Idx>
-        KOKKOS_INLINE_FUNCTION constexpr static bool isCloseToBoundary(
-            const std::index_sequence<Idx...>&, const vector_type& pos, const region_type& region,
-            Kokkos::Array<bool, Dim> periodic, T overlap);
-
         /*!
          * @brief convert a nd-cell-index to flat cell index
          * @param cellIndex to convert

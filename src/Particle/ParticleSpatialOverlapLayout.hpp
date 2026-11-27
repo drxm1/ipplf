@@ -228,18 +228,6 @@ namespace ippl {
         cellsOutdated_m           = false;
     }
 
-    template <typename T, unsigned Dim, class Mesh, typename... Properties>
-    template <std::size_t... Idx>
-    KOKKOS_INLINE_FUNCTION constexpr bool
-    ParticleSpatialOverlapLayout<T, Dim, Mesh, Properties...>::isCloseToBoundary(
-        const std::index_sequence<Idx...>&, const vector_type& pos, const region_type& globalRegion,
-        Kokkos::Array<bool, Dim> periodic, T overlap) {
-        return ((periodic[Idx]
-                 && (pos[Idx] < globalRegion[Idx].min() + overlap
-                     || pos[Idx] > globalRegion[Idx].max() - overlap))
-                || ...);
-    }
-
     namespace detail {
 
         template <typename ParticleContainer, typename index_type>
@@ -296,55 +284,68 @@ namespace ippl {
 
         const auto& globalRegion = this->rlayout_m->getDomain();
         const auto overlap       = rcutoff_m;
-        const auto numLoc        = pc.getLocalNum();
-        const auto positions     = pc.R.getView();
 
-        constexpr auto is = std::make_index_sequence<Dim>();
-        /* Step 1. Determine all particles which are close to the global domain boundary */
-        size_type numBoundaryParticles = 0;
-        Kokkos::parallel_reduce(
-            "count boundary particles", numLoc,
-            KOKKOS_LAMBDA(const size_t& i, size_type& sum) {
-                if (isCloseToBoundary(is, positions(i), globalRegion, periodic, overlap)) {
-                    ++sum;
-                }
-            },
-            Kokkos::Sum<size_type>(numBoundaryParticles));
-        if (numBoundaryParticles == 0) {
-            IpplTimings::stopTimer(timer);
-            return;
-        }
-
-        /* Step 2. compute prefix sum to collect boundary particle indices */
-        hash_type boundaryIndices("boundaryIndices", numBoundaryParticles);
-        Kokkos::parallel_scan(
-            "count boundary particles", numLoc,
-            KOKKOS_LAMBDA(const size_t& i, size_type& sum, bool final) {
-                if (isCloseToBoundary(is, positions(i), globalRegion, periodic, overlap)) {
-                    if (final) {
-                        boundaryIndices(sum) = i;
-                    }
-                    ++sum;
-                }
-            });
-
-        /* Step 3. copy given particles and all its attributes. A separate function is needed as
-         * lambdas with captures do not work with nvcc and template default argument ot the layout
-         * somehow. NOTE numLoc will change after this call.
+        /* A particle closer than the cutoff to a periodic face interacts with particles near the
+         * opposite face, so it needs a copy shifted by one domain length across that face.
+         * Particles farther than the cutoff from every periodic face get no copy. A particle
+         * near one face needs one image. Near an edge, where two faces meet, it needs three: one
+         * across each face and one across both. Near a corner it needs seven, one for each
+         * neighboring periodic domain.
+         *
+         * The loop builds these images one axis at a time. The pass for axis d copies every
+         * particle within the cutoff of a face normal to d, including the ghosts made by earlier
+         * passes, and shifts the copy along d only. For a particle near an x and a y face, the x
+         * pass makes the image across the x face, and the y pass copies both the particle and
+         * that image across the y face: 1 + 2 = 3 images. A third pass gives 3 + 4 = 7.
          */
-        detail::copyAttributes(pc, boundaryIndices);
-
-        /* Step 4. set the position of the copied particles to their periodic image. The copy may
-         * have reallocated the positions, so take the view again.
-         */
-        const auto ghostPositions = pc.R.getView();
         for (unsigned d = 0; d < Dim; ++d) {
             if (!periodic[d]) {
                 continue;
             }
-            const auto min    = globalRegion[d].min();
-            const auto length = globalRegion[d].length();
-            const auto middle = min + length / 2;
+            const auto numLoc    = pc.getLocalNum();
+            const auto positions = pc.R.getView();
+            const T lower        = globalRegion[d].min();
+            const T upper        = globalRegion[d].max();
+            const T length       = globalRegion[d].length();
+            const T middle       = lower + length / 2;
+
+            /* Step 1. Determine all particles which are close to this pair of faces */
+            size_type numBoundaryParticles = 0;
+            Kokkos::parallel_reduce(
+                "count boundary particles", numLoc,
+                KOKKOS_LAMBDA(const size_t& i, size_type& sum) {
+                    if (positions(i)[d] < lower + overlap || positions(i)[d] > upper - overlap) {
+                        ++sum;
+                    }
+                },
+                Kokkos::Sum<size_type>(numBoundaryParticles));
+            if (numBoundaryParticles == 0) {
+                continue;
+            }
+
+            /* Step 2. compute prefix sum to collect boundary particle indices */
+            hash_type boundaryIndices("boundaryIndices", numBoundaryParticles);
+            Kokkos::parallel_scan(
+                "count boundary particles", numLoc,
+                KOKKOS_LAMBDA(const size_t& i, size_type& sum, bool final) {
+                    if (positions(i)[d] < lower + overlap || positions(i)[d] > upper - overlap) {
+                        if (final) {
+                            boundaryIndices(sum) = i;
+                        }
+                        ++sum;
+                    }
+                });
+
+            /* Step 3. copy given particles and all its attributes. A separate function is needed
+             * as lambdas with captures do not work with nvcc and template default argument ot the
+             * layout somehow. NOTE the local particle count changes in this call.
+             */
+            detail::copyAttributes(pc, boundaryIndices);
+
+            /* Step 4. set the position of the copied particles to their periodic image. The copy
+             * may have reallocated the positions, so take the view again.
+             */
+            const auto ghostPositions = pc.R.getView();
             Kokkos::parallel_for(
                 "correct positions",
                 // the copied particles are appended at the end of the attributes
@@ -1289,6 +1290,52 @@ namespace ippl {
         Kokkos::fence();
 
         IpplTimings::stopTimer(interactionTimer);
+    }
+
+    template <typename T, unsigned Dim, class Mesh, typename... Properties>
+    template <typename ExecutionSpace, typename Accumulator, typename PairFunctor,
+              typename FinalizeFunctor>
+    void ParticleSpatialOverlapLayout<T, Dim, Mesh, Properties...>::forEachOwnedParticle(
+        PairFunctor&& pair, FinalizeFunctor&& finalize) const {
+        if (cellsOutdated_m) {
+            throw IpplException("ParticleSpatialOverlapLayout::forEachOwnedParticle",
+                                "The cells are outdated; call update() after updateLayout() or "
+                                "setCutoff().");
+        }
+        static IpplTimings::TimerRef ownedTimer = IpplTimings::getTimer("PPOwnedTimer");
+        IpplTimings::startTimer(ownedTimer);
+
+        const auto cellIndex               = cellIndex_m;
+        const auto cellStartingIdx         = cellStartingIdx_m;
+        const auto cellParticleCount       = cellParticleCount_m;
+        const auto cellPermutationForward  = cellPermutationForward_m;
+        const auto cellPermutationBackward = cellPermutationBackward_m;
+        const auto cellStrides             = cellStrides_m;
+        const auto numCells                = numCells_m;
+        constexpr auto numCellNeighbors    = detail::countHypercubes(Dim);
+
+        // update() puts the owned particles first, so targets are [0, numLocalParticles_m).
+        Kokkos::parallel_for(
+            "ParticleSpatialOverlapLayout::forEachOwnedParticle()",
+            Kokkos::RangePolicy<ExecutionSpace>(0, numLocalParticles_m),
+            KOKKOS_LAMBDA(const size_type i) {
+                const auto cell      = toCellIndex(cellPermutationBackward(cellIndex(i)), numCells);
+                const auto neighbors = getCellNeighbors(cell, cellStrides, cellPermutationForward);
+                Accumulator acc(0);
+                for (size_type n = 0; n < numCellNeighbors; ++n) {
+                    const size_type first = cellStartingIdx(neighbors[n]);
+                    const size_type last  = first + cellParticleCount(neighbors[n]);
+                    for (size_type j = first; j < last; ++j) {
+                        if (j != i) {
+                            pair(i, j, acc);
+                        }
+                    }
+                }
+                finalize(i, acc);
+            });
+        Kokkos::fence();
+
+        IpplTimings::stopTimer(ownedTimer);
     }
 
 }  // namespace ippl
