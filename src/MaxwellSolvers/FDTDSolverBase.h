@@ -80,6 +80,31 @@ namespace ippl {
         /// Return the construction-time description; initialize() preserves it.
         const FDTDBoundary& boundary() const { return boundary_m; }
 
+        /// Mur speed of each cell in kernel units, on the local field view including ghosts.
+        using MurCellSpeedView =
+            second_order_mur_boundary_conditions::cell_speed_view<SourceField, scalar>;
+
+        /// Mur speeds of the owned boundary layers; see second_order_mur_boundary_conditions.
+        using MurLayerSpeeds =
+            second_order_mur_boundary_conditions::layer_speeds<SourceField, scalar>;
+
+        /** @brief Use one Mur speed per cell in place of the six face speeds.
+         * @details Available only for configured. Every face, edge and corner row then uses
+         * the speed of the cell that it writes; second_order_mur_boundary_conditions::apply
+         * gives the reason. The face speeds of boundary() remain stored but Mur ignores them.
+         * The solver copies only the outermost owned layer at each Mur face of this rank
+         * and keeps no reference to speeds. Its storage thus grows with the boundary area,
+         * not with the volume. Each owned cell in these layers must pass
+         * isAdmissibleMurSpeed(); Mur does not read the other cells, so they are not checked.
+         * The check is collective, so all ranks throw together. initialize() preserves the
+         * layers.
+         * @param speeds Kernel-unit speeds with the extents of the local A_n view.
+         * @throws IpplException If the extents differ or a speed that Mur reads is not
+         * admissible.
+         */
+        void setMurCellSpeeds(const MurCellSpeedView& speeds)
+            requires(boundary_conditions == configured);
+
         /** @brief Complete the ghosts after loading the two stored potential levels.
          * @details Exchange halos of A_n and A_nm1, then apply their periodic field conditions
          * or the absorbing-face extension. Owned samples and A_np1 remain unchanged; no Mur
@@ -157,6 +182,14 @@ namespace ippl {
         void configurePotentialBoundaryConditions();
 
         const FDTDBoundary boundary_m;
+        MurLayerSpeeds murLayerSpeeds_m;  // Empty unless setMurCellSpeeds() selected them.
+
+        /// Global cell count per axis with one ghost cell on each side, as Mur expects it.
+        Vector<uint32_t, Dim> murGlobalExtents() const {
+            Vector<uint32_t, Dim> extents = nr_m;
+            extents += A_n.getNghost() * 2;
+            return extents;
+        }
 
         typename SourceField::Mesh_t* mesh_mp;  // Pointer to the mesh.
         FieldLayout<Dim>* layout_mp;            // Pointer to the layout

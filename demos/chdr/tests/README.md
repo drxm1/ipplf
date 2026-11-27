@@ -154,7 +154,7 @@ suites in more detail. Run the tests with
 | `chdr.src.FDTDBoundary.{serial,mpi2}` | `FDTDBoundary.cpp` (140) · `FDTDBoundary` (4 tests) | `fromLayout` marks exactly the faces of open axes as Mur faces of speed 1 for all 8 axis patterns, and `validateBoundary` refuses invalid speeds, mismatched face kinds, wrong ghost widths, too few cells and (two ranks) a rank with one cell. | refusal; exact lattice value (cell sets) | `unit`, `mpi` | 1.6 / 1.6 |
 | `chdr.src.MurSpeed.serial` | `MurSpeed.cpp` (211) · `MurSpeed` (2 tests) | The face, edge and corner Mur weights at speeds 0.6, 1 and 1.2 match the closed forms to \f$4\epsilon\f$ times the largest weight, and at speed 1 their bits equal the original unit-speed arithmetic. | exact lattice value; regression record (bitwise) | `unit` | 1.6 |
 | `chdr.src.InteriorBounds.{serial,mpi2}` | `InteriorBounds.cpp` (186) · `InteriorBounds` (5 tests, 2 compile-time checks) | One step of either stencil without the boundary update writes \f$\Delta t^2\f$ into exactly the interior cells of the oracle mask for all 8 axis patterns; the solver constructors refuse invalid descriptions before any communication. | exact lattice value; refusal | `unit`, `mpi` | 1.6 / 1.6 |
-| `chdr.src.MurDispatch.{serial,mpi2}` | `MurDispatch.cpp` (156) · `EveryOpenFaceEdgeAndCorner` | After `applyBCs()`, every face, edge and corner cell equals the output of the Mur struct that its mask selects and interior cells keep their values; an all-open dispatch must fail on the mixed patterns. | self-consistency (routing against an independent mask) | `unit`, `mpi` | 1.6 / 1.6 |
+| `chdr.src.MurDispatch.{serial,mpi2}` | `MurDispatch.cpp` (252) · `MurDispatch` (3 tests) | Checks each owned component against the selected Mur primitive with distinct histories, including unequal speeds on opposite faces. With a different speed in each cell from `setMurCellSpeeds()`, each face, edge and corner row must use the speed of the cell that it writes. Direct calls also check paired, one-sided, upper-only and empty face selections. `setMurCellSpeeds()` refuses a view with other extents and a zero speed in one boundary cell, and accepts a zero speed in an interior cell, which Mur does not read. | independent incident-face mask and primitive outputs; refusal | `unit`, `mpi` | 1.6 / 1.6 |
 
 ## `core/material`: material owner
 
@@ -437,12 +437,12 @@ Run the short entries with
 
 The executable `test-chdr-formulation` tests the O1-VS material formulation of
 `ChdrSolver`, the update for planar dielectric interfaces in the staggered
-reading. Each entry runs all five tests of the suite `O1VS`. Run it with
+reading. Each entry runs all six tests of the suite `O1VS`. Run it with
 `ctest --test-dir build -R '^chdr\.solver\.formulation\.' --output-on-failure`.
 
 | Entry | Source (lines) · suite | What it checks | Reference | Labels | Time (s) |
 |---|---|---|---|---|---|
-| `chdr.solver.formulation.o1vs.{serial,mpi2}` | `test_o1vs_regression.cpp` (204) · `O1VS` (5 tests) | At \f$\varepsilon\equiv1\f$ O1-VS gives the vacuum staggered R2 step bit for bit over 256 steps in a periodic and in a Mur box, at \f$\varepsilon=2.13\f$ it matches Homogeneous to `1e-13`, invalid configurations are refused, and the harmonic face mean of large values stays finite. | regression record (bitwise); refusal | `formulation`, `unit`, `mpi` | 1.8 / 1.7 |
+| `chdr.solver.formulation.o1vs.{serial,mpi2}` | `test_o1vs_regression.cpp` (213) · `O1VS` (6 tests) | At \f$\varepsilon\equiv1\f$ O1-VS gives the vacuum staggered R2 step bit for bit over 256 steps in a periodic and in a Mur box, at \f$\varepsilon=2.13\f$ it matches Homogeneous to `1e-13` in a periodic box and, with `MurSpeed::local()`, in a Mur box, invalid configurations are refused, and the harmonic face mean of large values stays finite. | regression record (bitwise); refusal | `formulation`, `unit`, `mpi` | 1.8 / 1.7 |
 
 ## `opt-in/diagnostics`: monitors, probe and energy
 

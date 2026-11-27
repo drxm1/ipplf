@@ -417,6 +417,24 @@ struct second_order_abc_corner {
  * @tparam dt_type     The type of the time step.
  */
 struct second_order_mur_boundary_conditions {
+    /// Read-only Mur speed of each local cell, in the memory space of the potential field.
+    template <typename field_type, typename dt_type>
+    using cell_speed_view =
+        Kokkos::View<const dt_type***, typename field_type::view_type::memory_space>;
+
+    /** @brief Read-only Mur speeds of the outermost owned layer of cells at one face.
+     * @details The two indices are the local allocation indices, ghosts included, of the two
+     * tangential axes in ascending order: (j, k) at an x face, (i, k) at a y face and (i, j)
+     * at a z face.
+     */
+    template <typename field_type, typename dt_type>
+    using layer_speed_view =
+        Kokkos::View<const dt_type**, typename field_type::view_type::memory_space>;
+
+    /// One layer for each face in paired order; a face that this rank does not own has none.
+    template <typename field_type, typename dt_type>
+    using layer_speeds = Kokkos::Array<layer_speed_view<field_type, dt_type>, 6>;
+
     /*!
      * @brief Apply second-order Mur ABCs on the selected nonperiodic domain faces.
      * @details An open face here is a global domain face selected for Mur absorption,
@@ -435,14 +453,28 @@ struct second_order_mur_boundary_conditions {
      * the two opposing faces may have different validated speeds; they do not intersect.
      * With Mur faces on two or three axes, validateBoundary requires the same
      * speed on each selected face. The edge and corner updates use that speed.
+     * @param layerSpeeds Optional Mur speed of each boundary cell in kernel units, from
+     * boundaryLayers() with the same true_nr, lDom and openFaces. If a layer is allocated,
+     * the face, edge or corner row of an owned cell uses the speed of that cell, and speeds
+     * is ignored. Each layer that contains a cell holds a copy of the same speed of that cell.
+     * One speed per cell satisfies the common-speed condition at every intersection.
+     * In a medium that varies
+     * along the boundary, each row thus uses the local speed. Engquist and Majda construct
+     * local absorbing conditions for variable coefficients with the coefficients at the
+     * boundary point [Engquist and Majda (1977), section 1.C, Eqs. (1.18)-(1.26)]. Their
+     * second approximation adds a term with the normal derivative of the coefficient,
+     * which is zero where the medium continues outward. This row omits the derivative
+     * terms (deduction; their Eq. (1.18) varies only the tangential coefficient).
      * @pre The caller has checked the face pairs, speeds and storage with validateBoundary.
      * The intersecting-face restriction follows the matched-speed contract documented
      * there [Bamberger, Joly and Roberts (1987), section II, Eqs. (2.10)-(2.11)].
+     * The caller has checked each layer in layerSpeeds with ippl::countInadmissibleMurSpeeds.
      */
     template <typename field_type, typename dt_type>
     void apply(field_type& FA_n, field_type& FA_nm1, field_type& FA_np1, dt_type dt,
                ippl::Vector<uint32_t, 3> true_nr, ippl::NDIndex<3> lDom, unsigned openFaces = 63,
-               ippl::Vector<dt_type, 6> speeds = ippl::Vector<dt_type, 6>(1)) {
+               ippl::Vector<dt_type, 6> speeds                      = ippl::Vector<dt_type, 6>(1),
+               const layer_speeds<field_type, dt_type>& layerSpeeds = {}) {
         using scalar = decltype(dt);
 
         // Get the mesh spacing
@@ -457,38 +489,35 @@ struct second_order_mur_boundary_conditions {
         ippl::Vector<uint32_t, 3> local_nr{uint32_t(A_n.extent(0)), uint32_t(A_n.extent(1)),
                                            uint32_t(A_n.extent(2))};
 
-        const unsigned activeMask      = toDispatchMask(openFaces);
-        const scalar intersectionSpeed = selectedIntersectionSpeed(openFaces, speeds);
+        const unsigned activeMask             = toDispatchMask(openFaces);
+        const scalar uniformIntersectionSpeed = selectedIntersectionSpeed(openFaces, speeds);
+        const unsigned localFaces             = ownedFaces(activeMask, true_nr, lDom);
+        bool useCellSpeeds                    = false;
+        for (unsigned face = 0; face < 6; ++face)
+            useCellSpeeds |= layerSpeeds[face].is_allocated();
 
-        constexpr uint32_t min_abc_boundary     = 1;
-        constexpr uint32_t max_abc_boundary_sub = min_abc_boundary + 1;
+        // Each group contains the owned points with exactly these incident open axes.
+        using Policy =
+            Kokkos::MDRangePolicy<typename decltype(A_n)::execution_space, Kokkos::Rank<3>>;
+        auto applyGroup = [&](unsigned axes) {
+            Kokkos::Array<uint32_t, 3> begin{}, end{};
+            if (!groupBounds(axes, localFaces, local_nr, begin, end))
+                return;
+            const auto update = KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
+                ippl::Vector<uint32_t, 3> point{i, j, k};
+                const unsigned val = boundaryPoint(axes, local_nr, point);
+                i                  = point[0];
+                j                  = point[1];
+                k                  = point[2];
 
-        // Apply second-order ABC to faces
-        Kokkos::parallel_for(
-            ippl::getRangePolicy(A_n, 1), KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
-                // Get the global indices of the current point
-                uint32_t ig = i + lDom.first()[0];
-                uint32_t jg = j + lDom.first()[1];
-                uint32_t kg = k + lDom.first()[2];
-
-                // Check on how many boundaries of the local domain the current point is located
-                uint32_t lval = uint32_t(i == 0) + (uint32_t(j == 0) << 1) + (uint32_t(k == 0) << 2)
-                                + (uint32_t(i == local_nr[0] - 1) << 3)
-                                + (uint32_t(j == local_nr[1] - 1) << 4)
-                                + (uint32_t(k == local_nr[2] - 1) << 5);
-
-                // Exits current iteration if the point is on an edge or corner of the local domain
-                if (Kokkos::popcount(lval) > 1)
-                    return;
-
-                // Check on how many boundaries of the global domain the current point is located
-                uint32_t val = uint32_t(ig == min_abc_boundary)
-                               + (uint32_t(jg == min_abc_boundary) << 1)
-                               + (uint32_t(kg == min_abc_boundary) << 2)
-                               + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
-                               + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
-                               + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
-                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
+                // A cell speed replaces the face and intersection speeds at this cell.
+                const scalar cellSpeed =
+                    useCellSpeeds ? layerSpeed<field_type, dt_type>(layerSpeeds, val, point)
+                                  : scalar(0);
+                const ippl::Vector<scalar, 6> faceSpeeds =
+                    useCellSpeeds ? ippl::Vector<scalar, 6>(cellSpeed) : speeds;
+                const scalar intersectionSpeed =
+                    useCellSpeeds ? cellSpeed : uniformIntersectionSpeed;
 
                 // Exactly one incident Mur face selects a face update, even at a periodic wrap.
                 if (Kokkos::popcount(val) == 1) {
@@ -499,59 +528,30 @@ struct second_order_mur_boundary_conditions {
                     const bool onUpperY = (val & 16u) != 0;
                     const bool onUpperZ = (val & 32u) != 0;
                     if (onLowerX) {
-                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, 1, speeds[0]);
+                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, 1, faceSpeeds[0]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onLowerY) {
-                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, 1, speeds[2]);
+                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, 1, faceSpeeds[2]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onLowerZ) {
-                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, 1, speeds[4]);
+                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, 1, faceSpeeds[4]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onUpperX) {
-                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, -1, speeds[1]);
+                        second_order_abc_face<scalar, 0, 1, 2> soa(hr, dt, -1, faceSpeeds[1]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onUpperY) {
-                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, -1, speeds[3]);
+                        second_order_abc_face<scalar, 1, 0, 2> soa(hr, dt, -1, faceSpeeds[3]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                     if (onUpperZ) {
-                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, -1, speeds[5]);
+                        second_order_abc_face<scalar, 2, 0, 1> soa(hr, dt, -1, faceSpeeds[5]);
                         A_np1(i, j, k) = soa(A_n, A_nm1, A_np1, ippl::Vector<uint32_t, 3>{i, j, k});
                     }
                 }
-            });
-        Kokkos::fence();
-
-        // Apply second-order ABC to edges
-        Kokkos::parallel_for(
-            ippl::getRangePolicy(A_n, 1), KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
-                // Get the global indices of the current point
-                uint32_t ig = i + lDom.first()[0];
-                uint32_t jg = j + lDom.first()[1];
-                uint32_t kg = k + lDom.first()[2];
-
-                // Check on how many boundaries of the local domain the current point is located
-                uint32_t lval = uint32_t(i == 0) + (uint32_t(j == 0) << 1) + (uint32_t(k == 0) << 2)
-                                + (uint32_t(i == local_nr[0] - 1) << 3)
-                                + (uint32_t(j == local_nr[1] - 1) << 4)
-                                + (uint32_t(k == local_nr[2] - 1) << 5);
-
-                // Exits current iteration if the point is on a corner of the local domain
-                if (Kokkos::popcount(lval) > 2)
-                    return;
-
-                // Check on how many boundaries of the global domain the current point is located
-                uint32_t val = uint32_t(ig == min_abc_boundary)
-                               + (uint32_t(jg == min_abc_boundary) << 1)
-                               + (uint32_t(kg == min_abc_boundary) << 2)
-                               + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
-                               + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
-                               + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
-                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
                 // An edge update requires two incident Mur faces, not merely two domain faces.
                 if (Kokkos::popcount(val) == 2) {
@@ -613,25 +613,6 @@ struct second_order_mur_boundary_conditions {
                         assert(false);
                     }
                 }
-            });
-        Kokkos::fence();
-
-        // Apply second-order ABC to corners
-        Kokkos::parallel_for(
-            ippl::getRangePolicy(A_n, 1), KOKKOS_LAMBDA(uint32_t i, uint32_t j, uint32_t k) {
-                // Get the global indices of the current point
-                uint32_t ig = i + lDom.first()[0];
-                uint32_t jg = j + lDom.first()[1];
-                uint32_t kg = k + lDom.first()[2];
-
-                // Check on how many boundaries of the global domain the current point is located
-                uint32_t val = uint32_t(ig == min_abc_boundary)
-                               + (uint32_t(jg == min_abc_boundary) << 1)
-                               + (uint32_t(kg == min_abc_boundary) << 2)
-                               + (uint32_t(ig == true_nr[0] - max_abc_boundary_sub) << 3)
-                               + (uint32_t(jg == true_nr[1] - max_abc_boundary_sub) << 4)
-                               + (uint32_t(kg == true_nr[2] - max_abc_boundary_sub) << 5);
-                val &= activeMask;  // Discard periodic-face bits; retain only incident Mur faces.
 
                 // A corner update requires three incident Mur faces.
                 if (Kokkos::popcount(val) == 3) {
@@ -669,11 +650,152 @@ struct second_order_mur_boundary_conditions {
                         assert(false);
                     }
                 }
-            });
+            };
+            Kokkos::parallel_for("Mur boundary", Policy(begin, end), update);
+        };
+
+        constexpr unsigned x = 1, y = 2, z = 4;
+        // Apply second-order ABC to faces
+        applyGroup(x);
+        applyGroup(y);
+        applyGroup(z);
+        Kokkos::fence();
+
+        // Apply second-order ABC to edges
+        applyGroup(x | y);
+        applyGroup(x | z);
+        applyGroup(y | z);
+        Kokkos::fence();
+
+        // Apply second-order ABC to corners
+        applyGroup(x | y | z);
         Kokkos::fence();
     }
 
+    /** @brief Copy the layers of cellSpeeds that apply() reads into separate allocations.
+     * @details For each Mur face that this rank owns, copy the outermost owned layer of
+     * cells, the ghosts of the two tangential axes included. A face that this rank does not
+     * own has no layer. The result thus holds a number of values proportional to the
+     * boundary area of the local domain, not to its volume. It keeps no reference to
+     * cellSpeeds.
+     * @param cellSpeeds Speed of each local cell, with the extents of the local field view.
+     * @param true_nr, lDom, openFaces The same arguments as for apply().
+     */
+    template <typename field_type, typename dt_type>
+    static layer_speeds<field_type, dt_type> boundaryLayers(
+        const cell_speed_view<field_type, dt_type>& cellSpeeds, ippl::Vector<uint32_t, 3> true_nr,
+        const ippl::NDIndex<3>& lDom, unsigned openFaces) {
+        const unsigned localFaces = ownedFaces(toDispatchMask(openFaces), true_nr, lDom);
+        layer_speeds<field_type, dt_type> layers;
+        for (unsigned d = 0; d < 3; ++d)
+            for (unsigned side = 0; side < 2; ++side)
+                if (localFaces & (1u << (d + 3 * side)))
+                    layers[2 * d + side] = copyLayer<field_type, dt_type>(cellSpeeds, d, side);
+        return layers;
+    }
+
+    /** @brief Copy the outermost owned layer of cells at the lower (side 0) or upper (side 1)
+     * face of axis d. The layer is indexed as layer_speed_view describes.
+     * @details This helper is public because NVCC requires a public enclosing function for
+     * an extended device lambda. Call boundaryLayers() instead.
+     */
+    template <typename field_type, typename dt_type>
+    static layer_speed_view<field_type, dt_type> copyLayer(
+        const cell_speed_view<field_type, dt_type>& cellSpeeds, unsigned d, unsigned side) {
+        const unsigned tangential0 = tangentialAxis(d, 0), tangential1 = tangentialAxis(d, 1);
+        const uint32_t normalIndex = layerIndex(side, cellSpeeds.extent(d));
+        typename layer_speed_view<field_type, dt_type>::non_const_type layer(
+            "Mur layer speeds", cellSpeeds.extent(tangential0), cellSpeeds.extent(tangential1));
+        Kokkos::parallel_for(
+            "Copy Mur layer speeds", ippl::getRangePolicy(layer),
+            KOKKOS_LAMBDA(uint32_t a, uint32_t b) {
+                ippl::Vector<uint32_t, 3> cell;
+                cell[d]           = normalIndex;
+                cell[tangential0] = a;
+                cell[tangential1] = b;
+                layer(a, b)       = cellSpeeds(cell[0], cell[1], cell[2]);
+            });
+        return layer;
+    }
+
 private:
+    /** @brief Keep the faces of activeMask that the local domain lDom reaches.
+     * @details Both masks use the ordering of toDispatchMask(). true_nr counts one ghost
+     * cell on each side of each axis, so the last owned global index is true_nr - 3.
+     */
+    static unsigned ownedFaces(unsigned activeMask, const ippl::Vector<uint32_t, 3>& true_nr,
+                               const ippl::NDIndex<3>& lDom) {
+        unsigned localFaces = activeMask;
+        for (unsigned d = 0; d < 3; ++d) {
+            if (lDom[d].first() != 0)
+                localFaces &= ~(1u << d);
+            if (uint32_t(lDom[d].last()) != true_nr[d] - 3)
+                localFaces &= ~(8u << d);
+        }
+        return localFaces;
+    }
+
+    /// Local allocation index of the outermost owned cell at the lower (0) or upper (1) side.
+    KOKKOS_INLINE_FUNCTION static uint32_t layerIndex(unsigned side, uint32_t localExtent) {
+        return side == 0 ? 1 : localExtent - 2;
+    }
+
+    /// Tangential axis n (0 or 1) of a face with normal axis d, in ascending order.
+    KOKKOS_INLINE_FUNCTION static unsigned tangentialAxis(unsigned d, unsigned n) {
+        return n == 0 ? (d == 0 ? 1 : 0) : (d == 2 ? 1 : 2);
+    }
+
+    /** @brief Read the speed of the owned boundary cell point from its lowest incident face.
+     * @details Each layer that contains the cell holds a copy of the same speed, so the
+     * choice of the face does not change the value.
+     * @param val Incident Mur faces in the ordering of toDispatchMask(); at least one is set.
+     */
+    template <typename field_type, typename dt_type>
+    KOKKOS_INLINE_FUNCTION static dt_type layerSpeed(
+        const layer_speeds<field_type, dt_type>& layers, unsigned val,
+        const ippl::Vector<uint32_t, 3>& point) {
+        const unsigned bit = Kokkos::countr_zero(val);
+        const unsigned d = bit % 3, side = bit / 3;
+        return layers[2 * d + side](point[tangentialAxis(d, 0)], point[tangentialAxis(d, 1)]);
+    }
+
+    /** @brief Bounds of the locally owned face, edge or corner group with normal axes in axes.
+     * On a normal axis, iterate over the side labels 0 (lower) and 1 (upper) owned by this rank.
+     * On a free axis, omit the owned Mur endpoints. This assigns intersections to a single group
+     * and retains periodic wrap samples. local_nr includes one ghost cell on each side.
+     */
+    static bool groupBounds(unsigned axes, unsigned localFaces,
+                            const ippl::Vector<uint32_t, 3>& local_nr,
+                            Kokkos::Array<uint32_t, 3>& begin, Kokkos::Array<uint32_t, 3>& end) {
+        for (unsigned d = 0; d < 3; ++d) {
+            const bool lower  = localFaces & (1u << d);
+            const bool upper  = localFaces & (8u << d);
+            const bool normal = axes & (1u << d);
+            begin[d]          = normal ? unsigned(!lower) : 1u + lower;
+            end[d]            = normal ? 1u + upper : local_nr[d] - 1u - upper;
+            if (begin[d] >= end[d])
+                return false;
+        }
+        return true;
+    }
+
+    /** @brief Convert the side labels to owned allocation indices and incident Mur face bits.
+     * The resulting mask has the same lower-x,y,z then upper-x,y,z ordering as toDispatchMask().
+     */
+    KOKKOS_INLINE_FUNCTION static unsigned boundaryPoint(unsigned axes,
+                                                         const ippl::Vector<uint32_t, 3>& local_nr,
+                                                         ippl::Vector<uint32_t, 3>& point) {
+        unsigned val = 0;
+        for (unsigned d = 0; d < 3; ++d) {
+            if (axes & (1u << d)) {
+                const unsigned side = point[d];
+                val |= 1u << (d + 3 * side);
+                point[d] = layerIndex(side, local_nr[d]);
+            }
+        }
+        return val;
+    }
+
     /** @brief Return a selected speed without reading a periodic-face entry.
      * @details Intersection updates only run with at least two open axes,
      * when validation has established that all selected speeds are equal.

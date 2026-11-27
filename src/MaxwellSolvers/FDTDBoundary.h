@@ -22,11 +22,12 @@
 #define IPPL_FDTD_BOUNDARY_H
 
 #include <array>
-#include <cmath>
+#include <concepts>
 
 #include "Types/Vector.h"
 
 #include "Utility/IpplException.h"
+#include "Utility/ParallelDispatch.h"
 
 #include "FieldLayout/FieldLayout.h"
 
@@ -127,28 +128,20 @@ namespace ippl {
     };
 
     /**
-     * @brief Reject incompatible face descriptions before any MPI communication.
+     * @brief Check the layout and storage shared by the interior and Mur updates.
      *
      * Inputs must be identical on all ranks. Every rank checks the stored domains
      * of all ranks, so an undersized partition cannot leave peers in a halo exchange.
      * Exactly one ghost layer is required. At least two owned cells per local axis keep
      * the inward A_np1 samples read by Mur on the same rank. Three global cells on an
      * open axis support the quadratic ghost extension.
-     * The speed bound follows Trefethen and Halpern, "Well-posedness of one-way wave
-     * equations and absorbing boundary conditions", Math. Comp. 47 (1986), 421-435,
-     * Theorem 2, p. 424; it is not a discrete stability guarantee.
-     * Intersecting open faces require a common kernel speed. The caller matches it
-     * to the bulk speed because the compatibility equations eliminate normal
-     * derivatives with the interior wave equation
-     * [bamberger1987SecondOrderCorner, section II, equations (2.10)-(2.11)].
      *
      * Ghost widths count layers of cells on each side of the local owned domain, not
      * field components or the total number of ghost cells. This function receives only
      * the widths, not the field objects. The three width checks are identical and may
      * also be used to validate the three stored potential levels.
      *
-     * @param boundary Kind and Mur speed of each of the six physical faces. Face kinds
-     * must match the layout's periodic axes; speed entries on periodic faces are ignored.
+     * @param faceKinds Lower and upper face kinds for each axis in paired order.
      * @param layout Global domain, periodic exchange topology and stored rank-local domains
      * to check. Every rank inspects all partitions without communicating.
      * @param sourceGhosts Source field's ghost-layer width, obtained from getNghost();
@@ -157,40 +150,98 @@ namespace ippl {
      * must be exactly one, independently of the source field's width.
      * @param magneticGhosts Magnetic field B's ghost-layer width, obtained from getNghost();
      * must be exactly one, independently of the source and electric fields' widths.
-     * @throws IpplException If any storage, domain, face-kind or Mur-speed check fails.
+     * @throws IpplException If any storage, domain or face-kind check fails.
      */
-    inline void validateBoundary(const FDTDBoundary& boundary, const FieldLayout<3>& layout,
-                                 int sourceGhosts, int electricGhosts, int magneticGhosts) {
+    inline void validateBoundaryTopology(const std::array<FaceKind, 6>& faceKinds,
+                                         const FieldLayout<3>& layout, int sourceGhosts,
+                                         int electricGhosts, int magneticGhosts) {
         auto require = [](bool valid, const char* message) {
             if (!valid)
                 throw IpplException("validateBoundary", message);
         };
         require(sourceGhosts == 1 && electricGhosts == 1 && magneticGhosts == 1,
                 "FDTD fields require exactly one ghost cell");
+        const auto domains = layout.getHostLocalDomains();
+        for (unsigned d = 0; d < 3; ++d) {
+            require(layout.getDomain()[d].first() == 0, "FDTD global indices must start at zero");
+            const auto expected = layout.isPeriodic(d) ? FaceKind::periodic : FaceKind::mur;
+            require(faceKinds[2 * d] == expected && faceKinds[2 * d + 1] == expected,
+                    "FDTD face kinds must agree with layout periodicity");
+            if (expected == FaceKind::mur)
+                require(layout.getDomain()[d].length() >= 3, "An open axis needs three cells");
+            for (unsigned rank = 0; rank < domains.extent(0); ++rank)
+                require(domains(rank)[d].length() >= 2, "Every local axis needs two owned cells");
+        }
+    }
+
+    /**
+     * @brief Test whether a Mur speed in kernel units is admissible.
+     *
+     * The bounds follow Trefethen and Halpern, "Well-posedness of one-way wave equations
+     * and absorbing boundary conditions", Math. Comp. 47 (1986), 421-435, Theorem 2,
+     * p. 424. They are not a discrete stability guarantee. A NaN or an infinite value
+     * fails one of the two comparisons, so the test also requires a finite speed.
+     * validateBoundary applies this test to each face speed, and
+     * countInadmissibleMurSpeeds to each cell speed that Mur reads.
+     */
+    template <std::floating_point Scalar>
+    KOKKOS_INLINE_FUNCTION bool isAdmissibleMurSpeed(Scalar speed) {
+        return speed > 0 && speed < Kokkos::sqrt(Scalar(2));
+    }
+
+    /**
+     * @brief Count the owned entries of one layer of Mur cell speeds that are not admissible.
+     *
+     * The layer has one ghost entry at each end of both axes. Mur does not read these
+     * entries, so they are not counted. An empty layer gives zero. The count is local
+     * to this rank; the caller reduces it over the ranks.
+     * @tparam LayerView Rank-2 Kokkos view of Mur speeds in kernel units.
+     */
+    template <typename LayerView>
+        requires(Kokkos::is_view_v<LayerView> && LayerView::rank() == 2)
+    int countInadmissibleMurSpeeds(const LayerView& layer) {
+        int count = 0;
+        if (layer.is_allocated())
+            Kokkos::parallel_reduce(
+                "Check Mur layer speeds", getRangePolicy(layer, 1),
+                KOKKOS_LAMBDA(size_t a, size_t b, int& sum) {
+                    sum += !isAdmissibleMurSpeed(layer(a, b));
+                },
+                count);
+        return count;
+    }
+
+    /**
+     * @brief Validate the storage, face kinds and constant speed on each Mur face.
+     *
+     * Periodic faces ignore their speed. Each active speed must pass
+     * isAdmissibleMurSpeed(). Intersecting open faces use a
+     * common speed matched by the caller to the bulk wave equation used to
+     * eliminate the normal derivatives in the compatibility equations
+     * [bamberger1987SecondOrderCorner, section II, equations (2.10)-(2.11)].
+     * The two ends of a single open axis may use different speeds.
+     * @see validateBoundaryTopology for the layout and ghost-width requirements.
+     */
+    inline void validateBoundary(const FDTDBoundary& boundary, const FieldLayout<3>& layout,
+                                 int sourceGhosts, int electricGhosts, int magneticGhosts) {
+        validateBoundaryTopology(boundary.kind, layout, sourceGhosts, electricGhosts,
+                                 magneticGhosts);
         unsigned openAxes = 0;
         for (unsigned d = 0; d < 3; ++d)
             openAxes += boundary.kind[2 * d] == FaceKind::mur;
         double commonSpeed = 0;
-        for (unsigned d = 0; d < 3; ++d) {
-            require(layout.getDomain()[d].first() == 0, "FDTD global indices must start at zero");
-            const auto expected = layout.isPeriodic(d) ? FaceKind::periodic : FaceKind::mur;
-            require(boundary.kind[2 * d] == expected && boundary.kind[2 * d + 1] == expected,
-                    "FDTD face kinds must agree with layout periodicity");
-            if (expected == FaceKind::mur) {
-                require(layout.getDomain()[d].length() >= 3, "An open axis needs three cells");
-                for (unsigned face = 2 * d; face < 2 * d + 2; ++face) {
-                    const double speed = boundary.speed[face];
-                    require(std::isfinite(speed) && speed > 0 && speed < std::sqrt(2.0),
-                            "Mur speed must be finite, positive and below sqrt(2)");
-                    if (commonSpeed == 0)
-                        commonSpeed = speed;
-                    require(openAxes < 2 || speed == commonSpeed,
-                            "Intersecting Mur faces need a common kernel speed");
-                }
-            }
-            const auto domains = layout.getHostLocalDomains();
-            for (unsigned rank = 0; rank < domains.extent(0); ++rank)
-                require(domains(rank)[d].length() >= 2, "Every local axis needs two owned cells");
+        for (unsigned face = 0; face < 6; ++face) {
+            if (boundary.kind[face] == FaceKind::periodic)
+                continue;
+            const double speed = boundary.speed[face];
+            if (!isAdmissibleMurSpeed(speed))
+                throw IpplException("validateBoundary",
+                                    "Mur speed must be finite, positive and below sqrt(2)");
+            if (commonSpeed == 0)
+                commonSpeed = speed;
+            if (openAxes >= 2 && speed != commonSpeed)
+                throw IpplException("validateBoundary",
+                                    "Intersecting Mur faces need a common kernel speed");
         }
     }
 }  // namespace ippl

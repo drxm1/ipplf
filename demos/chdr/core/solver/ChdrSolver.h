@@ -64,11 +64,26 @@ namespace chdr::solver {
      * propagation speed in the reused potential-update equations. In the time
      * coordinate of getDt(), this corresponds to speed \f$1/n\f$. The name
      * denotes this choice in this API; it does not assert perfect absorption.
+     *
+     * local() selects the speed of the medium in each boundary cell. With O1-VS,
+     * each Mur row uses \f$1/\sqrt{\varepsilon_r}\f$ of the cell that it writes.
+     * For \f$\alpha=1\f$ this is the speed of all four potentials in a uniform medium
+     * [chew2014generalizedgauge, section 2, text after Eq. (22)]. O1-VS does not
+     * rescale its timestep, so no conversion is necessary. The material of each
+     * boundary cell is assumed to continue outward. A body that ends at the wall
+     * needs exterior cells in the box. Without O1-VS, the potential update already
+     * has the speed of its uniform medium, and local() gives the same rows as matched().
      */
     class MurSpeed {
     public:
         /// Select exactly one as the speed passed to the Mur coefficient constructors.
         static MurSpeed matched() { return MurSpeed(); }
+
+        /// Select the medium speed of each boundary cell; see the class description.
+        static MurSpeed local() { return MurSpeed(0, true); }
+
+        /// Whether ChdrSolver gives each O1-VS Mur row the speed of its own cell.
+        bool isLocal() const { return local_m; }
 
         /** @brief Specify the boundary propagation speed before timestep rescaling.
          * @param speed Finite, positive speed in the time coordinate of ChdrSolver::getDt();
@@ -83,18 +98,21 @@ namespace chdr::solver {
          * @param refractiveIndex Ratio of ChdrSolver::getDt() to the timestep used
          * by the potential update: the homogeneous medium's refractive index, or one
          * without that rescaling. The caller supplies the validated material value.
-         * @return Exactly one for matched(); otherwise the supplied speed multiplied
-         * by refractiveIndex. The private zero sentinel selects the first case;
-         * it is never passed to Mur as a zero propagation speed.
+         * @return Exactly one for matched() and local(); otherwise the supplied speed
+         * multiplied by refractiveIndex. The private zero sentinel selects the first case;
+         * it is never passed to Mur as a zero propagation speed. With O1-VS, the cell
+         * speeds of local() replace the returned face speed.
          */
         double kernel(double refractiveIndex) const {
             return physical_m == 0 ? 1.0 : physical_m * refractiveIndex;
         }
 
     private:
-        explicit MurSpeed(double physical = 0)
-            : physical_m(physical) {}
+        explicit MurSpeed(double physical = 0, bool local = false)
+            : physical_m(physical)
+            , local_m(local) {}
         double physical_m;
+        bool local_m;
     };
 
     /// Configured Standard base; retain the alias name for existing ChdrSolver callers.
@@ -104,6 +122,32 @@ namespace chdr::solver {
     /// Longitudinally (z) smoothed NonStandard update; ChdrSolver permits periodic faces only.
     using NonStandardSolverPeriodic =
         ippl::NonStandardFDTDSolver<EMFieldsType, AJFourFieldsType, ippl::configured>;
+
+    /** @brief Return \f$1/\sqrt{\varepsilon_r}\f$ of each local cell for MurSpeed::local().
+     * @details The view has the extents of the permittivity field, which shares the
+     * potential layout and its single ghost layer. setMurCellSpeeds copies only the
+     * boundary layers that Mur reads, so this view can be released after that call.
+     * The permittivity is at least one, so each speed lies in (0, 1] and passes
+     * ippl::isAdmissibleMurSpeed(). The material owner may be destroyed after this call.
+     * This is a free function because NVCC refuses an extended device lambda in a
+     * private member function or in a function with a deduced return type.
+     * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
+     * supplies the type of the view.
+     */
+    template <class PotentialSolverBase>
+        requires(std::is_same_v<PotentialSolverBase, StandardSolverPeriodic>
+                 || std::is_same_v<PotentialSolverBase, NonStandardSolverPeriodic>)
+    typename PotentialSolverBase::MurCellSpeedView::non_const_type localMurSpeeds(
+        const material::MaterialOwner& owner) {
+        const auto epsilon = owner.epsilon();
+        typename PotentialSolverBase::MurCellSpeedView::non_const_type speeds(
+            "Mur cell speeds", epsilon.extent(0), epsilon.extent(1), epsilon.extent(2));
+        Kokkos::parallel_for(
+            "Mur cell speeds", ippl::getRangePolicy(epsilon), KOKKOS_LAMBDA(int i, int j, int k) {
+                speeds(i, j, k) = 1 / Kokkos::sqrt(epsilon(i, j, k));
+            });
+        return speeds;
+    }
 
     /** @brief Own the solve count and reconstruction choice, preserving base slot storage.
      * @tparam PotentialSolverBase StandardSolverPeriodic or NonStandardSolverPeriodic;
@@ -177,14 +221,14 @@ namespace chdr::solver {
          * the owner or a reference to its field. Source and E/B storage remain borrowed.
          * O1VSUpdate retains reference-counted coefficient views and uses the vacuum
          * timestep bound documented in O1VSUpdate::maxStableTimeStep.
-         * @pre O1-VS with Mur faces requires alpha = 1 and assumes vacuum permittivity
-         * in the outer layers for the standard boundary path. Face permittivity is not
-         * checked; an experimental boundary override must supply its own documented
-         * assumptions and speed treatment.
+         * @pre O1-VS with Mur faces requires alpha = 1. With matched() or physical(), it
+         * assumes one speed on all open faces, vacuum for matched(). Select local() when
+         * the permittivity of the outer cells differs from that speed.
          * @param murSpeed Speed assumed by the Mur formulas. The default passes exactly
          * one to agree with the reused potential-update equations. For Homogeneous,
          * physical(v) passes v times the refractive index to compensate for the shorter
-         * update timestep; MurSpeed documents the conversion and its sources.
+         * update timestep; MurSpeed documents the conversion and its sources. With O1-VS,
+         * local() gives each Mur row the speed of its own cell.
          */
         ChdrSolver(AJFourFieldsType& source, EMFieldsType& electric, EMFieldsType& magnetic,
                    EBReconstructionConvention reconstruction, SpatialDiscretization spatial,
@@ -199,6 +243,8 @@ namespace chdr::solver {
                                             ? owner.homogeneousValue()
                                             : std::numeric_limits<double>::quiet_NaN();
             formulationParameters_m   = parameters;
+            if (murSpeed.isLocal() && parameters.formulation_m == MaterialFormulation::O1VS)
+                this->setMurCellSpeeds(localMurSpeeds<PotentialSolverBase>(owner));
         }
 
         /// The service adapter borrows this solver's address; bindings cannot be copied or moved.

@@ -10,6 +10,8 @@
  *   (bitwise regression).
  * - UniformMedium: at \f$\varepsilon_r = 2.13\f$, A_n of O1-VS matches the Homogeneous
  *   formulation within 1e-13 of the reference maximum over 20 steps.
+ * - OpenUniformMediumLocalMurSpeed: as UniformMedium, with Mur on x and z, periodic y and
+ *   MurSpeed::local() for O1-VS (self-consistency of the two Mur speed conversions).
  * - Refusals: validateMaterialUpdate() refuses \f$\alpha = 2\f$ on an open layout,
  *   \f$\alpha\f$ = 0.5 and NaN, NonStandard, collocated, R1, \f$\varepsilon_r\f$ = 0.5 and
  *   1e155, and a non-finite map; for \f$\alpha = 2\f$ at \f$\varepsilon_r\f$ = 1 and 2.13,
@@ -17,7 +19,7 @@
  * - FiniteHarmonicFace: the x-face harmonic mean of 9e153 and 1e154 stays finite.
  *
  * CTest: chdr.solver.formulation.o1vs.serial and chdr.solver.formulation.o1vs.mpi2 run the
- * executable test-chdr-formulation without a filter, so each entry runs all five tests.
+ * executable test-chdr-formulation without a filter, so each entry runs all six tests.
  */
 #include <array>
 #include <gtest/gtest.h>
@@ -65,7 +67,8 @@ namespace {
     }
     /// Fresh sources share their physical values; both methods receive the same physical dt.
     void equivalent(double epsilon, bool signedZero,
-                    std::array<bool, 3> periodic = {true, true, true}) {
+                    std::array<bool, 3> periodic = {true, true, true},
+                    MurSpeed murSpeed            = MurSpeed::matched()) {
         auto fields = makeBoxFieldContainer({8, 6, 10}, {8, 7.8, 8}, 0, periodic);
         initializeFieldStorage(fields);
         material::MaterialOwner owner(
@@ -76,7 +79,7 @@ namespace {
             });
         EMFieldsType e(fields.getMesh(), fields.getFL()), b(fields.getMesh(), fields.getFL());
         Solver candidate(fields.getJ(), fields.getE(), fields.getB(), R2, Staggered, owner,
-                         {MaterialFormulation::O1VS, 1});
+                         {MaterialFormulation::O1VS, 1}, murSpeed);
         auto reference = coreTest::makeTestSolver<StandardSolverPeriodic>(
             fields.getJ(), e, b, R2, Staggered, epsilon == 1 ? 0 : epsilon);
         candidate.setSafetyFactor(0.9);
@@ -120,6 +123,12 @@ namespace {
     /// of the reference maximum over 20 steps.
     TEST(O1VS, UniformMedium) {
         equivalent(2.13, false);
+    }
+    /// As UniformMedium, with Mur on x and z and MurSpeed::local(). The Mur rows of O1-VS use
+    /// \f$1/\sqrt{\varepsilon_r}\f$ with the physical step, and those of Homogeneous use one
+    /// with the step divided by \f$\sqrt{\varepsilon_r}\f$. Both give the same speed times step.
+    TEST(O1VS, OpenUniformMediumLocalMurSpeed) {
+        equivalent(2.13, false, {false, true, false}, MurSpeed::local());
     }
 
     /** @brief Refuse invalid configurations from cached metadata before any solver
