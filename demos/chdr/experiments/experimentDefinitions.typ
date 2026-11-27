@@ -44,6 +44,8 @@
 
   #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E19.typ"
 
+  #include "./E21_planar_dielectric_interface_through_open_faces/E21.typ"
+
   #e15s.section
 
   #include "./E16E17_normal_incidence_on_planar_dielectric_interface/E16S.typ"
