@@ -155,6 +155,21 @@ namespace ippl {
          * real-space kernel is filled on the doubled convolution grid and then
          * transformed into `grntr_m`. The default is GreenFunction::STANDARD to
          * preserve historical IPPL behavior.
+         *
+         * With `repeat_count` @f$K>0@f$ and `repeat_spacing` @f$a@f$ (HOCKNEY only), the
+         * kernel also contains @f$2K@f$ copies shifted along the last axis,
+         * @f[
+         *   G_K(\mathbf{r}) = G(\mathbf{r}) + \sum_{0<|k|\le K} G_\mathrm{full}(\mathbf{r}-k a\,\hat{\mathbf{e}}_z),
+         * @f]
+         * so one solve returns the field of the source plus @f$2K@f$ translated copies of it,
+         * a finite train of identical bunches with spacing @f$a@f$, at the cost of a single
+         * convolution. The copies use the selected STANDARD or INTEGRATED kernel; for
+         * TRUNCATED they use the full Coulomb kernel with `force_constant`, since a copy has
+         * no short-range particle correction. Point-sampled copies reuse the near-origin
+         * regularization of shiftedGreensFunction(), so use INTEGRATED when the source is
+         * longer than @f$a@f$ and the shifted singularities fall inside the doubled grid.
+         * solve() regenerates the kernel when either parameter changes. Images from
+         * shiftedGreensFunction() do not include the copies.
          */
         void greensFunction();
 
@@ -214,6 +229,13 @@ namespace ippl {
          * @pre GreenFunction::INTEGRATED additionally requires `Dim == 3`.
          */
         void shiftedGreensFunction(const Vector<double, Dim>& shift);
+
+        /**
+         * @brief Add the 2K shifted kernel copies of `repeat_count` and `repeat_spacing` to the
+         *        real-space kernel before its transform (see greensFunction()).
+         * @note Public only because CUDA requires the enclosing function of a device lambda to be.
+         */
+        void addRepeatedKernels();
 
         // function called in the constructor to initialize the fields
         void initializeFields();
@@ -283,6 +305,11 @@ namespace ippl {
         // alpha of the cached truncated kernel; solve() regenerates the kernel when it changes
         Trhs truncatedAlpha_m = 0;
 
+        // repeat count and spacing of the cached kernel; solve() regenerates the kernel when
+        // either changes
+        int repeatCount_m    = 0;
+        Trhs repeatSpacing_m = 0;
+
         // string specifying algorithm: Hockney or Vico-Greengard
         std::string alg_m;
 
@@ -329,6 +356,14 @@ namespace ippl {
         KOKKOS_INLINE_FUNCTION static scalar_type integratedGreenAntiderivative(
             const scalar_type& x, const scalar_type& y, const scalar_type& z);
 
+        /**
+         * @brief Term @f$bc\ln(a+r)@f$ of the antiderivative; zero when @f$bc=0@f$.
+         *
+         * @note For @f$a<0@f$ the sum @f$a+r=r-|a|@f$ cancels when
+         * @f$|a|\gg\sqrt{b^2+c^2}@f$ and rounds to zero (giving NaN) once
+         * @f$(b^2+c^2)/a^2@f$ is below machine epsilon. That branch uses the exact
+         * identity @f$a+r=(b^2+c^2)/(r-a)@f$ instead.
+         */
         KOKKOS_INLINE_FUNCTION static scalar_type integratedGreenLogTerm(const scalar_type& a,
                                                                          const scalar_type& b,
                                                                          const scalar_type& c,
@@ -343,6 +378,12 @@ namespace ippl {
          * The returned value is the cell average without the Poisson prefactor;
          * callers multiply by @f$-1/(4\pi)@f$ to match IPPL's Hockney sign
          * convention.
+         *
+         * @note The average is even in each coordinate, so it is evaluated at
+         * @f$(|x|,|y|,|z|)@f$. This makes the kernel exactly symmetric under
+         * @f$\mathbf{r}\to-\mathbf{r}@f$, also for shifted and repeated offsets,
+         * and leaves negative antiderivative arguments only at the @f$-h/2@f$
+         * corners of zero offsets.
          */
         KOKKOS_INLINE_FUNCTION static scalar_type integratedGreenAverage(const scalar_type& x,
                                                                          const scalar_type& y,
@@ -381,6 +422,8 @@ namespace ippl {
             this->params_m.template add<Trhs>("alpha", 1);
             this->params_m.template add<Trhs>("force_constant", 1);
             this->params_m.add("hessian", false);
+            this->params_m.add("repeat_count", 0);
+            this->params_m.template add<Trhs>("repeat_spacing", 0);
         }
     };
 }  // namespace ippl

@@ -400,6 +400,10 @@ namespace ippl {
             && (this->params_m.template get<Trhs>("alpha") != truncatedAlpha_m)) {
             green = true;
         }
+        if ((this->params_m.template get<int>("repeat_count") != repeatCount_m)
+            || (this->params_m.template get<Trhs>("repeat_spacing") != repeatSpacing_m)) {
+            green = true;
+        }
 
         // set mesh spacing on the other grids again
         mesh2_m->setMeshSpacing(hr_m);
@@ -986,7 +990,14 @@ namespace ippl {
                                                                      const scalar_type& c,
                                                                      const scalar_type& r) {
         const scalar_type coeff = b * c;
-        return (coeff == scalar_type(0)) ? scalar_type(0) : coeff * Kokkos::log(a + r);
+        if (coeff == scalar_type(0)) {
+            return scalar_type(0);
+        }
+        if (a >= scalar_type(0)) {
+            return coeff * Kokkos::log(a + r);
+        }
+        // a + r = (b^2 + c^2) / (r - a) without subtracting nearly equal numbers
+        return coeff * Kokkos::log((b * b + c * c) / (r - a));
     }
 
     template <typename FieldLHS, typename FieldRHS>
@@ -1016,13 +1027,17 @@ namespace ippl {
                                                                      const scalar_type& y,
                                                                      const scalar_type& z,
                                                                      const vector_type& h) {
+        // even in each coordinate, see the declaration
         const scalar_type half = scalar_type(0.5);
-        const scalar_type x0   = x - half * h[0];
-        const scalar_type x1   = x + half * h[0];
-        const scalar_type y0   = y - half * h[1];
-        const scalar_type y1   = y + half * h[1];
-        const scalar_type z0   = z - half * h[2];
-        const scalar_type z1   = z + half * h[2];
+        const scalar_type ax   = Kokkos::fabs(x);
+        const scalar_type ay   = Kokkos::fabs(y);
+        const scalar_type az   = Kokkos::fabs(z);
+        const scalar_type x0   = ax - half * h[0];
+        const scalar_type x1   = ax + half * h[0];
+        const scalar_type y0   = ay - half * h[1];
+        const scalar_type y1   = ay + half * h[1];
+        const scalar_type z0   = az - half * h[2];
+        const scalar_type z1   = az + half * h[2];
 
         scalar_type integral = integratedGreenAntiderivative(x1, y1, z1);
         integral -= integratedGreenAntiderivative(x0, y1, z1);
@@ -1412,6 +1427,8 @@ namespace ippl {
             }
         }
 
+        addRepeatedKernels();
+
         // start a timer
         static IpplTimings::TimerRef fftg = IpplTimings::getTimer("FFT: Green");
         IpplTimings::startTimer(fftg);
@@ -1472,6 +1489,8 @@ namespace ippl {
                 const scalar_type originValue = forceConstant * 2 * alpha / Kokkos::sqrt(pi);
                 apply(view, args)             = isOrigin ? originValue : regular;
             });
+
+        addRepeatedKernels();
 
         static IpplTimings::TimerRef fftg = IpplTimings::getTimer("FFT: Green");
         IpplTimings::startTimer(fftg);
@@ -2419,6 +2438,80 @@ namespace ippl {
         fft_m->transform(FORWARD, grn_mr, grntr_m);
 
         IpplTimings::stopTimer(fftsg);
+    }
+
+    template <typename FieldLHS, typename FieldRHS>
+    void FFTOpenPoissonSolver<FieldLHS, FieldRHS>::addRepeatedKernels() {
+        repeatCount_m   = this->params_m.template get<int>("repeat_count");
+        repeatSpacing_m = this->params_m.template get<Trhs>("repeat_spacing");
+        if (repeatCount_m == 0) {
+            return;
+        }
+        const int alg                = this->params_m.template get<int>("algorithm");
+        const int greensFunctionType = this->params_m.template get<int>("greens_function");
+        if (repeatCount_m < 0 || !(repeatSpacing_m > 0)) {
+            throw IpplException("FFTOpenPoissonSolver::addRepeatedKernels",
+                                "repeat_count must be >= 0 and repeat_spacing > 0");
+        }
+        if (alg != Algorithm::HOCKNEY || Dim != 3) {
+            throw IpplException("FFTOpenPoissonSolver::addRepeatedKernels",
+                                "Repeated kernels are only implemented for 3D HOCKNEY.");
+        }
+
+        const scalar_type pi      = Kokkos::numbers::pi_v<scalar_type>;
+        auto view                 = grn_mr.getView();
+        const int nghost          = grn_mr.getNghost();
+        const auto& ldom          = layout2_m->getLocalNDIndex();
+        const Vector<int, Dim> nr = nr_m;
+        const vector_type hs      = hr_m;
+        const int count           = repeatCount_m;
+        const scalar_type spacing = repeatSpacing_m;
+        const bool integrated     = greensFunctionType == GreenFunction::INTEGRATED;
+        const Trhs coupling       = greensFunctionType == GreenFunction::TRUNCATED
+                                        ? this->params_m.template get<Trhs>("force_constant")
+                                        : -Trhs(1) / (Trhs(4) * pi);
+        // same near-origin regularization as shiftedGreensFunction()
+        scalar_type hmin2 = hs[0] * hs[0];
+        for (unsigned d = 1; d < Dim; ++d) {
+            hmin2 = Kokkos::min(hmin2, hs[d] * hs[d]);
+        }
+        const scalar_type regThresh = 0.25 * hmin2;
+
+        static IpplTimings::TimerRef repeatTimer = IpplTimings::getTimer("Green: repeats");
+        IpplTimings::startTimer(repeatTimer);
+        if constexpr (Dim == 3) {
+            using index_array_type = typename RangePolicy<Dim>::index_array_type;
+            ippl::parallel_for(
+                "Repeated open Green's function", grn_mr.getFieldRangePolicy(),
+                KOKKOS_LAMBDA(const index_array_type& args) {
+                    Vector<int, Dim> igVec = args - nghost;
+                    scalar_type offset[Dim];
+                    for (unsigned d = 0; d < Dim; ++d) {
+                        igVec[d] += ldom[d].first();
+                        const int igSigned = (igVec[d] < nr[d]) ? igVec[d] : igVec[d] - 2 * nr[d];
+                        offset[d]          = static_cast<scalar_type>(igSigned) * hs[d];
+                    }
+
+                    scalar_type sum = 0;
+                    for (int k = -count; k <= count; ++k) {
+                        if (k == 0) {
+                            continue;
+                        }
+                        const scalar_type z = offset[2] - k * spacing;
+                        if (integrated) {
+                            sum -= integratedGreenAverage(offset[0], offset[1], z, hs)
+                                   / (scalar_type(4) * pi);
+                        } else {
+                            const scalar_type rsq =
+                                offset[0] * offset[0] + offset[1] * offset[1] + z * z;
+                            const bool nearSing = rsq < regThresh;
+                            sum += coupling / Kokkos::sqrt(rsq + nearSing * regThresh);
+                        }
+                    }
+                    apply(view, args) += sum;
+                });
+        }
+        IpplTimings::stopTimer(repeatTimer);
     }
 
 }  // namespace ippl
