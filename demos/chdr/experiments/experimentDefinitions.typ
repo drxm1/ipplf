@@ -44,6 +44,9 @@
 
   #include "./E18E19_oblique_incidence_on_planar_dielectric_interface/E19.typ"
 
+  // Proposed specification, not yet accepted.
+  #proposal[#include "./E22_guided_modes_of_dielectric_slab/E22.typ"]
+
   #e15s.section
 
   #include "./E16E17_normal_incidence_on_planar_dielectric_interface/E16S.typ"
